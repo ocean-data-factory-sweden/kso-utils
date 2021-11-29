@@ -1,8 +1,8 @@
 import pandas as pd
 import ipywidgets as widgets
-import utils.server_utils as server_utils
-import utils.db_utils as db_utils
-import utils.zooniverse_utils as zooniverse_utils
+import kso_utils.server_utils as server_utils
+import kso_utils.db_utils as db_utils
+import kso_utils.zooniverse_utils as zooniverse_utils
 import panoptes_client
 
 

@@ -2,8 +2,8 @@ import os, cv2, sys, io
 import operator
 import pandas as pd
 from tqdm import tqdm
-import utils.server_utils as server_utils
-import utils.spyfish_utils as spyfish_utils
+import kso_utils.server_utils as server_utils
+import kso_utils.spyfish_utils as spyfish_utils
 
 
 # Calculate length and fps of a movie

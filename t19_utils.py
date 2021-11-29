@@ -2,8 +2,8 @@ import os
 from ipyfilechooser import FileChooser
 from ipywidgets import interactive, Layout
 
-import utils.movie_utils as movie_utils
-import utils.server_utils as server_utils
+import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
 import pandas as pd
 import ipywidgets as widgets
 import numpy as np

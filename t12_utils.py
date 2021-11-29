@@ -2,12 +2,13 @@ import pandas as pd
 import numpy as np
 import json, io
 from ast import literal_eval
-from tutorial_utils.zooniverse_utils import auth_session
-import tutorial_utils.db_utils as db_utils
-from tutorial_utils.koster_utils import filter_bboxes, process_clips_koster
-from tutorial_utils.spyfish_utils import process_clips_spyfish
-from tutorial_utils import db_utils
+from kso_utils.zooniverse_utils import auth_session
+import kso_utils.db_utils as db_utils
+from kso_utils.koster_utils import filter_bboxes, process_clips_koster
+from kso_utils.spyfish_utils import process_clips_spyfish
+import kso_utils.tutorials_utils as tutorials_utils
 from collections import OrderedDict, Counter
+
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact

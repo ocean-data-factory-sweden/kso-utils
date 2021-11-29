@@ -3,9 +3,9 @@ import pandas as pd
 import numpy as np
 import json, io
 from ast import literal_eval
-from tutorial_utils.zooniverse_utils import auth_session
+from kso_utils.zooniverse_utils import auth_session
 #from db_setup.process_frames import filter_bboxes
-from tutorial_utils import db_utils
+from kso_utils import db_utils
 from collections import OrderedDict
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets

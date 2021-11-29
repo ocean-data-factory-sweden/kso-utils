@@ -12,10 +12,10 @@ from panoptes_client import (
 )
 
 from ast import literal_eval
-from utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
-from utils.spyfish_utils import process_spyfish_subjects
-import utils.db_utils as db_utils
-import utils.tutorials_utils as tutorials_utils
+from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
+from kso_utils.spyfish_utils import process_spyfish_subjects
+import kso_utils.db_utils as db_utils
+import kso_utils.tutorials_utils as tutorials_utils
     
 
 def zoo_credentials():

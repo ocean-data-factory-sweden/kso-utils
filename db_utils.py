@@ -9,9 +9,9 @@ import numpy as np
 #import operator
 #from datetime import datetime
 
-import utils.koster_utils as koster_utils
-import utils.spyfish_utils as spyfish_utils
-import utils.movie_utils as movie_utils
+import kso_utils.koster_utils as koster_utils
+import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.movie_utils as movie_utils
 
 
 # Utility functions for common database operations

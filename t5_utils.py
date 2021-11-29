@@ -1,13 +1,26 @@
 #t5 utils
 import argparse, os
-import utils.db_utils as db_utils
+import kso_utils.db_utils as db_utils
 import pandas as pd
 import numpy as np
 import math
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact
-from utils.zooniverse_utils import auth_session
+from kso_utils.zooniverse_utils import auth_session
+
+def choose_classes(db_path: str = "koster_lab.db"):
+    conn = db_utils.create_connection(db_path)
+    species_list = pd.read_sql_query("SELECT label from species", conn)["label"].tolist()
+    w = widgets.SelectMultiple(
+        options=species_list,
+        value=[species_list[0]],
+        description='Species',
+        disabled=False
+    )
+
+    display(w)
+    return w
 
 def upload_frames_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     

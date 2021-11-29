@@ -7,7 +7,7 @@ from collections import OrderedDict
 from IPython.display import HTML, display, update_display, clear_output
 from datetime import date
 import ipywidgets as widgets
-import utils.movie_utils as movie_utils
+import kso_utils.movie_utils as movie_utils
 
 def check_sites_csv(sites_csv):
 

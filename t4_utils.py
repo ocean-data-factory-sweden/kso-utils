@@ -9,15 +9,15 @@ import subprocess
 from tqdm import tqdm
 from IPython.display import HTML, display, update_display, clear_output
 from ipywidgets import interact, interactive, Layout
-from utils.zooniverse_utils import auth_session
+from kso_utils.zooniverse_utils import auth_session
 import ipywidgets as widgets
 
-import utils.db_utils as db_utils
-import utils.zooniverse_utils as zooniverse_utils
-import utils.movie_utils as movie_utils
-import utils.server_utils as server_utils
-import utils.tutorials_utils as tutorials_utils
-import utils.koster_utils as koster_utils
+import kso_utils.db_utils as db_utils
+import kso_utils.zooniverse_utils as zooniverse_utils
+import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
+import kso_utils.tutorials_utils as tutorials_utils
+import kso_utils.koster_utils as koster_utils
 from panoptes_client import (
     SubjectSet,
     Subject,

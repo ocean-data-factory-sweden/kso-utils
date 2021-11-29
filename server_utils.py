@@ -11,7 +11,7 @@ import paramiko
 from paramiko import SSHClient
 from scp import SCPClient
 
-import utils.tutorials_utils as tutorials_utils
+import kso_utils.tutorials_utils as tutorials_utils
 from tqdm import tqdm
 from pathlib import Path
 
