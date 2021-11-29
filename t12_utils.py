@@ -1,14 +1,12 @@
 import pandas as pd
 import numpy as np
 import json, io
-
 from ast import literal_eval
-from utils.zooniverse_utils import auth_session
-import utils.db_utils as db_utils
-from utils.koster_utils import filter_bboxes, process_clips_koster
-from utils.spyfish_utils import process_clips_spyfish
-import utils.tutorials_utils as tutorials_utils
-from utils import db_utils
+from tutorial_utils.zooniverse_utils import auth_session
+import tutorial_utils.db_utils as db_utils
+from tutorial_utils.koster_utils import filter_bboxes, process_clips_koster
+from tutorial_utils.spyfish_utils import process_clips_spyfish
+from tutorial_utils import db_utils
 from collections import OrderedDict, Counter
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
@@ -36,7 +34,7 @@ def choose_project():
     display(choose_project)
     return choose_project
 
-    
+
 def choose_agg_parameters(subject_type: str):
     agg_users = widgets.FloatSlider(
         value=0.8,
@@ -129,46 +127,149 @@ def choose_agg_parameters(subject_type: str):
         return agg_users, min_users
 
 
-def choose_w_version(workflows_df, workflow_id):
-
-    # Selects the workflow id based on the workflow name
-    workflow_id = workflows_df[workflows_df.display_name==workflow_id].workflow_id.unique()[0]
+def choose_workflows(workflows_df):
 
     layout = widgets.Layout(width="auto", height="40px")  # set width and height
 
-    # Estimate the versions of the workflow available
-    versions_available = workflows_df[workflows_df.workflow_id==workflow_id].version.unique().tolist()
-
-    # Display the versions of the workflow available
-    w_version = widgets.Dropdown(
-        options=list(map(float, versions_available)),
-        value=float(versions_available[0]),
-        description="Minimum workflow version:",
+    # Display the names of the workflows
+    workflow_name = widgets.Dropdown(
+        options=workflows_df.display_name.unique().tolist(),
+        value=workflows_df.display_name.unique().tolist()[0],
+        description="Workflow name:",
         disabled=False,
         display="flex",
         flex_flow="column",
         align_items="stretch",
         style={"description_width": "initial"},
+        layout = layout
     )
 
-    display(w_version)
-    return w_version, workflow_id
+    # Display the type of subjects
+    subj_type = widgets.Dropdown(
+        options=["frame", "clip"],
+        value="clip",
+        description="Subject type:",
+        disabled=False,
+        display="flex",
+        flex_flow="column",
+        align_items="stretch",
+        style={"description_width": "initial"},
+        layout = layout
+    )
+    
+    workflow_version, versions = choose_w_version(workflows_df, workflow_name.value)
+    
+    def on_change(change):
+        with out:
+            if change['name'] == 'value':
+                clear_output()
+                workflow_version.options = choose_w_version(workflows_df, change['new'])[1]
+                workflow_name.observe(on_change)
+    
+    #display(workflow_name)
+    #display(subj_type)
+    
+    out = widgets.Output()
+    display(out)
+    
+    workflow_name.observe(on_change)
+    return workflow_name, subj_type, workflow_version
+
+
+class WidgetMaker(widgets.VBox):
+
+    def __init__(self, workflows_df):
+        self.workflows_df = workflows_df
+        self.widget_count = widgets.IntText(description='Number of workflows:',
+                                            display="flex",
+                                            flex_flow="column",
+                                            align_items="stretch",
+                                            style={"description_width": "initial"})
+        self.bool_widget_holder = widgets.HBox(layout=widgets.Layout(width='100%',
+                                                                     display='inline-flex',
+                                                                     flex_flow='row wrap'))
+        children = [
+            self.widget_count,
+            self.bool_widget_holder,
+        ]
+        self.widget_count.observe(self._add_bool_widgets, names=['value'])
+        super().__init__(children=children)
+
+    def _add_bool_widgets(self, widg):
+        num_bools = widg['new']
+        new_widgets = []
+        for _ in range(num_bools):
+            new_widget = choose_workflows(self.workflows_df)
+            for wdgt in new_widget:
+                wdgt.description = wdgt.description + f" #{_}"
+            new_widgets.extend(new_widget)
+        self.bool_widget_holder.children = tuple(new_widgets)
+
+    @property
+    def checks(self):
+        return {
+            w.description: w.value
+            for w in self.bool_widget_holder.children
+        }
+
+
+def choose_w_version(workflows_df, workflow_id):
+
+    layout = widgets.Layout(width="auto", height="40px")  # set width and height
+
+    # Estimate the versions of the workflow available
+    versions_available = workflows_df[workflows_df.display_name==workflow_id].version.unique().tolist()
+    
+    if len(versions_available) > 1:
+
+        # Display the versions of the workflow available
+        w_version = widgets.Dropdown(
+            options=list(map(float, versions_available)),
+            value=float(versions_available[0]),
+            description="Minimum workflow version:",
+            disabled=False,
+            display="flex",
+            flex_flow="column",
+            align_items="stretch",
+            style={"description_width": "initial"},
+        )
+        
+    else:
+        
+        raise ValueError("There are no versions available for this workflow.")
+
+    #display(w_version)
+    return w_version, list(map(float, versions_available))
+
+
+def get_workflow_ids(workflows_df, workflow_names):
+    return [workflows_df[workflows_df.display_name==wf_name].workflow_id.unique()[0] for 
+            wf_name in workflow_names]
 
 
 def get_classifications(
-    workflow_id: int, workflow_version: float, subj_type, class_df, project_name,db_info_dict
+    workflow_dict: dict, workflows_df: pd.DataFrame, subj_type, class_df, db_path
 ):
     
+    names, workflow_versions = [], []
+    for i in range(0, len(workflow_dict), 3):
+        names.append(list(workflow_dict.values())[i])
+        workflow_versions.append(list(workflow_dict.values())[i+2])
+        
+    workflow_ids = get_workflow_ids(workflows_df, names)
     
     # Filter classifications of interest
-    class_df = class_df[
-        (class_df.workflow_id == workflow_id)
-        & (class_df.workflow_version >= workflow_version)
-    ].reset_index(drop=True)
+    classes_df = pd.DataFrame()
+    for id, version in zip(workflow_ids, workflow_versions):
+        class_df = class_df[
+            (class_df.workflow_id == id)
+            & (class_df.workflow_version >= version)
+        ].reset_index(drop=True)
+        classes_df = classes_df.append(class_df)
     
     # Add information about the subject
     # Create connection to db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
+    conn = db_utils.create_connection(db_path)
     
     if subj_type == "frame":
         # Query id and subject type from the subjects table
@@ -179,38 +280,39 @@ def get_classifications(
         subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, clip_start_time, movie_id FROM subjects", conn)
     
     # Ensure id format matches classification's subject_id
-    class_df["subject_ids"] = class_df["subject_ids"].astype('Int64')
+    classes_df["subject_ids"] = classes_df["subject_ids"].astype('Int64')
     subjects_df["id"] = subjects_df["id"].astype('Int64')
     
+    
     # Add subject information based on subject_ids
-    class_df = pd.merge(
-        class_df,
+    classes_df = pd.merge(
+        classes_df,
         subjects_df,
         how="left",
         left_on="subject_ids",
         right_on="id",
     )
     
-    if class_df[["subject_type", "https_location","movie_id"]].isna().any().any():
+    if classes_df[["subject_type", "https_location","movie_id"]].isna().any().any():
         # Exclude classifications from missing subjects
-        filtered_class_df = class_df.dropna(subset=["subject_type",
+        filtered_class_df = classes_df.dropna(subset=["subject_type",
                                                     "https_location",
                                                     "movie_id"], 
                                             how='any').reset_index(drop=True)
         
         # Report on the issue
         print("There are", 
-              (class_df.shape[0]-filtered_class_df.shape[0]), 
+              (classes_df.shape[0]-filtered_class_df.shape[0]), 
               "classifications out of",
-              class_df.shape[0],
+              classes_df.shape[0],
               "missing subject info. Maybe the subjects have been removed from Zooniverse?")
         
-        class_df = filtered_class_df
+        classes_df = filtered_class_df
         
     
     print("Zooniverse classifications have been retrieved")
 
-    return class_df
+    return classes_df
 
 
 def aggregrate_labels(raw_class_df, agg_users, min_users):
@@ -234,7 +336,7 @@ def aggregrate_labels(raw_class_df, agg_users, min_users):
     agg_class_df = raw_class_df[raw_class_df.class_prop >= agg_users].reset_index(drop=True)
     
     return agg_class_df
-    
+
 
 def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
 
@@ -382,11 +484,11 @@ def process_clips(df: pd.DataFrame, project_name):
         annotations = json.loads(row["annotations"])
 
         # Select the information from the species identification task
-        if project_name == "Koster_Seafloor_Obs":
+        if project_name == "Koster Seafloor Obs":
             rows_list = process_clips_koster(annotations, row["classification_id"], rows_list)
             
         # Check if the Zooniverse project is the Spyfish
-        if project_name == "Spyfish_Aotearoa":
+        if project_name == "Spyfish Aotearoa":
             rows_list = process_clips_spyfish(annotations, row["classification_id"], rows_list)
 
     # Create a data frame with annotations as rows
@@ -559,7 +661,7 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
                 
     subject_widget.observe(on_change, names='value')
 
-    
+
 def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type):
 
     # Select the subject
