@@ -84,7 +84,7 @@ def download_init_csv(gdrive_id, db_csv_info):
     os.remove(zip_file)
     
     
-def get_db_init_info(project_name, server_dict, csv_info: dict):
+def get_db_init_info(project_name, server_dict):
     
     # Define the path to the csv files with initial info to build the db
     db_csv_info = "../db_starter/db_csv_info/"
@@ -93,37 +93,36 @@ def get_db_init_info(project_name, server_dict, csv_info: dict):
     server = tutorials_utils.get_project_info(project_name, "server")
     
     if server == "AWS":
+        
         # Provide bucket and key
-        
-        # TODO: Remove Names of csv files from AWS to download
-        #sites_csv = "sites_buv_doc.csv"
-        #movies_csv = "movies_buv_doc.csv"
-        #species_csv = "species_buv_doc.csv"
-        #"init_db_doc_buv/"+movies_csv
-        # bucket = "marine_buv"
-        
+        bucket = tutorials_utils.get_project_info(project_name, "bucket")
+        key = tutorials_utils.get_project_info(project_name, "key")
+        sites_csv = tutorials_utils.get_project_info(project_name, "sites_csv")
+        movies_csv = tutorials_utils.get_project_info(project_name, "movies_csv")
+        species_csv = tutorials_utils.get_project_info(project_name, "species_csv")
+     
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
             
         download_object_from_s3(server_dict["client"],
-                                bucket=csv_info["bucket"],
-                                key=str(Path(csv_info["key"], csv_info["sites_csv"])), 
-                                filename=str(Path(db_csv_info,csv_info["sites_csv"])))
+                                bucket=bucket,
+                                key=str(Path(key, sites_csv)), 
+                                filename=str(Path(db_csv_info,sites_csv)))
         download_object_from_s3(server_dict["client"],
-                                bucket=csv_info["bucket"],
-                                key=str(Path(csv_info["key"], csv_info["movies_csv"])), 
-                                filename=str(Path(db_csv_info,csv_info["movies_csv"])))
+                                bucket=bucket,
+                                key=str(Path(key, movies_csv)), 
+                                filename=str(Path(db_csv_info,movies_csv)))
         download_object_from_s3(server_dict["client"],
-                                bucket=csv_info["bucket"],
-                                key=str(Path(csv_info["key"], csv_info["species_csv"])), 
-                                filename=str(Path(db_csv_info,csv_info["species_csv"])))
+                                bucket=bucket,
+                                key=str(Path(key, species_csv)), 
+                                filename=str(Path(db_csv_info,species_csv)))
         
         
         db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,csv_info["sites_csv"])), 
-            "movies_csv": str(Path(db_csv_info,csv_info["movies_csv"])), 
-            "species_csv": str(Path(db_csv_info,csv_info["species_csv"]))
+            "sites_csv": str(Path(db_csv_info,sites_csv)), 
+            "movies_csv": str(Path(db_csv_info,movies_csv)), 
+            "species_csv": str(Path(db_csv_info,species_csv))
         }
         
                 
@@ -156,25 +155,33 @@ def get_db_init_info(project_name, server_dict, csv_info: dict):
         }
         
     elif server == "SNIC" and not project_name == "Koster_Seafloor_Obs":
+        
+        # Get project variables from project csv
+        remote_fpath = tutorials_utils.get_project_info(project_name, "remote_fpath")
+        local_fpath = tutorials_utils.get_project_info(project_name, "local_fpath")
+        sites_csv = tutorials_utils.get_project_info(project_name, "sites_csv")
+        movies_csv = tutorials_utils.get_project_info(project_name, "movies_csv")
+        species_csv = tutorials_utils.get_project_info(project_name, "species_csv")
+        
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
             
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
-                                local_fpath=str(Path(db_csv_info,csv_info["sites_csv"])))
+                                remote_fpath=str(Path(remote_fpath,sites_csv)),
+                                local_fpath=str(Path(db_csv_info,sites_csv)))
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
-                                local_fpath=str(Path(db_csv_info,csv_info["movies_csv"])))
+                                remote_fpath=str(Path(remote_fpath,sites_csv)),
+                                local_fpath=str(Path(db_csv_info,movies_csv)))
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
-                                local_fpath=str(Path(db_csv_info,csv_info["species_csv"])))
+                                remote_fpath=str(Path(remote_fpath,species_csv)),
+                                local_fpath=str(Path(db_csv_info,species_csv)))
         
         
         db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,csv_info["sites_csv"])), 
-            "movies_csv": str(Path(db_csv_info,csv_info["movies_csv"])), 
-            "species_csv": str(Path(db_csv_info,csv_info["species_csv"]))
+            "sites_csv": str(Path(db_csv_info,sites_csv)), 
+            "movies_csv": str(Path(db_csv_info,movies_csv)), 
+            "species_csv": str(Path(db_csv_info,species_csv))
         }
     
     elif server == "local":
@@ -187,18 +194,19 @@ def get_db_init_info(project_name, server_dict, csv_info: dict):
 
 def update_db_init_info(project_name, csv_to_update):
     
-    if project_name == "Spyfish_Aotearoa":
+    if server == "AWS":
             
         # Start AWS session
         aws_access_key_id, aws_secret_access_key = server_utils.aws_credentials()
         client = server_utils.connect_s3(aws_access_key_id, aws_secret_access_key)
-
+        bucket = tutorials_utils.get_project_info(project_name, "bucket")
+        key = tutorials_utils.get_project_info(project_name, "key")
 
         csv_filename=csv_to_update.name
 
         upload_file_to_s3(client,
-                              bucket='marine-buv',
-                              key="init_db_doc_buv/"+csv_filename,
+                              bucket=bucket,
+                              key=str(Path(key, csv_filename)),
                               filename=str(csv_to_update))
             
             

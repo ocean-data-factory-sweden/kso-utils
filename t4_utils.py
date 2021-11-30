@@ -140,6 +140,7 @@ def select_clip_n_len(movie_i, db_info_dict):
                                  options=[10,5],
                                  value=10,
                                  description="Length of clips:",
+                                 style = {'description_width': 'initial'},
                                  ensure_option=True,
                                  disabled=False,),
                              clips_range = widgets.IntRangeSlider(value=[movie_df.survey_start.values,
@@ -148,6 +149,7 @@ def select_clip_n_len(movie_i, db_info_dict):
                                                                   max=int(movie_df.duration.values),
                                                                   step=1,
                                                                   description='Range in seconds:',
+                                                                  style = {'description_width': 'initial'},
                                                                   layout=widgets.Layout(width='100%')
                                                                  ))
 
@@ -299,10 +301,12 @@ def select_modification():
     }, "Zoo_compression": {},"Blur_sensitive_info": {
       "-crf": "30",
       "-c:v": "libx264",
+      "-c:a": "copy",
       "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
         [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
         [0:v][b0]overlay=0:0[ovr0]; \
-        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",                      
+        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
+      "-map": "[ovr1]",
       "-pix_fmt": "yuv420p",
       "-preset": "veryfast"
     }, "None": {}}
@@ -354,7 +358,16 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
                                      "-pix_fmt", modification_details["-pix_fmt"],
                                      "-preset", modification_details["-preset"],
                                      str(row['modif_clip_path'])])
-                        
+                elif "-filter_complex" in modification_details:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
+                                     "-filter_complex", modification_details["-filter_complex"],
+                                     "-crf", modification_details["-crf"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     "-map", modification_details["-map"],
+                                     str(row['modif_clip_path'])])       
                 else:
                     subprocess.call(["ffmpeg",
                                      "-i", str(row['clip_path']),
@@ -366,8 +379,6 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
 
 
         print("Clips modified successfully")
-            
-        
         return clips_to_upload_df
     
     else:

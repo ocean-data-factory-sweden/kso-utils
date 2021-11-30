@@ -38,7 +38,7 @@ def choose_project():
     display(choose_project)
     return choose_project
 
-def initiate_db(project_name, csv_info: dict):
+def initiate_db(project_name):
     
     # Get the project-specific name of the database
     db_path = get_project_info(project_name, "db_path")
@@ -50,7 +50,7 @@ def initiate_db(project_name, csv_info: dict):
     server_i_dict = server_utils.connect_to_server(project_name)
     
     # Get the initial info
-    db_initial_info = server_utils.get_db_init_info(project_name, server_i_dict, csv_info)
+    db_initial_info = server_utils.get_db_init_info(project_name, server_i_dict)
     
     # Populate the sites info 
     db_utils.add_sites(db_initial_info["sites_csv"], db_path)
