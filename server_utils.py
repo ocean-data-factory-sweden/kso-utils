@@ -127,7 +127,7 @@ def get_db_init_info(project_name, server_dict, csv_info: dict):
         }
         
                 
-    if server == "SNIC" and project == "Koster_Seafloor_Obs":
+    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         # Check if the directory db_csv_info exists
         if not os.path.exists(db_csv_info) or len(os.listdir(db_csv_info)) == 0:
 
@@ -155,7 +155,7 @@ def get_db_init_info(project_name, server_dict, csv_info: dict):
             "species_csv": species_csv
         }
         
-    elif server == "SNIC" and not project == "Koster_Seafloor_Obs":
+    elif server == "SNIC" and not project_name == "Koster_Seafloor_Obs":
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
@@ -328,7 +328,7 @@ def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str =
         sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
         
         
-def upload_object_to_snic(sftp_client, local_fpath: str = ".", remote_fpath: str):
+def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
     """
     Upload an object to SNIC with progress bar.
     """
