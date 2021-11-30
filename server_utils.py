@@ -38,8 +38,13 @@ def connect_to_server(project_name):
         
         # Connect to SNIC
         client = connect_snic(snic_user, snic_pass)
+        sftp_client = create_snic_transport(snic_user, snic_pass)
         
-    server_dict["client"] = client
+    if "client" in vars():
+        server_dict['client'] = client
+        
+    if "sftp_client" in vars():
+        server_dict['sftp_client'] = sftp_client
         
     return server_dict
 
@@ -79,7 +84,7 @@ def download_init_csv(gdrive_id, db_csv_info):
     os.remove(zip_file)
     
     
-def get_db_init_info(project_name, server_dict):
+def get_db_init_info(project_name, server_dict, csv_info: dict):
     
     # Define the path to the csv files with initial info to build the db
     db_csv_info = "../db_starter/db_csv_info/"
@@ -88,38 +93,41 @@ def get_db_init_info(project_name, server_dict):
     server = tutorials_utils.get_project_info(project_name, "server")
     
     if server == "AWS":
+        # Provide bucket and key
         
-        # Names of csv files from AWS to download
-        sites_csv = "sites_buv_doc.csv"
-        movies_csv = "movies_buv_doc.csv"
-        species_csv = "species_buv_doc.csv"
+        # TODO: Remove Names of csv files from AWS to download
+        #sites_csv = "sites_buv_doc.csv"
+        #movies_csv = "movies_buv_doc.csv"
+        #species_csv = "species_buv_doc.csv"
+        #"init_db_doc_buv/"+movies_csv
+        # bucket = "marine_buv"
         
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
             
         download_object_from_s3(server_dict["client"],
-                                bucket='marine-buv',
-                                key="init_db_doc_buv/"+sites_csv, 
-                                filename=db_csv_info+sites_csv)
+                                bucket=csv_info["bucket"],
+                                key=str(Path(csv_info["key"], csv_info["sites_csv"])), 
+                                filename=str(Path(db_csv_info,csv_info["sites_csv"])))
         download_object_from_s3(server_dict["client"],
-                                bucket='marine-buv',
-                                key="init_db_doc_buv/"+movies_csv, 
-                                filename=db_csv_info+movies_csv)
+                                bucket=csv_info["bucket"],
+                                key=str(Path(csv_info["key"], csv_info["movies_csv"])), 
+                                filename=str(Path(db_csv_info,csv_info["movies_csv"])))
         download_object_from_s3(server_dict["client"],
-                                bucket='marine-buv',
-                                key="init_db_doc_buv/"+species_csv, 
-                                filename=db_csv_info+species_csv)
+                                bucket=csv_info["bucket"],
+                                key=str(Path(csv_info["key"], csv_info["species_csv"])), 
+                                filename=str(Path(db_csv_info,csv_info["species_csv"])))
         
         
         db_initial_info = {
-            "sites_csv": db_csv_info+sites_csv, 
-            "movies_csv": db_csv_info+movies_csv, 
-            "species_csv": db_csv_info+species_csv
+            "sites_csv": str(Path(db_csv_info,csv_info["sites_csv"])), 
+            "movies_csv": str(Path(db_csv_info,csv_info["movies_csv"])), 
+            "species_csv": str(Path(db_csv_info,csv_info["species_csv"]))
         }
         
                 
-    if project_name == "Koster_Seafloor_Obs":
+    if server == "SNIC" and project == "Koster_Seafloor_Obs":
         # Check if the directory db_csv_info exists
         if not os.path.exists(db_csv_info) or len(os.listdir(db_csv_info)) == 0:
 
@@ -147,8 +155,33 @@ def get_db_init_info(project_name, server_dict):
             "species_csv": species_csv
         }
         
-           
+    elif server == "SNIC" and not project == "Koster_Seafloor_Obs":
+        # Create the folder to store the csv files if not exist
+        if not os.path.exists(db_csv_info):
+            os.mkdir(db_csv_info)
+            
+        download_object_from_snic(server_dict["sftp_client"],
+                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
+                                local_fpath=str(Path(db_csv_info,csv_info["sites_csv"])))
+        download_object_from_snic(server_dict["sftp_client"],
+                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
+                                local_fpath=str(Path(db_csv_info,csv_info["movies_csv"])))
+        download_object_from_snic(server_dict["sftp_client"],
+                                remote_fpath=str(Path(csv_info["remote_fpath"],csv_info["sites_csv"])),
+                                local_fpath=str(Path(db_csv_info,csv_info["species_csv"])))
+        
+        
+        db_initial_info = {
+            "sites_csv": str(Path(db_csv_info,csv_info["sites_csv"])), 
+            "movies_csv": str(Path(db_csv_info,csv_info["movies_csv"])), 
+            "species_csv": str(Path(db_csv_info,csv_info["species_csv"]))
+        }
     
+    elif server == "local":
+        return None
+
+    else:
+        raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
     return db_initial_info
 
 
@@ -187,6 +220,13 @@ def connect_snic(snic_user: str, snic_pass: str):
                 username=snic_user,
                 password=snic_pass)
     return client
+
+def create_snic_transport(snic_user: str, snic_pass: str):
+    # Connect to the SNIC server and return SSH client
+    t = paramiko.Transport(("129.16.125.130", 22))
+    t.connect(username=snic_user, password=snic_pass)
+    sftp = paramiko.SFTPClient.from_transport(t)
+    return sftp
 
             
 def aws_credentials():
@@ -272,6 +312,35 @@ def get_koster_movies(client):
     stdin, stdout, stderr = client.exec_command("ls /cephyr/NOBACKUP/groups/snic2021-6-9/koster_movies/")
     snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
     return snic_df
+
+def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str ='.'):
+    """
+    Download an object from SNIC with progress bar.
+    """
+
+    class TqdmWrap(tqdm):
+        def viewBar(self, a, b):
+            self.total = int(b)
+            self.update(int(a - self.n))  # update pbar with increment
+
+    # end of reusable imports/classes
+    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+        sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
+        
+        
+def upload_object_to_snic(sftp_client, local_fpath: str = ".", remote_fpath: str):
+    """
+    Upload an object to SNIC with progress bar.
+    """
+
+    class TqdmWrap(tqdm):
+        def viewBar(self, a, b):
+            self.total = int(b)
+            self.update(int(a - self.n))  # update pbar with increment
+
+    # end of reusable imports/classes
+    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+        sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
 
 
 # def retrieve_s3_buckets_info(client, bucket, suffix):

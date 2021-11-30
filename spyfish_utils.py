@@ -10,6 +10,15 @@ import kso_utils.movie_utils as movie_utils
 from tqdm import tqdm
 import subprocess
 
+def process_spyfish_movies_csv(movies_df):
+    # Specify the key (path in S3 of the object)
+    movies_df["Fpath"] = movies_df["prefix"] + "/" + movies_df["filename"]
+
+    # Remove extension from the filename to match the subject metadata from Zoo
+    movies_df["filename"] = movies_df["filename"].str.split('.',1).str[0]
+    
+    return movies_df
+
 def check_spyfish_movies(movies_df, client, bucket_i):
     
     # Specify the formats of the movies to select

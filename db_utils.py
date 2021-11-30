@@ -208,11 +208,7 @@ def add_movies(movies_csv, project_name, db_path):
     
     # Check if the project is the Spyfish Aotearoa
     if project_name == "Spyfish_Aotearoa":
-        # Specify the key (path in S3 of the object)
-        movies_df["Fpath"] = movies_df["prefix"] + "/" + movies_df["filename"]
-        
-        # Remove extension from the filename to match the subject metadata from Zoo
-        movies_df["filename"] = movies_df["filename"].str.split('.',1).str[0]
+        movies_df = spyfish_utils.process_spyfish_movies_csv(movies_df)
             
     # Check if the project is the KSO
     if project_name == "Koster_Seafloor_Obs":
