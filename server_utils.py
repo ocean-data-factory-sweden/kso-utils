@@ -97,9 +97,9 @@ def get_db_init_info(project_name, server_dict):
         # Provide bucket and key
         bucket = tutorials_utils.get_project_info(project_name, "bucket")
         key = tutorials_utils.get_project_info(project_name, "key")
-        sites_csv = tutorials_utils.get_project_info(project_name, "sites_csv")
-        movies_csv = tutorials_utils.get_project_info(project_name, "movies_csv")
-        species_csv = tutorials_utils.get_project_info(project_name, "species_csv")
+        sites_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"sites"))).values[0]
+        movies_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"movies"))).values[0]
+        species_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"species"))).values[0]
      
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
@@ -107,22 +107,22 @@ def get_db_init_info(project_name, server_dict):
             
         download_object_from_s3(server_dict["client"],
                                 bucket=bucket,
-                                key=str(Path(key, sites_csv)), 
-                                filename=str(Path(db_csv_info,sites_csv)))
+                                key=sites_csv, 
+                                filename=str(Path(db_csv_info,Path(sites_csv.name))))
         download_object_from_s3(server_dict["client"],
                                 bucket=bucket,
-                                key=str(Path(key, movies_csv)), 
-                                filename=str(Path(db_csv_info,movies_csv)))
+                                key=movies_csv, 
+                                filename=str(Path(db_csv_info,Path(movies_csv.name))))
         download_object_from_s3(server_dict["client"],
                                 bucket=bucket,
-                                key=str(Path(key, species_csv)), 
-                                filename=str(Path(db_csv_info,species_csv)))
+                                key=species_csv, 
+                                filename=str(Path(db_csv_info,Path(species_csv.name))))
         
         
         db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,sites_csv)), 
-            "movies_csv": str(Path(db_csv_info,movies_csv)), 
-            "species_csv": str(Path(db_csv_info,species_csv))
+            "sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
+            "movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
+            "species_csv": str(Path(db_csv_info,Path(species_csv.name)))
         }
         
                 
@@ -157,35 +157,57 @@ def get_db_init_info(project_name, server_dict):
     elif server == "SNIC" and not project_name == "Koster_Seafloor_Obs":
         
         # Get project variables from project csv
-        remote_fpath = tutorials_utils.get_project_info(project_name, "remote_fpath")
-        local_fpath = tutorials_utils.get_project_info(project_name, "local_fpath")
-        sites_csv = tutorials_utils.get_project_info(project_name, "sites_csv")
-        movies_csv = tutorials_utils.get_project_info(project_name, "movies_csv")
-        species_csv = tutorials_utils.get_project_info(project_name, "species_csv")
+        csv_folder = tutorials_utils.get_project_info(project_name, "csv_folder")
+        csv_files = get_snic_files(server_dict["client"], csv_folder)
+        
+        # Look for csv files
+        for file in csv_files:
+            if 'sites' in file:
+                sites_csv = file
+            if 'movies' in file:
+                movies_csv = file
+            if 'species' in file:
+                species_csv = file
         
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
             
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(remote_fpath,sites_csv)),
-                                local_fpath=str(Path(db_csv_info,sites_csv)))
+                                remote_fpath=sites_csv,
+                                local_fpath=str(Path(db_csv_info,Path(sites_csv.name))))
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(remote_fpath,sites_csv)),
-                                local_fpath=str(Path(db_csv_info,movies_csv)))
+                                remote_fpath=sites_csv,
+                                local_fpath=str(Path(db_csv_info,Path(movies_csv.name))))
         download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=str(Path(remote_fpath,species_csv)),
-                                local_fpath=str(Path(db_csv_info,species_csv)))
+                                remote_fpath=species_csv,
+                                local_fpath=str(Path(db_csv_info,Path(species_csv.name))))
         
         
         db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,sites_csv)), 
-            "movies_csv": str(Path(db_csv_info,movies_csv)), 
-            "species_csv": str(Path(db_csv_info,species_csv))
+            "sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
+            "movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
+            "species_csv": str(Path(db_csv_info,Path(species_csv.name)))
         }
     
     elif server == "local":
-        return None
+        
+        csv_folder = tutorials_utils.get_project_info(project_name, "csv_folder")
+        
+        # Define the path to the csv files with inital info to build the db
+        for file in Path(csv_folder).rglob("*.csv"):
+            if 'sites' in file.name:
+                sites_csv = file
+            if 'movies' in file.name:
+                movies_csv = file
+            if 'species' in file.name:
+                species_csv = file
+        
+        db_initial_info = {
+            "sites_csv": sites_csv, 
+            "movies_csv": movies_csv, 
+            "species_csv": species_csv
+        }
 
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
@@ -311,13 +333,13 @@ def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
     
     return contents_s3_pd
 
-def get_koster_movies(client):
+def get_snic_files(client, folder):
     """ 
     Get list of movies from SNIC server using ssh client.
     
     :param client: SSH client (paramiko)
     """
-    stdin, stdout, stderr = client.exec_command("ls /cephyr/NOBACKUP/groups/snic2021-6-9/koster_movies/")
+    stdin, stdout, stderr = client.exec_command(f"ls {folder}")
     snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
     return snic_df
 

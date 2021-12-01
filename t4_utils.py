@@ -28,9 +28,11 @@ from panoptes_client import (
    
 def retrieve_movie_info_from_server(project_name, db_info_dict):
     
-    if project_name == "Spyfish_Aotearoa":
+    server = tutorials_utils.get_project_info(project_name, "server")
+    
+    if server == "AWS":
         # Specify the bucket
-        bucket_i = 'marine-buv'
+        bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
 
         # Retrieve info from the bucket
         server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
@@ -38,8 +40,9 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
                                                          suffix = movie_utils.get_movie_extensions())
         server_df.rename({"Key": "spath"})
     
-    if project_name == "Koster_Seafloor_Obs":
-        server_df = server_utils.get_koster_movies(client = db_info_dict["client"])
+    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
+        folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = folder)
         server_df["spath"] = server_df["spath"].apply(koster_utils.unswedify)
     else:
         raise ValueError("The project you selected is not currently supported.")
@@ -78,7 +81,7 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
 def movie_to_upload(available_movies_df):
 
     # Widget to select the movie
-    movie_to_upload_widget = widgets.Combobox(
+    movie_to_upload_widget = widgets.Dropdown(
                     options=tuple(available_movies_df.filename.unique()),
                     description="Movie to upload:",
                     ensure_option=True,
@@ -229,7 +232,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
     if server == "AWS":
 
-        bucket_i = "marine-buv"
+        bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
 
         if not os.path.exists(movie_i_df.filename_ext[0]):
             # Download the movie of interest
@@ -242,12 +245,14 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
     if server == "SNIC":
         
+        movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+        
         if not os.path.exists(movie_i_df.filename_ext[0]):
             # Download the movie of interest
             server_utils.download_object_from_snic(
                             db_info_dict["sftp_client"],
-                            remote_fpath=str(Path("/cephyr/NOBACKUP/groups/snic2021-6-9/koster_movies/", movie_i_df.filename_ext[0])),
-                            local_fpath=str(Path(".", movie_i_df.filename_ext[0])),
+                            remote_fpath=str(Path(movie_folder, movie_i_df.filename_ext[0])),
+                            local_fpath=str(Path(".", movie_i_df.filename_ext[0]))
             )
     
 
