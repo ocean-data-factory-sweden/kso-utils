@@ -179,12 +179,16 @@ def find_duplicated_clips(conn):
 
 ### Populate sites, movies and species
 
-def add_sites(sites_csv, db_path):
+def add_sites(sites_csv, project_name, db_path):
 
     # Load the csv with sites information
     sites_df = pd.read_csv(sites_csv)
     
-    
+    # Check if the project is the Spyfish Aotearoa
+    if project_name == "Spyfish_Aotearoa":
+        # Rename columns to match schema fields
+        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
+        
     # Select relevant fields
     sites_df = sites_df[
         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
@@ -208,8 +212,9 @@ def add_movies(movies_csv, project_name, db_path):
     
     # Check if the project is the Spyfish Aotearoa
     if project_name == "Spyfish_Aotearoa":
-        movies_df = spyfish_utils.process_spyfish_movies_csv(movies_df)
-            
+        movies_df = spyfish_utils.process_spyfish_movies(movies_df)
+        
+        
     # Check if the project is the KSO
     if project_name == "Koster_Seafloor_Obs":
         movies_df = koster_utils.process_koster_movies_csv(movies_df)
@@ -242,7 +247,7 @@ def add_movies(movies_csv, project_name, db_path):
     )
 
 
-def add_species(species_csv, db_path):
+def add_species(species_csv, project_name, db_path):
 
     # Load the csv with species information
     species_df = pd.read_csv(species_csv)

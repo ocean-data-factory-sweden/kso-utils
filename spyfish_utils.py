@@ -10,15 +10,6 @@ import kso_utils.movie_utils as movie_utils
 from tqdm import tqdm
 import subprocess
 
-def process_spyfish_movies_csv(movies_df):
-    # Specify the key (path in S3 of the object)
-    movies_df["Fpath"] = movies_df["prefix"] + "/" + movies_df["filename"]
-
-    # Remove extension from the filename to match the subject metadata from Zoo
-    movies_df["filename"] = movies_df["filename"].str.split('.',1).str[0]
-    
-    return movies_df
-
 def check_spyfish_movies(movies_df, client, bucket_i):
     
     # Specify the formats of the movies to select
@@ -65,63 +56,42 @@ def add_fps_length_spyfish(df, miss_par_df, client):
                     
     return df
     
-def add_movie_filenames(movies_df):
-
-    #####Get info from bucket#####
-    # Your acess key for the s3 bucket. 
-    aws_access_key_id, aws_secret_access_key = server_utils.aws_credentials
+def process_spyfish_sites(sites_df):
     
-    # Specify the bucket where the BUV files are
-    bucket_i = movies_df['bucket'].str.split('/').str[0].unique().str[0]
-    
-    # Retrieve info from the bucket
-    contents_s3_pd = server_utils.retrieve_s3_buckets_info(aws_access_key_id,aws_secret_access_key, bucket_i)
-
-    # Include server's path to the movie files
-    movies_df["Fpath"] = movies_path["bucket"] + "/" + movies_df["filename"]
-
-    # Specify the 'key' or path to the BUV directories
-    movies_df['key'] = movies_df['bucket'].str.split('/',1).str[1]
-
-    # Specify the filename to be saved to
-    movies_df['VideoFilename'] = movies_df['filename']
-
-    # Select the relevant bucket
-    bucket_i = movies_to_upload.bucket.unique()[0]
-    objs = client.list_objects(Bucket=bucket_i)
-
-    # Set the contents as pandas dataframe
-    filenames_s3_buv_pd = pd.DataFrame(objs['Contents'])
-    
-    # Select only surveys that are missing filenames
-    unprocessed_movies_df = movies_df[movies_df["filename"].isna()].reset_index(drop=True)
-    
-    # Write the filename of the concatenated movie
-    unprocessed_movies_df["filename"] = unprocessed_movies_df["siteName"] + "_" + unprocessed_movies_df["created_on"].str.replace('/','_')+ ".MP4"
-    
-    # Download go pro videos, concatenate them and upload the concatenated videos to aws
-    concatenate_videos(unprocessed_movies_df)
-
-    
-    # Add the updated movie info 
-    movies_df = movies_df[~movies_df["filename"].isna()].reset_index(drop=True).append(unprocessed_movies_df)
-    
-    
-    # Update the local movies.csv file with the new fps and duration information
-    df.drop(["Fpath","exists"], axis=1).to_csv(movies_csv,index=False)
+    # Rename relevant fields
+    sites_df = sites_df.rename(
+        columns = {
+            "schema_site_id": "site_id",# site id for the db
+            "SiteID": "siteName",#site id used for zoo subjects
+            "Latitude": "decimalLatitude",
+            "Longitude": "decimalLongitude"
+        }
+    )
         
-    ######Merge csv and bucket information
-    # Check that videos can be mapped
-    movies_df['exists'] = movies_df['Fpath'].map(os.path.isfile)
-    
-    # Create the folder to store the concatenated videos if not exist
-    if not os.path.exists(concat_folder):
-        os.mkdir(concat_folder)
+    return sites_df
 
-    # Specify the prefixes of the BUV Go Pro files
-    movies_to_upload["directory_prefix"] = movies_to_upload['key'] + "/GH"
+
+def process_spyfish_movies(movies_df):
     
-    #movies_to_upload = apply(concatenate_go_pro x["VideoFilename","go_pro_files"])
+    # Rename relevant fields
+    movies_df = movies_df.rename(
+        columns = {
+            "LinkToVideoFile": "Fpath",
+            "EventDate": "created_on",
+            "SurveyStart": "survey_start",
+            "SurveyEnd": "survey_end",
+            "RecordedBy": "Author",
+
+        }
+    )
+
+    # Remove extension from the filename to match the subject metadata from Zoo
+    movies_df["filename"] = movies_df["filename"].str.split('.',1).str[0]
+    
+    
+    return movies_df
+    
+    
 
 # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
 def concatenate_videos(df, session):
