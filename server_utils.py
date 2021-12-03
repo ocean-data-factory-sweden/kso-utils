@@ -94,37 +94,40 @@ def get_db_init_info(project_name, server_dict):
     
     if server == "AWS":
         
-        # Provide bucket and key
-        bucket = tutorials_utils.get_project_info(project_name, "bucket")
-        key = tutorials_utils.get_project_info(project_name, "key")
-        sites_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"sites"))).values[0]
-        movies_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"movies"))).values[0]
-        species_csv = get_matching_s3_keys(server_dict["client"], bucket, prefix=str(Path(key,"species"))).values[0]
-     
         # Create the folder to store the csv files if not exist
         if not os.path.exists(db_csv_info):
             os.mkdir(db_csv_info)
             
-        download_object_from_s3(server_dict["client"],
-                                bucket=bucket,
-                                key=sites_csv, 
-                                filename=str(Path(db_csv_info,Path(sites_csv.name))))
-        download_object_from_s3(server_dict["client"],
-                                bucket=bucket,
-                                key=movies_csv, 
-                                filename=str(Path(db_csv_info,Path(movies_csv.name))))
-        download_object_from_s3(server_dict["client"],
-                                bucket=bucket,
-                                key=species_csv, 
-                                filename=str(Path(db_csv_info,Path(species_csv.name))))
+        # Provide bucket and key
+        bucket = tutorials_utils.get_project_info(project_name, "bucket")
+        key = tutorials_utils.get_project_info(project_name, "key")
         
-        
-        db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
-            "movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
-            "species_csv": str(Path(db_csv_info,Path(species_csv.name)))
-        }
-        
+        # Create empty dict
+        db_initial_info = {}
+            
+        for i in ['sites', 'movies', 'species', 'surveys']:
+            # Get the server path of the csv
+            server_i_csv = get_matching_s3_keys(server_dict["client"], 
+                                                bucket, 
+                                                prefix = key+"/"+i)['Key'][0]
+            
+            # Specify the local path for the csv
+            local_i_csv = str(Path(db_csv_info,Path(server_i_csv).name))
+            
+            # Download the csv
+            download_object_from_s3(server_dict["client"],
+                                bucket=bucket,
+                                key=server_i_csv, 
+                                filename=local_i_csv)
+            
+            # Save the local and server paths in the dict
+            local_csv_str = str("local_"+i+"_csv")
+            server_csv_str = str("server_"+i+"_csv")
+            
+            db_initial_info[local_csv_str] = Path(local_i_csv)
+            db_initial_info[server_csv_str] = server_i_csv
+            
+        return db_initial_info
                 
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         # Check if the directory db_csv_info exists
@@ -149,9 +152,9 @@ def get_db_init_info(project_name, server_dict):
                 species_csv = file
             
         db_initial_info = {
-            "sites_csv": sites_csv, 
-            "movies_csv": movies_csv, 
-            "species_csv": species_csv
+            "local_sites_csv": sites_csv, 
+            "local_movies_csv": movies_csv, 
+            "local_species_csv": species_csv
         }
         
     elif server == "SNIC" and not project_name == "Koster_Seafloor_Obs":
@@ -185,9 +188,9 @@ def get_db_init_info(project_name, server_dict):
         
         
         db_initial_info = {
-            "sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
-            "movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
-            "species_csv": str(Path(db_csv_info,Path(species_csv.name)))
+            "local_sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
+            "local_movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
+            "local_species_csv": str(Path(db_csv_info,Path(species_csv.name)))
         }
     
     elif server == "local":
@@ -204,13 +207,14 @@ def get_db_init_info(project_name, server_dict):
                 species_csv = file
         
         db_initial_info = {
-            "sites_csv": sites_csv, 
-            "movies_csv": movies_csv, 
-            "species_csv": species_csv
+            "local_sites_csv": sites_csv, 
+            "local_movies_csv": movies_csv, 
+            "local_species_csv": species_csv
         }
 
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
+    
     return db_initial_info
 
 
