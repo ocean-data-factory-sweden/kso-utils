@@ -103,8 +103,10 @@ def get_db_init_info(project_name, server_dict):
         key = tutorials_utils.get_project_info(project_name, "key")
         
         # Create empty dict
-        db_initial_info = {}
-            
+        db_initial_info = {
+            "bucket": bucket
+        }
+                    
         for i in ['sites', 'movies', 'species', 'surveys']:
             # Get the server path of the csv
             server_i_csv = get_matching_s3_keys(server_dict["client"], 
@@ -143,6 +145,7 @@ def get_db_init_info(project_name, server_dict):
                                 key=server_choices_csv, 
                                 filename=local_choices_csv)
             
+            db_initial_info["server_choices_csv"] = server_choices_csv
             db_initial_info["local_choices_csv"] = Path(local_choices_csv)
             
         return db_initial_info
