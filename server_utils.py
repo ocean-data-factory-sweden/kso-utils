@@ -127,6 +127,24 @@ def get_db_init_info(project_name, server_dict):
             db_initial_info[local_csv_str] = Path(local_i_csv)
             db_initial_info[server_csv_str] = server_i_csv
             
+        if project_name == "Spyfish_Aotearoa":
+            # Get the server path of the csv with sites and survey choices
+            server_choices_csv = get_matching_s3_keys(server_dict["client"], 
+                                                bucket, 
+                                                prefix = key+"/"+"choices")['Key'][0]
+            
+            
+            # Specify the local path for the csv
+            local_choices_csv = str(Path(db_csv_info,Path(server_choices_csv).name))
+            
+            # Download the csv
+            download_object_from_s3(server_dict["client"],
+                                bucket=bucket,
+                                key=server_choices_csv, 
+                                filename=local_choices_csv)
+            
+            db_initial_info["local_choices_csv"] = Path(local_choices_csv)
+            
         return db_initial_info
                 
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
