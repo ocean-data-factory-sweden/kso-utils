@@ -141,7 +141,7 @@ def concatenate_go_pro_videos(SiteName_i, EventDate_i, go_pro_folder, go_pro_fil
     fps_i, duration_i = movie_utils.get_length(concat_video)
     
     video_info_dict = {
-        "fps_i": fps, 
+        "fps_i": fps_i, 
         "duration_i": duration_i, 
         "concat_video_i": concat_video, 
         "filename_i": filename_i, 
@@ -224,7 +224,7 @@ def select_DeploymentDurationMinutes():
                 min=0,
                 max=60,
                 step=1,
-                description='theoretical minimum soaking time in minutes for the unit:',
+                description='Theoretical minimum soaking time for the unit (mins):',
                 disabled=False,
                 layout=Layout(width='50%'),
                 style = {'description_width': 'initial'}
@@ -974,15 +974,17 @@ def wait_for_change(widget1, widget2): #<------ Rename to widget1, and add widge
 def confirm_survey(survey_i, db_info_dict, date_encoder):
 
     correct_button = widgets.Button(
-              description = 'Yes, details are correct',
-              layout=Layout(width='25%'),
-              style = {'description_width': 'initial'}
+        description = 'Yes, details are correct',
+        layout=Layout(width='25%'),
+        style = {'description_width': 'initial'},
+        button_style='danger'
         )
 
     wrong_button = widgets.Button(
         description = 'No, I will go back and fix them',
         layout=Layout(width='45%'),
-        style = {'description_width': 'initial'}
+        style = {'description_width': 'initial'}, 
+        button_style='danger'
     )
 
 
