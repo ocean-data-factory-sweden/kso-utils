@@ -81,6 +81,7 @@ def process_spyfish_movies(movies_df):
             "SurveyStart": "survey_start",
             "SurveyEnd": "survey_end",
             "RecordedBy": "Author",
+            "SiteName": "siteName",
 
         }
     )
