@@ -513,9 +513,7 @@ def confirm_deployment_details(video_info_dict_i,
             
             
     # Create temporary prefix (s3 path) for concatenated video
-    prefix_conc_i = os.path.join(deployment_info["s3_folder_i"].value, 
-                                 video_info_dict_i["SiteName_i"],
-                                 video_info_dict_i["filename_i"])
+    prefix_conc_i = deployment_info["s3_folder_i"].value+"/"+video_info_dict_i["SiteName_i"]+"/"+video_info_dict_i["filename_i"]
     
     # Read surveys csv
     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
@@ -533,7 +531,7 @@ def confirm_deployment_details(video_info_dict_i,
         
     else:
         # Get the last unitID
-        last_unitID = str(survey_movies_df.sort("UnitID").tail(1).values[0])[-4:]
+        last_unitID = str(survey_movies_df.sort_values("UnitID").tail(1)["UnitID"].values[0])[-4:]
         
         # Add one more to the last UnitID
         next_unitID = str(int(last_unitID) + 1).zfill(4)
@@ -576,6 +574,7 @@ def confirm_deployment_details(video_info_dict_i,
             "NotesDeployment": deployment_info["NotesDeployment_i"].value,
             "DeploymentDurationMinutes": deployment_info["DeploymentDurationMinutes_i"].value,
             "SurveyID": surveys_df_i["SurveyID"].values[0],
+            "SiteName": video_info_dict_i["SiteName_i"],
             "SurveyName": survey_name,
         }
     )
@@ -589,12 +588,8 @@ def confirm_deployment_details(video_info_dict_i,
 
 def upload_concat_movie(db_info_dict, video_info_dict_i, new_deployment_row):
     
-    # Create the link to concat video file in s3
-    location = "ap-southeast-2"
-    url = "https://s3-%s.amazonaws.com/%s/%s" % (location, db_info_dict["bucket"], new_deployment_row["prefix_conc"])
-    
     # Save to new deployment row df
-    new_deployment_row["LinkToVideoFile"] = url
+    new_deployment_row["LinkToVideoFile"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+new_deployment_row["prefix_conc"][0]
     
     # Upload movie to the s3 bucket
     server_utils.upload_file_to_s3(client = db_info_dict["client"],
