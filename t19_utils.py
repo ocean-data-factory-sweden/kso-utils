@@ -101,8 +101,11 @@ def select_eventdate():
 # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
 def concatenate_go_pro_videos(SiteName_i, EventDate_i, go_pro_folder, go_pro_files_i):
 
+    # Save eventdate as str
+    EventDate_str_i = EventDate_i.isoformat().replace("-","_")
+    
     # Specify the name of the deployment
-    deployment_name_i = SiteName_i+"_"+EventDate_i
+    deployment_name_i = SiteName_i+"_"+EventDate_str_i
 
     # Specify temp folder to host the concat video
     concat_folder = go_pro_folder+"concat_video/"
@@ -147,6 +150,7 @@ def concatenate_go_pro_videos(SiteName_i, EventDate_i, go_pro_folder, go_pro_fil
         "filename_i": filename_i, 
         "SiteName_i": SiteName_i, 
         "EventDate_i": EventDate_i, 
+        "EventDate_str_i": EventDate_str_i,
         "go_pro_files_i": go_pro_files_i, 
         "deployment_name_i": deployment_name_i
     }
@@ -196,7 +200,7 @@ def record_deployment_info(db_info_dict, video_info_dict):
     # Select the S3 "survey folder" to upload the video
     s3_folder_i = select_s3_folder(db_info_dict)
 
-    #Add any comment related to the movie
+    # Add any comment related to the movie
     NotesDeployment_i = write_comment()
     
     deployment_info = {
@@ -295,7 +299,7 @@ def select_UnderwaterVisibility():
 def select_author(movies_df):
     
     # Existing authors
-    exisiting_authors = movies_df.Author.unique()
+    exisiting_authors = movies_df.RecordedBy.unique()
 
     def f(Existing_or_new):
         if Existing_or_new == 'Existing':
@@ -509,19 +513,21 @@ def confirm_deployment_details(video_info_dict_i,
             
             
     # Create temporary prefix (s3 path) for concatenated video
-    prefix_conc_i = deployment_info("s3_folder_i") + "/" + video_info_dict_i["deployment_name_i"] + "/" + video_info_dict_i["filename_i"]
+    prefix_conc_i = os.path.join(deployment_info["s3_folder_i"].value, 
+                                 video_info_dict_i["SiteName_i"],
+                                 video_info_dict_i["filename_i"])
     
     # Read surveys csv
     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
     
     # Select relevant survey
-    surveys_df_i = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index() 
+    surveys_df_i = surveys_df[surveys_df["SurveyName"]==survey_i.result.value].reset_index() 
     
     # Select previously processed movies within the same survey
     survey_movies_df = movies_df[movies_df["SurveyID"]==surveys_df_i["SurveyID"].values[0]].reset_index()
     
     # Create unit id
-    if not survey_movies_df:
+    if survey_movies_df.empty:
         # Start unit_id in 0
         UnitID = surveys_df_i["SurveyID"].values[0] + "_0000"
         
@@ -534,24 +540,23 @@ def confirm_deployment_details(video_info_dict_i,
         
         # Add one more to the last UnitID
         UnitID = surveys_df_i["SurveyID"].values[0] + "_" + next_unitID
-        
+            
     # Save the responses as a new row for the survey csv file
     new_deployment_row = pd.DataFrame(
         {
             "movie_id": movie_id_i,
-            "RecordedBy": deployment_info["RecordedBy_i"],
             "DateEntryMovie": date_encoder[1].value,
             "EncoderNameMovie": date_encoder[0].value,
             "EventDate": video_info_dict_i["EventDate_i"],
-            "SurveyStart": deployment_info["SurveyStart_i"],
-            "SurveyEnd": deployment_info["SurveyEnd_i"],
+            "SurveyStart": deployment_info["SurveyStart_i"].result,
+            "SurveyEnd": deployment_info["SurveyEnd_i"].result,
             "prefix_conc": prefix_conc_i,
             "filename": video_info_dict_i["filename_i"],
             "fps": video_info_dict_i["fps_i"],
             "duration": video_info_dict_i["duration_i"],
             "go_pro_files": video_info_dict_i["go_pro_files_i"],
-            "IsBadDeployment": deployment_info["IsBadDeployment_i"],
-            "LinkToFieldSheets": deployment_info["LinkToFieldSheets_i"],
+            "IsBadDeployment": deployment_info["IsBadDeployment_i"].result,
+            "LinkToFieldSheets": deployment_info["LinkToFieldSheets_i"].value,
             "LinkReport01": "NA",
             "LinkReport02": "NA",
             "LinkReport03": "NA",
@@ -559,48 +564,48 @@ def confirm_deployment_details(video_info_dict_i,
             "LinkToOriginalData": "NA",
             "UnitID": UnitID,
             "ReplicateWithinSite": "NA",
-            "RecordedBy": deployment_info["RecordedBy_i"],
+            "RecordedBy": deployment_info["RecordedBy_i"].result.value,
             "Year": video_info_dict_i["EventDate_i"].year,
             "Month": video_info_dict_i["EventDate_i"].month,
             "Day": video_info_dict_i["EventDate_i"].day,
-            "DepthStrata": deployment_info["DepthStrata_i"],
-            "Depth": deployment_info["Depth_i"],
-            "UnderwaterVisibility": deployment_info["UnderwaterVisibility_i"],
-            "TimeIn": deployment_info["TimeIn_i"],
-            "TimeOut": deployment_info["TimeOut_i"],
-            "NotesDeployment": deployment_info["NotesDeployment_i"],
-            "DeploymentDurationMinutes": deployment_info["DeploymentDurationMinutes_i"],
+            "DepthStrata": deployment_info["DepthStrata_i"].value,
+            "Depth": deployment_info["Depth_i"].value,
+            "UnderwaterVisibility": deployment_info["UnderwaterVisibility_i"].value,
+            "TimeIn": deployment_info["TimeIn_i"].value,
+            "TimeOut": deployment_info["TimeOut_i"].value,
+            "NotesDeployment": deployment_info["NotesDeployment_i"].value,
+            "DeploymentDurationMinutes": deployment_info["DeploymentDurationMinutes_i"].value,
             "SurveyID": surveys_df_i["SurveyID"].values[0],
             "SurveyName": survey_name,
         }
     )
-    
+   
     print("The details of the new deployment are:")
     for ind in new_deployment_row.T.index:
         print(ind,"-->", new_deployment_row.T[0][ind])
     
-    return new_deployment_row
+    return new_deployment_row.head(1)
 
 
-def upload_concat_movie(db_info_dict, new_deployment_row):
-    
-    # Upload movie to the s3 bucket
-    server_utils.upload_file_to_s3(client = db_info_dict["client"],
-                                   bucket = db_info_dict["bucket"], 
-                                   key = new_deployment_row["prefix_conc"], 
-                                   filename = video_info_dict["concat_video"])
+def upload_concat_movie(db_info_dict, video_info_dict_i, new_deployment_row):
     
     # Create the link to concat video file in s3
-    location = db_info_dict["client"].get_bucket_location(Bucket=db_info_dict["bucket"])['LocationConstraint']
+    location = "ap-southeast-2"
     url = "https://s3-%s.amazonaws.com/%s/%s" % (location, db_info_dict["bucket"], new_deployment_row["prefix_conc"])
     
     # Save to new deployment row df
     new_deployment_row["LinkToVideoFile"] = url
     
+    # Upload movie to the s3 bucket
+    server_utils.upload_file_to_s3(client = db_info_dict["client"],
+                                   bucket = db_info_dict["bucket"], 
+                                   key = new_deployment_row["prefix_conc"][0], 
+                                   filename = video_info_dict_i["concat_video_i"])
+    
     print("Movie uploaded to", new_deployment_row["LinkToVideoFile"])
     
     # Remove temporary prefix for concatenated video
-    new_deployment_row = new_deployment_row.drop("prefix_conc")
+    new_deployment_row = new_deployment_row.drop("prefix_conc", axis=1)
     
     # Load the csv with movies information
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
@@ -615,7 +620,7 @@ def upload_concat_movie(db_info_dict, new_deployment_row):
     server_utils.upload_file_to_s3(db_info_dict["client"],
                                    bucket=db_info_dict["bucket"], 
                                    key=db_info_dict["server_movies_csv"], 
-                                   filename=db_info_dict["local_movies_csv"])
+                                   filename=str(db_info_dict["local_movies_csv"]))
     
     # Remove temporary movie
     
