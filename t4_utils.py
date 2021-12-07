@@ -5,6 +5,7 @@ import numpy as np
 import math
 import datetime
 import subprocess
+import logging
 from pathlib import Path
 
 from tqdm import tqdm
@@ -25,15 +26,20 @@ from panoptes_client import (
     Project,
     Panoptes,
 )
+
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
    
 def retrieve_movie_info_from_server(project_name, db_info_dict):
     
     server = tutorials_utils.get_project_info(project_name, "server")
+    bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
+    movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
     
     if server == "AWS":
-        # Specify the bucket
-        bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
-
         # Retrieve info from the bucket
         server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
                                                          bucket = bucket_i, 
@@ -41,11 +47,19 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
         server_df.rename({"Key": "spath"})
     
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
-        folder = tutorials_utils.get_project_info(project_name, "movie_folder")
-        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = folder)
+        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
         server_df["spath"] = server_df["spath"].apply(koster_utils.unswedify)
+    
+    if server == "local":
+        if [movie_folder, bucket_i] == ["None", "None"]:
+            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 5 instead.")
+            return pd.DataFrame(columns = ["filename"])
+        else:
+            server_files = os.listdir(movie_folder)
+            server_paths = [movie_folder + i for i in server_files]
+            server_df = pd.DataFrame(server_files, columns="spath") 
     else:
-        raise ValueError("The project you selected is not currently supported.")
+        raise ValueError("The server type you selected is not currently supported.")
     
     
     # Create connection to db
@@ -73,7 +87,7 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
     # Create a filename with ext column
     available_movies_df["filename_ext"] = available_movies_df["fpath"].str.split("/").str[-1]
 
-    print(available_movies_df.shape[0], "movies are mapped from the server")
+    logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
     
     return available_movies_df
 

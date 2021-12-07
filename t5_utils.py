@@ -4,10 +4,20 @@ import kso_utils.db_utils as db_utils
 import pandas as pd
 import numpy as np
 import math
+import logging
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact
 from kso_utils.zooniverse_utils import auth_session
+import kso_utils.tutorials_utils as t_utils
+from ipyfilechooser import FileChooser
+
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+out_df = pd.DataFrame()
 
 def choose_species(db_path: str = "koster_lab.db"):
     conn = db_utils.create_connection(db_path)
@@ -143,19 +153,32 @@ def create_frames(sp_frames_df: pd.DataFrame):
     ]
     return sp_frames_df
 
-def get_frames(species_ids: list, db_path: str, frame_method, n_frames=300):
-    if frame_method == "Manual":
-        df = get_manual_frames(frames_path)
+def get_frames(species_ids: list, db_path: str, project_name: str, n_frames=300):
+    
+    movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+    df = pd.DataFrame()
+    
+    if movie_folder == "None":
+        df = FileChooser('.')
+            
+        # Callback function
+        def build_df(chooser):
+            frame_files = os.listdir(chooser.selected)
+            frame_paths = [chooser.selected+i for i in frame_files]
+            chooser.df = pd.DataFrame(frame_paths, columns=["fpath"])
+                
+        # Register callback function
+        df.register_callback(build_df)
+        display(df)
+        
     else:
         # Connect to koster_db
         conn = db_utils.create_connection(db_path)
         df = get_species_frames(species_ids, conn, n_frames)
         df = check_frames_uploaded(df)
         
-    return df
+    return df       
     
-
-
 def get_species_frames(species_ids: list, conn, n_frames):
     """
     # Function to identify up to n number of frames per classified clip

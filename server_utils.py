@@ -1,5 +1,4 @@
-import os, io
-import os
+import os, io, sys
 import requests
 import pandas as pd
 import numpy as np
@@ -8,12 +7,19 @@ import gdown
 import zipfile
 import boto3
 import paramiko
+import logging
 from paramiko import SSHClient
 from scp import SCPClient
 
 import kso_utils.tutorials_utils as tutorials_utils
 from tqdm import tqdm
 from pathlib import Path
+
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Common utility functions to connect to external servers (AWS, GDrive,...)
 
@@ -39,6 +45,9 @@ def connect_to_server(project_name):
         # Connect to SNIC
         client = connect_snic(snic_user, snic_pass)
         sftp_client = create_snic_transport(snic_user, snic_pass)
+        
+    else:
+        server_dict = {}
         
     if "client" in vars():
         server_dict['client'] = client
@@ -217,8 +226,12 @@ def get_db_init_info(project_name, server_dict):
     elif server == "local":
         
         csv_folder = tutorials_utils.get_project_info(project_name, "csv_folder")
+        movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
         
-        # Define the path to the csv files with inital info to build the db
+        # Define the path to the csv files with initial info to build the db
+        if not os.path.exists(csv_folder):
+            logging.error("Invalid csv folder specified, please provide the path to the species, sites and movies (optional)")
+            
         for file in Path(csv_folder).rglob("*.csv"):
             if 'sites' in file.name:
                 sites_csv = file
@@ -226,17 +239,27 @@ def get_db_init_info(project_name, server_dict):
                 movies_csv = file
             if 'species' in file.name:
                 species_csv = file
-        
-        db_initial_info = {
-            "local_sites_csv": sites_csv, 
-            "local_movies_csv": movies_csv, 
-            "local_species_csv": species_csv
-        }
+                
+        if "movies_csv" not in vars() and os.path.exists(csv_folder):
+            logging.info("No movies found, an empty file will be created.")
+            with open(f'{csv_folder}/movies.csv', 'w') as fp:
+                pass
+                
+        try:
+            db_initial_info = {
+                "local_sites_csv": sites_csv, 
+                "local_movies_csv": movies_csv, 
+                "local_species_csv": species_csv
+            }
+            
+        except:
+            logging.error("Insufficient information to build the database. Please fix the path to csv files.")
+            db_initial_info = {}
 
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
-    
     return db_initial_info
+    
 
 
 def update_db_init_info(project_name, csv_to_update):
