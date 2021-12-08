@@ -555,7 +555,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
     if project_name == "Koster_Seafloor_Obs":
         
         # Read sites csv as pd
-        sitesdf = pd.read_csv(db_info_dict["sites_csv"])
+        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
 
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(columns={

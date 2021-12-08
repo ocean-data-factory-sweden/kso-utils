@@ -3,6 +3,7 @@ import io
 import getpass
 import pandas as pd
 import json
+import logging
 import numpy as np
 from panoptes_client import (
     SubjectSet,
@@ -16,6 +17,12 @@ from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_sub
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
 import kso_utils.tutorials_utils as tutorials_utils
+
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
     
 
 def zoo_credentials():
@@ -39,10 +46,11 @@ def auth_session(username, password, project_n):
 #         raise AuthenticationError("Your credentials are invalid. Please try again.")
 
     # Specify the project number of the koster lab
-    project = Project(project_n)
-
-    return project
-
+    try:
+        project = Project(project_n)
+        return project
+    except Exception as e:
+        logging.error(e)
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(project_name, zoo_project, zoo_info: str):

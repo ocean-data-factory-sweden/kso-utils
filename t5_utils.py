@@ -7,9 +7,10 @@ import math
 import logging
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
-from ipywidgets import interact
+from ipywidgets import interact, Layout
 from kso_utils.zooniverse_utils import auth_session
 import kso_utils.tutorials_utils as t_utils
+import kso_utils.server_utils as s_utils
 from ipyfilechooser import FileChooser
 
 # Logging
@@ -174,91 +175,153 @@ def get_frames(species_ids: list, db_path: str, project_name: str, n_frames=300)
     else:
         # Connect to koster_db
         conn = db_utils.create_connection(db_path)
-        df = get_species_frames(species_ids, conn, n_frames)
+        df = get_species_frames(species_ids, conn, project_name, n_frames)
         df = check_frames_uploaded(df)
         
-    return df       
+    return df
+
+def compare_frames(df):
     
-def get_species_frames(species_ids: list, conn, n_frames):
+    if not isinstance(df, pd.DataFrame):
+        df = df.df
+
+    # Save the paths of the clips
+    original_clip_paths = df["fpath"].unique()
+    
+    # Add "no movie" option to prevent conflicts
+    original_clip_paths = np.append(original_clip_paths,"No frame")
+    
+    clip_path_widget = widgets.Dropdown(
+                    options=tuple(np.sort(original_clip_paths)),
+                    description="Select original frame:",
+                    ensure_option=True,
+                    disabled=False,
+                    layout=Layout(width='50%'),
+                    style = {'description_width': 'initial'}
+                )
+    
+    main_out = widgets.Output()
+    display(clip_path_widget, main_out)
+    
+    # Display the original and modified clips
+    def on_change(change):
+        with main_out:
+            clear_output()
+            if change["new"]=="No frame":
+                print("It is OK to modify the frames again")
+            else:
+                a = view_frames(df, change["new"])
+                display(a)
+                
+                
+    clip_path_widget.observe(on_change, names='value')
+    
+# Display the clips using html
+def view_frames(df, frame_path):
+    
+    # Get path of the modified clip selected
+    #modified_clip_path = df[df["clip_path"]==movie_path].modif_clip_path.values[0]
+    #print(modified_clip_path)
+        
+    html_code = f"""
+        <html>
+        <div style="display: flex; justify-content: space-around">
+        <div>
+          <img src={frame_path}>
+        </img>
+        </div>
+        <div>
+          <img src={frame_path}>
+        </img>
+        </div>
+        </html>"""
+   
+    return HTML(html_code)
+
+    
+def get_species_frames(species_ids: list, conn, project_name, n_frames):
     """
     # Function to identify up to n number of frames per classified clip
     # that contains species of interest after the first time seen
 
     # Find classified clips that contain the species of interest
     """
-    frames_df = pd.read_sql_query(
-        f"SELECT subject_id, first_seen FROM agg_annotations_clip WHERE agg_annotations_clip.species_id={species_id}",
-        conn,
-    )
-
-    # Add species id to the df
-    frames_df["frame_exp_sp_id"] = species_id
-
-    # Get start time of the clips and ids of the original movies
-    (frames_df["clip_start_time"], frames_df["movie_id"],) = list(
-        zip(
-            *pd.read_sql_query(
-                f"SELECT clip_start_time, movie_id FROM subjects WHERE id IN {tuple(frames_df['subject_id'].values)} AND subject_type='clip'",
-                conn,
-            ).values
+    server = t_utils.get_project_info(project_name, "server")
+    
+    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
+        
+        movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+    
+        frames_df = pd.read_sql_query(
+            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
+            conn,
         )
-    )
-
-    # Identify the second of the original movie when the species first appears
-    frames_df["first_seen_movie"] = (
-        frames_df["clip_start_time"] + frames_df["first_seen"]
-    )
-
-    # Get the filepath and fps of the original movies
-    f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
-
-    # TODO: Fix fps figures for old movies and paths. Right now the path configuration is done manually to fix old copies
-    f_paths["fps"] = f_paths["fps"].apply(lambda x: 25.0 if np.isnan(x) else x, 1)
-    extensions = f_paths["fpath"].apply(lambda x: '' if len(os.path.splitext(x))>1 and os.path.splitext(x)[1]!='' else '.mov', 1)
-    f_paths["fpath"] = f_paths["fpath"].apply(lambda x: os.path.basename(x), 1)
-    f_paths["fpath"] = "/cephyr/NOBACKUP/groups/snic2021-6-9/koster_movies/" + f_paths["fpath"] + extensions
-
-    # Ensure swedish characters don't cause issues
-    f_paths["fpath"] = f_paths["fpath"].apply(
-        lambda x: str(x) if os.path.isfile(str(x)) else koster_utlis.unswedify(str(x))
-    )
-    # Include movies' filepath and fps to the df
-    frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
-
-    # Specify if original movies can be found
-    # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
-    frames_df["exists"] = frames_df["fpath"].map(os.path.isfile)
-
-    if len(frames_df[~frames_df.exists]) > 0:
-        print(
-            f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
+        
+        frames_df = pd.read_sql_query(
+            f"SELECT * FROM agg_annotations_clip",
+            conn,
         )
 
-    # Select only frames from movies that can be found
-    frames_df = frames_df[frames_df.exists]
+        # Get start time of the clips and ids of the original movies
+        (frames_df["clip_start_time"], frames_df["movie_id"],) = list(
+            zip(
+                *pd.read_sql_query(
+                    f"SELECT clip_start_time, movie_id FROM subjects WHERE id IN {tuple(frames_df['subject_id'].values)} AND subject_type='clip'",
+                    conn,
+                ).values
+            )
+        )
 
-    # Identify the ordinal number of the frames expected to be extracted
-    frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
-        lambda x: [
-            int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames)
-        ],
-        1,
-    )
+        # Identify the second of the original movie when the species first appears
+        frames_df["first_seen_movie"] = (
+            frames_df["clip_start_time"] + frames_df["first_seen"]
+        )
 
-    # Reshape df to have each frame as rows
-    lst_col = "frame_number"
+        # Get the filepath and fps of the original movies
+        f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
+        f_paths["fpath"] = movie_folder + f_paths["fpath"] + extensions
 
-    frames_df = pd.DataFrame(
-        {
-            col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
-            for col in frames_df.columns.difference([lst_col])
-        }
-    ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
-        frames_df.columns.tolist()
-    ]
+        # Ensure swedish characters don't cause issues
+        f_paths["fpath"] = f_paths["fpath"].apply(
+            lambda x: str(x) if os.path.isfile(str(x)) else koster_utils.unswedify(str(x))
+        )
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
 
-    # Drop unnecessary columns
-    frames_df.drop(["subject_id"], inplace=True, axis=1)
+        # Specify if original movies can be found
+        # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
+        frames_df["exists"] = frames_df["fpath"].map(os.path.isfile)
+
+        if len(frames_df[~frames_df.exists]) > 0:
+            logging.error(
+                f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
+            )
+
+        # Select only frames from movies that can be found
+        frames_df = frames_df[frames_df.exists]
+
+        # Identify the ordinal number of the frames expected to be extracted
+        frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
+            lambda x: [
+                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames)
+            ],
+            1,
+        )
+
+        # Reshape df to have each frame as rows
+        lst_col = "frame_number"
+
+        frames_df = pd.DataFrame(
+            {
+                col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
+                for col in frames_df.columns.difference([lst_col])
+            }
+        ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
+            frames_df.columns.tolist()
+        ]
+
+        # Drop unnecessary columns
+        frames_df.drop(["subject_id"], inplace=True, axis=1)
 
     return frames_df
 
