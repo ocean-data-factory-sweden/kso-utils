@@ -86,34 +86,34 @@ def check_fps_duration(df, movies_csv, project_name):
                     
      
         
-def check_survey_start_end(df, movies_csv):
-    # Check if survey start or end is missing from any movie
-    if not df[["survey_start", "survey_end"]].isna().all().any():
+def check_sampling_start_end(df, movies_csv):
+    # Check if sampling start or end is missing from any movie
+    if not df[["sampling_start", "sampling_end"]].isna().all().any():
         
-        print("Survey_start and survey_end information checked")
+        print("sampling_start and survey_end information checked")
         
     else:
         
         print("Updating the survey_start or survey_end information of:")
-        print(*df[df[["survey_start", "survey_end"]].isna()].filename.unique(), sep = "\n")
+        print(*df[df[["sampling_start", "sampling_end"]].isna()].filename.unique(), sep = "\n")
         
         # Set the start of each movie to 0 if empty
-        df.loc[df["survey_start"].isna(),"survey_start"] = 0
+        df.loc[df["sampling_start"].isna(),"sampling_start"] = 0
 
             
         # Set the end of each movie to the duration of the movie if empty
-        df.loc[df["survey_end"].isna(),"survey_end"] = df["duration"]
+        df.loc[df["survey_end"].isna(),"sampling_end"] = df["duration"]
 
-        # Update the local movies.csv file with the new survey start/end info
+        # Update the local movies.csv file with the new sampling start/end info
         df.to_csv(movies_csv, index=False)
         
         print("The survey start and end columns have been updated in movies.csv")
 
         
-    # Prevent ending survey times longer than actual movies
-    if (df["survey_end"] > df["duration"]).any():
-        print("The survey_end times of the following movies are longer than the actual movies")
-        print(*df[df["survey_end"] > df["duration"]].filename.unique(), sep = "\n")
+    # Prevent ending sampling times longer than actual movies
+    if (df["sampling_end"] > df["duration"]).any():
+        print("The sampling_end times of the following movies are longer than the actual movies")
+        print(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
 
     return df
                     

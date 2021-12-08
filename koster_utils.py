@@ -276,6 +276,16 @@ def process_koster_movies_csv(movies_df):
     # TO DO Include server's path to the movie files
     movies_df["Fpath"] = movies_df["filename"]
     
+    # Rename relevant fields
+    movies_df = movies_df.rename(
+        columns = {
+            "SamplingStart": "sampling_start",
+            "SamplingEnd": "sampling_end",
+
+        }
+    )
+            
+    
     return movies_df
 
 def bb_iou(boxA, boxB):

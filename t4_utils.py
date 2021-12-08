@@ -44,13 +44,15 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
         server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
                                                          bucket = bucket_i, 
                                                          suffix = movie_utils.get_movie_extensions())
-        server_df.rename({"Key": "spath"})
+        # Get the fpath(html) from the key
+        server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
+        
     
-    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
+    elif server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
         server_df["spath"] = server_df["spath"].apply(koster_utils.unswedify)
     
-    if server == "local":
+    elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
             logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 5 instead.")
             return pd.DataFrame(columns = ["filename"])
@@ -82,7 +84,7 @@ def retrieve_movie_info_from_server(project_name, db_info_dict):
     movies_df = movies_df.drop("_merge", axis=1)
     
     # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df['exists']]
+    available_movies_df = movies_df[movies_df['exists']].reset_index()
     
     # Create a filename with ext column
     available_movies_df["filename_ext"] = available_movies_df["fpath"].str.split("/").str[-1]
@@ -138,7 +140,7 @@ def select_clip_n_len(movie_i, db_info_dict):
 
     # Query info about the movie of interest
     movie_df = pd.read_sql_query(
-        f"SELECT filename, duration, survey_start, survey_end FROM movies WHERE filename='{movie_i}'", conn)
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'", conn)
     
     # Display in hours, minutes and seconds
     def to_clips(clip_length, clips_range):
@@ -160,8 +162,8 @@ def select_clip_n_len(movie_i, db_info_dict):
                                  style = {'description_width': 'initial'},
                                  ensure_option=True,
                                  disabled=False,),
-                             clips_range = widgets.IntRangeSlider(value=[movie_df.survey_start.values,
-                                                                         movie_df.survey_end.values],
+                             clips_range = widgets.IntRangeSlider(value=[movie_df.sampling_start.values,
+                                                                         movie_df.sampling_end.values],
                                                                   min=0,
                                                                   max=int(movie_df.duration.values),
                                                                   step=1,
@@ -253,11 +255,11 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
             server_utils.download_object_from_s3(
                             db_info_dict["client"],
                             bucket=bucket_i,
-                            key=movie_i_df.Key.unique()[0],
+                            key=movie_i_df.spath.unique()[0].replace("http://marine-buv.s3.ap-southeast-2.amazonaws.com/",""),
                             filename=movie_i_df.filename_ext[0],
             )
     
-    if server == "SNIC":
+    elif server == "SNIC":
         
         movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
         
@@ -277,7 +279,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
 
     # Set the path of the clips
-    potential_start_df["clip_path"] = clips_folder+ "/" + potential_start_df["clip_filename"]
+    potential_start_df["clip_path"] = clips_folder+ os.sep + potential_start_df["clip_filename"]
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
@@ -312,23 +314,27 @@ def select_modification():
     # Widget to select the clip modification
     
     clip_modifications = {"Color_correction": {
-      "-crf": "30",
-      "-c:v": "libx264",
-      #"-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
-      "-pix_fmt": "yuv420p",
-      "-preset": "veryfast"
-    }, "Zoo_compression": {},"Blur_sensitive_info": {
-      "-crf": "30",
-      "-c:v": "libx264",
-      "-c:a": "copy",
-      "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
+        "-crf": "30",
+        "-c:v": "libx264",
+        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_compression": {
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        },"Blur_sensitive_info": {
+        "-crf": "30",
+        "-c:v": "libx264",
+        "-c:a": "copy",
+        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
         [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
         [0:v][b0]overlay=0:0[ovr0]; \
         [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
-      "-map": "[ovr1]",
-      "-pix_fmt": "yuv420p",
-      "-preset": "veryfast"
-    }, "None": {}}
+        "-map": "[ovr1]",
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "None": {}}
     
     select_modification_widget = widgets.Dropdown(
                     options=[(a,b) for a,b in clip_modifications.items()],
@@ -391,7 +397,6 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
                     subprocess.call(["ffmpeg",
                                      "-i", str(row['clip_path']),
                                      "-c:v", modification_details["-c:v"],
-                                     "-crf", modification_details["-crf"],
                                      "-pix_fmt", modification_details["-pix_fmt"],
                                      "-preset", modification_details["-preset"],
                                      str(row['modif_clip_path'])])
@@ -470,10 +475,6 @@ def view_clips(df, movie_path):
 
 def set_zoo_metadata(df, project_name, db_info_dict):
     
-    # Get the site information
-    if "siteName" in df.columns:
-        sitename = df["siteName"].unique()[0]
-
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
 
@@ -482,9 +483,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
         f"SELECT * FROM sites", conn)
         
     # Combine site info to the df
-    if "siteName" in df.columns:
-        upload_to_zoo = df.merge(sitesdf, on="siteName")
-    elif "site_id" in df.columns:
+    if "site_id" in df.columns:
         upload_to_zoo = df.merge(sitesdf, left_on="site_id", right_on="id")
         sitename = upload_to_zoo["siteName"].unique()[0]
     else:
@@ -525,32 +524,33 @@ def set_zoo_metadata(df, project_name, db_info_dict):
     if project_name == "Spyfish_Aotearoa":
         
         # Read sites csv as pd
-        sitesdf = pd.read_csv(db_info_dict["sites_csv"])
-
+        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
+        
+        # Read movies csv as pd
+        moviesdf = pd.read_csv(db_info_dict["local_movies_csv"])
+        
+        # Include movie info to the sites df
+        sitesdf = sitesdf.merge(moviesdf, on="SiteID")
+        
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(columns={
-            "Marine Reserve": "!LinkToMarineReserve",
-            "Waypoint": "#SiteID",
-            "Protection Status": "ProtectionStatus",
-            "Depth (m)": "Depth",
+            "LinkToMarineReserve": "!LinkToMarineReserve",
+            "SiteID": "#SiteID",
             })
                                            
         # Select only relevant columns
         sitesdf = sitesdf[
             [
-                "siteName",
                 "!LinkToMarineReserve",
                 "#SiteID",
-                "ProtectionStatus",
-                "Depth"
+                "ProtectionStatus"
             ]
         ]
         
         # Include site info to the df
         upload_to_zoo = upload_to_zoo.merge(sitesdf, left_on="#siteName",
-                                            right_on="siteName")
+                                            right_on="#SiteID")
         
-        # Add spyfish-specific info
     
     if project_name == "Koster_Seafloor_Obs":
         

@@ -78,10 +78,10 @@ def process_spyfish_movies(movies_df):
         columns = {
             "LinkToVideoFile": "Fpath",
             "EventDate": "created_on",
-            "SurveyStart": "survey_start",
-            "SurveyEnd": "survey_end",
+            "SamplingStart": "sampling_start",
+            "SamplingEnd": "sampling_end",
             "RecordedBy": "Author",
-            "SiteName": "siteName",
+            "SiteID": "siteName",
 
         }
     )
