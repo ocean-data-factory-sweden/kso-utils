@@ -314,16 +314,30 @@ def select_modification():
     # Widget to select the clip modification
     
     clip_modifications = {"Color_correction": {
-        "-crf": "30",
         "-c:v": "libx264",
         "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
         "-pix_fmt": "yuv420p",
         "-preset": "veryfast"
-        }, "Zoo_compression": {
+        }, "Zoo_no_compression": {
         "-c:v": "libx264",                      
         "-pix_fmt": "yuv420p",
         "-preset": "veryfast"
-        },"Blur_sensitive_info": {
+        }, "Zoo_low_compression": {
+        "-crf": "30",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_medium_compression": {
+        "-crf": "27",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_high_compression": {
+        "-crf": "25",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Blur_sensitive_info": {
         "-crf": "30",
         "-c:v": "libx264",
         "-c:a": "copy",
@@ -379,6 +393,13 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
                                      "-i", str(row['clip_path']),
                                      "-c:v", modification_details["-c:v"],
                                      "-vf", modification_details["-vf"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     str(row['modif_clip_path'])])
+                elif "-crf" in modification_details:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
                                      "-crf", modification_details["-crf"],
                                      "-pix_fmt", modification_details["-pix_fmt"],
                                      "-preset", modification_details["-preset"],
