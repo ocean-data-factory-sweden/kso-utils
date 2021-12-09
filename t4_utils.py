@@ -611,21 +611,23 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 
     print("uploading subjects to Zooniverse")
     for modif_clip_path, metadata in tqdm(subject_metadata.items(), total=len(subject_metadata)):
+        # Create a subject
         subject = Subject()
         
-        
+        # Add project info
         subject.links.project = project
+        
+        # Add location of clip
         subject.add_location(modif_clip_path)
         
-        print(modif_clip_path)
+        # Add metadata
         subject.metadata.update(metadata)
         
-        print(metadata)
+        # Save subject info
         subject.save()
-        print("subject saved")
         new_subjects.append(subject)
 
-    # Upload videos
+    # Upload all subjects
     subject_set.add(new_subjects)
 
     print("Subjects uploaded to Zooniverse")
