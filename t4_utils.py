@@ -495,7 +495,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
     upload_to_zoo = upload_to_zoo.rename(columns={
             "created_on": "#created_on",
             "clip_length": "#clip_length",
-            "filename": "VideoFilename",
+            "filename": "#VideoFilename",
             "clip_modification_details": "#clip_modification_details",
             "siteName": "#siteName"
             })
@@ -511,7 +511,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
             "upl_seconds",
             "#clip_length",
             "#created_on",
-            "VideoFilename",
+            "#VideoFilename",
             "#siteName",
             "#clip_modification_details"
         ]
