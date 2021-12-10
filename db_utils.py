@@ -233,7 +233,7 @@ def add_movies(movies_csv, project_name, db_path):
     
     # Select only those fields of interest
     movies_db = movies_df[
-        ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
+        ["movie_id", "filename", "created_on", "fps", "duration", "survey_start", "survey_end", "Author", "Site_id", "Fpath"]
     ]
 
     # Roadblock to prevent empty information

@@ -197,16 +197,37 @@ def populate_agg_annotations(annotations, subj_type, project_name):
         annotations,
         subjects_df,
         how="left",
-        left_on="subject_id",
+        left_on="subject_ids",
         right_on="id",
         validate="many_to_one",
     )
 
-
-    
     # Update agg_annotations_clip table
     if subj_type == "clip":
-        print("WIP")
+        
+        # Set the columns in the right order
+        species_df = pd.read_sql_query("SELECT id as species_id, label FROM species", conn)
+        species_df["label"] = species_df["label"].apply(lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper())
+        
+        # Combine annotation and subject information
+        annotations_df = pd.merge(
+            annotations_df,
+            species_df,
+            how="left",
+            on = "label"
+        )
+        
+        annotations_df = annotations_df[["species_id", "how_many", "first_seen", "subject_ids"]]
+        annotations_df["species_id"] = annotations_df["species_id"].apply(lambda x: int(x) if not np.isnan(x) else x)
+        
+        # Test table validity
+        db_utils.test_table(annotations_df, "agg_annotations_clip", keys=["subject_ids"])
+
+        # Add annotations to the agg_annotations_clip table
+        db_utils.add_to_table(
+            db_path, "agg_annotations_clip", [(None,) + tuple(i) for i in annotations_df.values], 5
+        )
+
         
     # Update agg_annotations_frame table
     if subj_type == "frame":

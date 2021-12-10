@@ -8,9 +8,11 @@ import logging
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact, Layout
-from kso_utils.zooniverse_utils import auth_session
+from kso_utils.zooniverse_utils import auth_session, populate_agg_annotations
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.server_utils as s_utils
+import kso_utils.t12_utils as t12
+import kso_utils.koster_utils as k_utils
 from ipyfilechooser import FileChooser
 
 # Logging
@@ -54,27 +56,29 @@ def get_species_ids(species_list: list):
     ).values[0][0]
     return get_species_ids
     
-def check_frames_uploaded(frames_df: pd.DataFrame):
+def check_frames_uploaded(frames_df: pd.DataFrame, species_ids, conn):
     # Get info of frames already uploaded
+    # Set the columns in the right order
+    species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
     uploaded_frames_df = pd.read_sql_query(
-        f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id='{species_id}' and subject_type='frame'",
+        f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN {tuple(species_ids)} AND subject_type='frame'",
     conn,
     )
 
     # Filter out frames that have already been uploaded
-    if len(uploaded_frames_df) > 0 and not args.testing:
+    #if len(uploaded_frames_df) > 0:
 
         # Exclude frames that have already been uploaded
-        sp_frames_df = sp_frames_df[
-            ~(sp_frames_df["movie_id"].isin(uploaded_frames_df["movie_id"]))
-            & ~(sp_frames_df["frame_number"].isin(uploaded_frames_df["frame_number"]))
-            & ~(
-                sp_frames_df["frame_exp_sp_id"].isin(
-                    uploaded_frames_df["frame_exp_sp_id"]
-                )
-            )
-        ]
-    return sp_frames_df
+    #    frames_df = frames_df[
+    #        ~(frames_df["movie_id"].isin(uploaded_frames_df["movie_id"]))
+    #        & ~(frames_df["frame_number"].isin(uploaded_frames_df["frame_number"]))
+    #        & ~(
+    #            frames_df["species_id"].isin(
+    #                uploaded_frames_df["frame_exp_sp_id"]
+    #            )
+    #        )
+    #    ]
+    return frames_df
 
 def extract_frames(df, frames_folder):
     """
@@ -154,12 +158,13 @@ def create_frames(sp_frames_df: pd.DataFrame):
     ]
     return sp_frames_df
 
-def get_frames(species_ids: list, db_path: str, project_name: str, n_frames=300):
+def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, project_name: str, n_frames=300):
     
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     df = pd.DataFrame()
     
     if movie_folder == "None":
+        
         df = FileChooser('.')
             
         # Callback function
@@ -175,8 +180,19 @@ def get_frames(species_ids: list, db_path: str, project_name: str, n_frames=300)
     else:
         # Connect to koster_db
         conn = db_utils.create_connection(db_path)
+        clips_df = t12.get_classifications({'Workflow name: #0': 'Species identification',
+                                                                 'Subject type: #0': 'clip',
+                                                                 'Minimum workflow version: #0': 1.0},
+                                               zoo_info_dict["workflows"], "clip", zoo_info_dict["classifications"], db_path)
+        
+        agg_clips_df, raw_clips_df = t12.aggregrate_classifications(clips_df, "clip", project_name, agg_params=[0.8, 1])
+        
+        agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
+
+        populate_agg_annotations(agg_clips_df, "clip", project_name)
         df = get_species_frames(species_ids, conn, project_name, n_frames)
-        df = check_frames_uploaded(df)
+        print(df.columns)
+        df = check_frames_uploaded(df, species_ids, conn)
         
     return df
 
@@ -212,8 +228,7 @@ def compare_frames(df):
             else:
                 a = view_frames(df, change["new"])
                 display(a)
-                
-                
+                   
     clip_path_widget.observe(on_change, names='value')
     
 # Display the clips using html
@@ -248,49 +263,48 @@ def get_species_frames(species_ids: list, conn, project_name, n_frames):
     """
     server = t_utils.get_project_info(project_name, "server")
     
+    
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         
         movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+        
+        # Set the columns in the right order
+        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
+
     
         frames_df = pd.read_sql_query(
             f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
             conn,
         )
         
-        frames_df = pd.read_sql_query(
-            f"SELECT * FROM agg_annotations_clip",
-            conn,
-        )
+        subjects_df = pd.read_sql_query(
+                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
+                    conn,)
 
         # Get start time of the clips and ids of the original movies
-        (frames_df["clip_start_time"], frames_df["movie_id"],) = list(
-            zip(
-                *pd.read_sql_query(
-                    f"SELECT clip_start_time, movie_id FROM subjects WHERE id IN {tuple(frames_df['subject_id'].values)} AND subject_type='clip'",
-                    conn,
-                ).values
-            )
-        )
-
+        frames_df = pd.merge(frames_df, subjects_df, how="left", left_on="subject_id", right_on="id").drop(columns=["id"])
+        
         # Identify the second of the original movie when the species first appears
         frames_df["first_seen_movie"] = (
             frames_df["clip_start_time"] + frames_df["first_seen"]
         )
+       
 
         # Get the filepath and fps of the original movies
         f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
-        f_paths["fpath"] = movie_folder + f_paths["fpath"] + extensions
+        f_paths["fpath"] = movie_folder + f_paths["fpath"]
 
         # Ensure swedish characters don't cause issues
         f_paths["fpath"] = f_paths["fpath"].apply(
-            lambda x: str(x) if os.path.isfile(str(x)) else koster_utils.unswedify(str(x))
+            lambda x: str(x) if os.path.isfile(str(x)) else k_utils.unswedify(str(x))
         )
+        
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
-
+        
         # Specify if original movies can be found
         # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
-        frames_df["exists"] = frames_df["fpath"].map(os.path.isfile)
+        frames_df["exists"] = True
 
         if len(frames_df[~frames_df.exists]) > 0:
             logging.error(
@@ -299,13 +313,14 @@ def get_species_frames(species_ids: list, conn, project_name, n_frames):
 
         # Select only frames from movies that can be found
         frames_df = frames_df[frames_df.exists]
+        
+        print(frames_df.head())
 
         # Identify the ordinal number of the frames expected to be extracted
         frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
             lambda x: [
                 int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames)
-            ],
-            1,
+            ], 1
         )
 
         # Reshape df to have each frame as rows

@@ -342,9 +342,14 @@ def aggregrate_labels(raw_class_df, agg_users, min_users):
 def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
 
     print("Aggregrating the classifications")
+    
     if subj_type == "frame":
+        
         # Get the aggregration parameters
-        agg_users, min_users, agg_obj, agg_iou, agg_iua = [i.value for i in agg_params]
+        try:
+            agg_users, min_users, agg_obj, agg_iou, agg_iua = [i.value for i in agg_params]
+        except:
+            agg_users, min_users, agg_obj, agg_iou, agg_iua = agg_params
         
         # Process the raw classifications
         raw_class_df = process_frames(df, project_name)
@@ -449,7 +454,10 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
   
     else:
         # Get the aggregration parameters
-        agg_users, min_users = [i.value for i in agg_params]
+        try:
+            agg_users, min_users = [i.value for i in agg_params]
+        except:
+            agg_users, min_users = agg_params
         
         # Process the raw classifications
         raw_class_df = process_clips(df, project_name)
@@ -485,7 +493,7 @@ def process_clips(df: pd.DataFrame, project_name):
         annotations = json.loads(row["annotations"])
 
         # Select the information from the species identification task
-        if project_name == "Koster Seafloor Obs":
+        if project_name == "Koster_Seafloor_Obs":
             rows_list = process_clips_koster(annotations, row["classification_id"], rows_list)
             
         # Check if the Zooniverse project is the Spyfish
