@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import math
 import logging
+import pims
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact, Layout
@@ -14,6 +15,7 @@ import kso_utils.server_utils as s_utils
 import kso_utils.t12_utils as t12
 import kso_utils.koster_utils as k_utils
 from ipyfilechooser import FileChooser
+from pathlib import Path
 
 # Logging
 
@@ -34,6 +36,11 @@ def choose_species(db_path: str = "koster_lab.db"):
 
     display(w)
     return w
+
+def choose_folder():
+    fc = FileChooser('.')
+    display(fc)
+    return fc
 
 def select_frame_method():
     # Widget to select the frame
@@ -56,7 +63,7 @@ def get_species_ids(species_list: list):
     ).values[0][0]
     return get_species_ids
     
-def check_frames_uploaded(frames_df: pd.DataFrame, species_ids, conn):
+def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
     # Get info of frames already uploaded
     # Set the columns in the right order
     species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
@@ -64,7 +71,7 @@ def check_frames_uploaded(frames_df: pd.DataFrame, species_ids, conn):
         f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN {tuple(species_ids)} AND subject_type='frame'",
     conn,
     )
-
+    
     # Filter out frames that have already been uploaded
     #if len(uploaded_frames_df) > 0:
 
@@ -80,13 +87,19 @@ def check_frames_uploaded(frames_df: pd.DataFrame, species_ids, conn):
     #    ]
     return frames_df
 
-def extract_frames(df, frames_folder):
+def extract_frames(df, server_dict, project_name, frames_folder):
     """
     Extract frames and save them in chosen folder.
     """
+    
+    movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+    
+    # Create the folder to store the frames if not exist
+    if not os.path.exists(frames_folder):
+        os.mkdir(frames_folder)
 
     # Get movies filenames from their path
-    df["movie_filename"] = df["fpath"].str.split("/").str[-1].str.replace(".mov", "")
+    df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(x)[0])
 
     # Set the filename of the frames
     df["frame_path"] = (
@@ -95,25 +108,38 @@ def extract_frames(df, frames_folder):
         + "_frame_"
         + df["frame_number"].astype(str)
         + "_"
-        + df["frame_exp_sp_id"].astype(str)
+        + df["species_id"].astype(str)
         + ".jpg"
     )
 
-    # Read all original movies
-    video_dict = {k: pims.Video(k) for k in df["fpath"].unique()}
+    # Download movies that are not available locally
+    if len(df["fpath"].unique()) > 5:
+        logging.error(f"You are about to download {len(df['fpath'].unique())} movies to your local machine. We recommend running this notebook on your SNIC server environment directly instead to limit transfer volume.")
+    
+    else:
+        for k in df["fpath"].unique():
+            if not os.path.exists(k):
+                # Download the movie of interest
+                s_utils.download_object_from_snic(
+                                server_dict["sftp_client"],
+                                remote_fpath=k_utils.reswedify(k),
+                                local_fpath=str(Path(".", k_utils.unswedify(os.path.basename(k))))
+                )
+    
+        video_dict = {k: pims.Video(k) for k in df["fpath"].unique()}
 
-    # Save the frame as matrix
-    df["frames"] = df[["fpath", "frame_number"]].apply(
-        lambda x: video_dict[x["fpath"]][int(x["frame_number"])],
-        1,
-    )
+        # Save the frame as matrix
+        df["frames"] = df[["fpath", "frame_number"]].apply(
+            lambda x: video_dict[x["fpath"]][int(x["frame_number"])],
+            1,
+        )
 
-    # Extract and save frames
-    for frame, filename in zip(df["frames"], df["frame_path"]):
-        Image.fromarray(frame).save(f"{filename}")
+        # Extract and save frames
+        for frame, filename in zip(df["frames"], df["frame_path"]):
+            Image.fromarray(frame).save(f"{filename}")
 
-    print("Frames extracted successfully")
-    return df["frame_path"]
+        print("Frames extracted successfully")
+        return df["frame_path"]
 
 def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     
@@ -158,7 +184,7 @@ def create_frames(sp_frames_df: pd.DataFrame):
     ]
     return sp_frames_df
 
-def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, project_name: str, n_frames=300):
+def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames=300):
     
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     df = pd.DataFrame()
@@ -171,6 +197,7 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, project_nam
         def build_df(chooser):
             frame_files = os.listdir(chooser.selected)
             frame_paths = [chooser.selected+i for i in frame_files]
+            os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["fpath"])
                 
         # Register callback function
@@ -190,9 +217,18 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, project_nam
         agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
 
         populate_agg_annotations(agg_clips_df, "clip", project_name)
-        df = get_species_frames(species_ids, conn, project_name, n_frames)
-        print(df.columns)
-        df = check_frames_uploaded(df, species_ids, conn)
+        frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames)
+        frame_df = check_frames_uploaded(frame_df, project_name, species_ids, conn)
+        
+        df = FileChooser('.')
+            
+        # Callback function
+        def extract_files(chooser):
+            chooser.df = extract_frames(frame_df, server_dict, project_name, chooser.selected)
+                
+        # Register callback function
+        df.register_callback(extract_files)
+        display(df)
         
     return df
 
@@ -237,16 +273,19 @@ def view_frames(df, frame_path):
     # Get path of the modified clip selected
     #modified_clip_path = df[df["clip_path"]==movie_path].modif_clip_path.values[0]
     #print(modified_clip_path)
+    
+    base_dir = "linked_frames"
+    file_name = os.path.basename(frame_path)
         
     html_code = f"""
         <html>
         <div style="display: flex; justify-content: space-around">
         <div>
-          <img src={frame_path}>
+          <img src={str(Path(base_dir, file_name))}>
         </img>
         </div>
         <div>
-          <img src={frame_path}>
+          <img src={str(Path(base_dir, file_name))}>
         </img>
         </div>
         </html>"""
@@ -254,7 +293,7 @@ def view_frames(df, frame_path):
     return HTML(html_code)
 
     
-def get_species_frames(species_ids: list, conn, project_name, n_frames):
+def get_species_frames(species_ids: list, server_dict: dict, conn, project_name, n_frames):
     """
     # Function to identify up to n number of frames per classified clip
     # that contains species of interest after the first time seen
@@ -262,7 +301,6 @@ def get_species_frames(species_ids: list, conn, project_name, n_frames):
     # Find classified clips that contain the species of interest
     """
     server = t_utils.get_project_info(project_name, "server")
-    
     
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         
@@ -295,17 +333,16 @@ def get_species_frames(species_ids: list, conn, project_name, n_frames):
         f_paths["fpath"] = movie_folder + f_paths["fpath"]
 
         # Ensure swedish characters don't cause issues
-        f_paths["fpath"] = f_paths["fpath"].apply(
-            lambda x: str(x) if os.path.isfile(str(x)) else k_utils.unswedify(str(x))
-        )
+        f_paths["fpath"] = f_paths["fpath"].apply(k_utils.unswedify)
         
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
         
         # Specify if original movies can be found
         # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
-        frames_df["exists"] = True
-
+        movie_paths = [k_utils.unswedify(str(Path(movie_folder, x))) for x in s_utils.get_snic_files(server_dict["client"], movie_folder).spath.values]
+        frames_df["exists"] = frames_df["fpath"].apply(lambda x: True if x in movie_paths else False)
+                                                      
         if len(frames_df[~frames_df.exists]) > 0:
             logging.error(
                 f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
@@ -313,8 +350,6 @@ def get_species_frames(species_ids: list, conn, project_name, n_frames):
 
         # Select only frames from movies that can be found
         frames_df = frames_df[frames_df.exists]
-        
-        print(frames_df.head())
 
         # Identify the ordinal number of the frames expected to be extracted
         frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(

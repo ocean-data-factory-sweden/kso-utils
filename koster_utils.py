@@ -19,6 +19,16 @@ def unswedify(string):
         .decode("utf-8")
     )
 
+# Function to prevent issues with Swedish characters
+def reswedify(string):
+    """Convert ä and ö to utf-8"""
+    return (
+        string.encode("utf-8")
+        .replace(b"a\xcc\x88", b"\xc3\xa4")
+        .replace(b"a\xcc\x88", b"\xc3\xb6")
+        .decode("utf-8")
+    )
+
 # Function to extract metadata from subjects
 def extract_metadata(subj_df):
 

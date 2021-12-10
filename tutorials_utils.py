@@ -4,7 +4,13 @@ import kso_utils.server_utils as server_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
 import panoptes_client
+import logging
 
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def get_project_info(project_name, info_interest):
     # Specify location of the latest list of projects
@@ -87,15 +93,18 @@ def connect_zoo_project(project_name):
     
 def retrieve__populate_zoo_info(project_name, db_info_dict, zoo_project, zoo_info):
     
-    # Retrieve and store the information of subjects uploaded to zooniverse
-    zoo_info_dict = zooniverse_utils.retrieve_zoo_info(project_name, zoo_project, zoo_info)
-        
-    # Populate the sql with subjects uploaded to Zooniverse
-    zooniverse_utils.populate_subjects(zoo_info_dict["subjects"], 
-                                       project_name,
-                                       db_info_dict["db_path"])
+    if zoo_project is None:
+        logging.error("This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial.")
+    else:
     
-    return zoo_info_dict
+        # Retrieve and store the information of subjects uploaded to zooniverse
+        zoo_info_dict = zooniverse_utils.retrieve_zoo_info(project_name, zoo_project, zoo_info)
+
+        # Populate the sql with subjects uploaded to Zooniverse
+        zooniverse_utils.populate_subjects(zoo_info_dict["subjects"], 
+                                           project_name,
+                                           db_info_dict["db_path"])
+        return zoo_info_dict
     
 def choose_single_workflow(workflows_df):
 
