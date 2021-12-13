@@ -6,6 +6,9 @@ import numpy as np
 import math
 import logging
 import pims
+
+from tqdm import tqdm
+from PIL import Image
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact, Layout
@@ -16,6 +19,13 @@ import kso_utils.t12_utils as t12
 import kso_utils.koster_utils as k_utils
 from ipyfilechooser import FileChooser
 from pathlib import Path
+
+from panoptes_client import (
+    SubjectSet,
+    Subject,
+    Project,
+    Panoptes,
+)
 
 # Logging
 
@@ -42,18 +52,6 @@ def choose_folder():
     display(fc)
     return fc
 
-def select_frame_method():
-    # Widget to select the frame
-    select_frames_widget = widgets.Combobox(
-                    options=["Manual", "Automatic (from movies)"],
-                    description="Select frame method:",
-                    ensure_option=True,
-                    disabled=False,
-                )
-    
-    display(select_frames_widget)
-    return select_frames_widget
-
 def get_species_ids(species_list: list):
     """
     # Get ids of species of interest
@@ -66,8 +64,13 @@ def get_species_ids(species_list: list):
 def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
     # Get info of frames already uploaded
     # Set the columns in the right order
-    species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
-    uploaded_frames_df = pd.read_sql_query(
+    if len(species_ids) <= 1:
+        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
+        uploaded_frames_df = pd.read_sql_query(f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id=='{species_ids[0]}' AND subject_type='frame'", conn)
+    
+    else:
+        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
+        uploaded_frames_df = pd.read_sql_query(
         f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN {tuple(species_ids)} AND subject_type='frame'",
     conn,
     )
@@ -99,7 +102,7 @@ def extract_frames(df, server_dict, project_name, frames_folder):
         os.mkdir(frames_folder)
 
     # Get movies filenames from their path
-    df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(x)[0])
+    df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
 
     # Set the filename of the frames
     df["frame_path"] = (
@@ -119,14 +122,15 @@ def extract_frames(df, server_dict, project_name, frames_folder):
     else:
         for k in df["fpath"].unique():
             if not os.path.exists(k):
+                print(k)
                 # Download the movie of interest
                 s_utils.download_object_from_snic(
                                 server_dict["sftp_client"],
-                                remote_fpath=k_utils.reswedify(k),
+                                remote_fpath=k,#k_utils.reswedify(k),
                                 local_fpath=str(Path(".", k_utils.unswedify(os.path.basename(k))))
                 )
     
-        video_dict = {k: pims.Video(k) for k in df["fpath"].unique()}
+        video_dict = {k: pims.Video(str(Path(".", k_utils.unswedify(os.path.basename(k))))) for k in df["fpath"].unique()}
 
         # Save the frame as matrix
         df["frames"] = df[["fpath", "frame_number"]].apply(
@@ -139,23 +143,23 @@ def extract_frames(df, server_dict, project_name, frames_folder):
             Image.fromarray(frame).save(f"{filename}")
 
         print("Frames extracted successfully")
-        return df["frame_path"]
+        return df
 
 def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     
-    # Save the df as the subject metadata
-    subject_metadata = df.set_index("frame_path").to_dict("index")
-
-    # Create a subjet set in Zooniverse to host the frames
-    subject_set = SubjectSet()
-
-    subject_set.links.project = koster_project
-    subject_set.display_name = "_".join(species_list) + date.today().strftime("_%d_%m_%Y")
-
-    subject_set.save()
-
-    print("Zooniverse subject set created")
-
+    if not isinstance(df, pd.DataFrame):
+        df = df.df
+        
+    upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
+    
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    
+    upload_to_zoo = upload_to_zoo.merge(movies_df, left_on="movie_id",
+                                            right_on="movie_id")
+    
+    created_on = upload_to_zoo["created_on"].unique()[0]
+    sitename = upload_to_zoo["siteName"].unique()[0]
+ 
     return upload_to_zoo, sitename, created_on
 
 def create_frames(sp_frames_df: pd.DataFrame):
@@ -197,8 +201,12 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
         def build_df(chooser):
             frame_files = os.listdir(chooser.selected)
             frame_paths = [chooser.selected+i for i in frame_files]
-            os.symlink(chooser.selected[:-1], 'linked_frames')
-            chooser.df = pd.DataFrame(frame_paths, columns=["fpath"])
+            try:
+                os.symlink(chooser.selected[:-1], 'linked_frames')
+            except FileExistsError:
+                os.remove('linked_frames')
+                os.symlink(chooser.selected[:-1], 'linked_frames')
+            chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
                 
         # Register callback function
         df.register_callback(build_df)
@@ -207,24 +215,30 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
     else:
         # Connect to koster_db
         conn = db_utils.create_connection(db_path)
-        clips_df = t12.get_classifications({'Workflow name: #0': 'Species identification',
-                                                                 'Subject type: #0': 'clip',
-                                                                 'Minimum workflow version: #0': 1.0},
-                                               zoo_info_dict["workflows"], "clip", zoo_info_dict["classifications"], db_path)
-        
-        agg_clips_df, raw_clips_df = t12.aggregrate_classifications(clips_df, "clip", project_name, agg_params=[0.8, 1])
-        
-        agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
+        workflows_out = t12.WidgetMaker(zoo_info_dict["workflows"])
+        display(workflows_out)
+        agg_params = t12.choose_agg_parameters("clip")
 
-        populate_agg_annotations(agg_clips_df, "clip", project_name)
-        frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames)
-        frame_df = check_frames_uploaded(frame_df, project_name, species_ids, conn)
-        
         df = FileChooser('.')
+        df.title = '<b>Choose location to store frames</b>'
             
         # Callback function
         def extract_files(chooser):
+            clips_df = t12.get_classifications(workflows_out.checks,
+                                               zoo_info_dict["workflows"], "clip", zoo_info_dict["classifications"], db_path)
+        
+            agg_clips_df, raw_clips_df = t12.aggregrate_classifications(clips_df, "clip", project_name, agg_params=agg_params)
+            agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
+
+            populate_agg_annotations(agg_clips_df, "clip", project_name)
+            frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames)
+            frame_df = check_frames_uploaded(frame_df, project_name, species_ids, conn)
             chooser.df = extract_frames(frame_df, server_dict, project_name, chooser.selected)
+            try:
+                os.symlink(chooser.selected[:-1], 'linked_frames')
+            except FileExistsError:
+                os.remove('linked_frames')
+                os.symlink(chooser.selected[:-1], 'linked_frames')
                 
         # Register callback function
         df.register_callback(extract_files)
@@ -238,13 +252,13 @@ def compare_frames(df):
         df = df.df
 
     # Save the paths of the clips
-    original_clip_paths = df["fpath"].unique()
+    original_frame_paths = df["frame_path"].unique()
     
     # Add "no movie" option to prevent conflicts
-    original_clip_paths = np.append(original_clip_paths,"No frame")
+    original_frame_paths = np.append(original_frame_paths,"No frame")
     
     clip_path_widget = widgets.Dropdown(
-                    options=tuple(np.sort(original_clip_paths)),
+                    options=tuple(np.sort(original_frame_paths)),
                     description="Select original frame:",
                     ensure_option=True,
                     disabled=False,
@@ -281,11 +295,11 @@ def view_frames(df, frame_path):
         <html>
         <div style="display: flex; justify-content: space-around">
         <div>
-          <img src={str(Path(base_dir, file_name))}>
+          <img src='{str(Path(base_dir, file_name))}'>
         </img>
         </div>
         <div>
-          <img src={str(Path(base_dir, file_name))}>
+          <img src='{str(Path(base_dir, file_name))}'>
         </img>
         </div>
         </html>"""
@@ -307,14 +321,19 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         movie_folder = t_utils.get_project_info(project_name, "movie_folder")
         
         # Set the columns in the right order
-        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
-
-    
-        frames_df = pd.read_sql_query(
+        if len(species_ids) <= 1:
+            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
+            frames_df = pd.read_sql_query(
+            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id== '{species_ids[0]}'",
+            conn,
+        )
+        else:
+            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
+            frames_df = pd.read_sql_query(
             f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
             conn,
         )
-        
+
         subjects_df = pd.read_sql_query(
                     f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
                     conn,)
@@ -375,7 +394,7 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
 
     return frames_df
 
-def upload_frames_to_zooniverse(upload_to_zoo, species_list, created_on, project):
+def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_on, project):
     
     # Estimate the number of clips
     n_frames = upload_to_zoo.shape[0]
@@ -383,7 +402,7 @@ def upload_frames_to_zooniverse(upload_to_zoo, species_list, created_on, project
     # Create a new subject set to host the frames
     subject_set = SubjectSet()
 
-    subject_set_name = str(int(n_frames)) + "_frames" + "_" + "_".join(species_list) + created_on
+    subject_set_name = str(int(n_frames)) + "_frames_" + "_".join(species_list) + "_" + sitename + "_" + created_on
     subject_set.links.project = project
     subject_set.display_name = subject_set_name
 
