@@ -12,11 +12,8 @@ import subprocess
 
 def check_spyfish_movies(movies_df, client, bucket_i):
     
-    # Specify the formats of the movies to select
-    movie_formats = tuple(['wmv', 'mpg', 'mov', 'avi', 'mp4', 'MOV', 'MP4'])
-
     # Get dataframe of movies from AWS
-    movies_s3_pd = get_matching_s3_keys(client, bucket_i, suffix=movie_formats)
+    movies_s3_pd = get_matching_s3_keys(client, bucket_i, suffix=movie_utils.get_movie_extensions())
 
     # Specify the key of the movies (path in S3 of the object)
     movies_df["Key"] = movies_df["prefix"] + filename
