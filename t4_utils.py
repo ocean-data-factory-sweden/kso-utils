@@ -616,7 +616,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     # Create a new subject set to host the clips
     subject_set = SubjectSet()
 
-    subject_set_name = str(int(n_clips)) + "_clips" + "_" + sitename + "_" + created_on
+    subject_set_name = "clips_" + sitename + "_" + str(int(n_clips)) + "_" + created_on
     subject_set.links.project = project
     subject_set.display_name = subject_set_name
 
