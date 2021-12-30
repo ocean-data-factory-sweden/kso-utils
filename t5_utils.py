@@ -34,9 +34,28 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 out_df = pd.DataFrame()
 
+def setup_frame_info(project_name: str):
+    # Initiate db
+    db_info_dict = t_utils.initiate_db(project_name)
+    movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+    zoo_number = t_utils.get_project_info(project_name, "Zooniverse_number")
+    if zoo_number.isdigit():
+        # Connect to Zooniverse project
+        zoo_project = t_utils.connect_zoo_project(project_name)
+        zoo_info_dict = t_utils.retrieve__populate_zoo_info(project_name = project_name, 
+                                                    db_info_dict = db_info_dict,
+                                                    zoo_project = zoo_project,
+                                                    zoo_info = ["subjects", "classifications", "workflows"])
+    else:
+        zoo_project, zoo_info_dict = None, None
+    return db_info_dict, zoo_project, zoo_info_dict
+
 def choose_species(db_path: str = "koster_lab.db"):
     conn = db_utils.create_connection(db_path)
     species_list = pd.read_sql_query("SELECT label from species", conn)["label"].tolist()
+    if len(species_list) == 0:
+        species_list = [""]
+        logging.error("Your database contains no species, please add at least one species before continuing.")
     w = widgets.SelectMultiple(
         options=species_list,
         value=[species_list[0]],
@@ -76,18 +95,14 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, co
     )
     
     # Filter out frames that have already been uploaded
-    #if len(uploaded_frames_df) > 0:
+    if len(uploaded_frames_df) > 0:
+        
+        merge_df = pd.merge(frames_df, uploaded_frames_df, left_on=["movie_id", "frame_number", "species_id"], right_on=["movie_id", "frame_number", "frame_exp_sp_id"],how='left', indicator=True)['_merge'] == 'both'
 
         # Exclude frames that have already been uploaded
-    #    frames_df = frames_df[
-    #        ~(frames_df["movie_id"].isin(uploaded_frames_df["movie_id"]))
-    #        & ~(frames_df["frame_number"].isin(uploaded_frames_df["frame_number"]))
-    #        & ~(
-    #            frames_df["species_id"].isin(
-    #                uploaded_frames_df["frame_exp_sp_id"]
-    #            )
-    #        )
-    #    ]
+        frames_df = frames_df[merge_df == False]
+        if len(frames_df) == 0:
+            logging.error("All of the frames you have selected are already uploaded.")
     return frames_df
 
 def extract_frames(df, server_dict, project_name, frames_folder):
@@ -189,13 +204,15 @@ def create_frames(sp_frames_df: pd.DataFrame):
     return sp_frames_df
 
 def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames=300):
-    
+    if species_ids[0] == "":
+        logging.error("No species were selected. Please select at least one species before continuing.")
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     df = pd.DataFrame()
     
     if movie_folder == "None":
         
         df = FileChooser('.')
+        df.title = '<b>Select frame folder location</b>'
             
         # Callback function
         def build_df(chooser):
@@ -435,6 +452,130 @@ def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_o
     # Upload videos
     subject_set.add(new_subjects)
     print("Subjects uploaded to Zooniverse")
+    
+def select_modification():
+    # Widget to select the clip modification
+    
+    clip_modifications = {"Color_correction": {
+        "-c:v": "libx264",
+        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_no_compression": {
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_low_compression": {
+        "-crf": "30",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_medium_compression": {
+        "-crf": "27",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_high_compression": {
+        "-crf": "25",
+        "-c:v": "libx264",                      
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Blur_sensitive_info": {
+        "-crf": "30",
+        "-c:v": "libx264",
+        "-c:a": "copy",
+        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
+        [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
+        [0:v][b0]overlay=0:0[ovr0]; \
+        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
+        "-map": "[ovr1]",
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "None": {}}
+    
+    select_modification_widget = widgets.Dropdown(
+                    options=[(a,b) for a,b in clip_modifications.items()],
+                    description="Select clip modification:",
+                    ensure_option=True,
+                    disabled=False,
+                    style = {'description_width': 'initial'}
+                )
+    
+    display(select_modification_widget)
+    return select_modification_widget
+
+
+
+def modify_frames(clips_to_upload_df, movie_i, clip_modification, modification_details):
+
+    # Specify the folder to host the modified clips
+    mod_clips_folder = "modified_" + movie_i +"_clips"
+    
+    # Specify the path of the modified clips
+    clips_to_upload_df["modif_clip_path"] = str(Path(mod_clips_folder, "modified")) + clips_to_upload_df["clip_filename"]
+    
+    # Remove existing modified clips
+    if os.path.exists(mod_clips_folder):
+        shutil.rmtree(mod_clips_folder)
+
+    if not clip_modification=="None":
+        
+        # Save the modification details to include as subject metadata
+        clips_to_upload_df["clip_modification_details"] = str(modification_details)
+        
+        # Create the folder to store the videos if not exist
+        if not os.path.exists(mod_clips_folder):
+            os.mkdir(mod_clips_folder)
+
+        #### Modify the clips###
+        # Read each clip and modify them (printing a progress bar) 
+        for index, row in tqdm(clips_to_upload_df.iterrows(), total=clips_to_upload_df.shape[0]): 
+            if not os.path.exists(row['modif_clip_path']):
+                if "-vf" in modification_details:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
+                                     "-vf", modification_details["-vf"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     str(row['modif_clip_path'])])
+                elif "-crf" in modification_details:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
+                                     "-crf", modification_details["-crf"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     str(row['modif_clip_path'])])
+                elif "-filter_complex" in modification_details:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
+                                     "-filter_complex", modification_details["-filter_complex"],
+                                     "-crf", modification_details["-crf"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     "-map", modification_details["-map"],
+                                     str(row['modif_clip_path'])])       
+                else:
+                    subprocess.call(["ffmpeg",
+                                     "-i", str(row['clip_path']),
+                                     "-c:v", modification_details["-c:v"],
+                                     "-pix_fmt", modification_details["-pix_fmt"],
+                                     "-preset", modification_details["-preset"],
+                                     str(row['modif_clip_path'])])
+
+
+        print("Clips modified successfully")
+        return clips_to_upload_df
+    
+    else:
+        
+        # Save the modification details to include as subject metadata
+        clips_to_upload_df["modif_clip_path"] = "no_modification"
+        
+        return clips_to_upload_df
+    
 
 # def choose_clip_workflows(workflows_df):
 
