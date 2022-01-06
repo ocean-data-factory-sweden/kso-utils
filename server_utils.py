@@ -12,6 +12,7 @@ from paramiko import SSHClient
 from scp import SCPClient
 
 import kso_utils.tutorials_utils as tutorials_utils
+import kso_utils.spyfish_utils as spyfish_utils
 from tqdm import tqdm
 from pathlib import Path
 
@@ -21,10 +22,11 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Common utility functions to connect to external servers (AWS, GDrive,...)
+###################################### 
+####### Common server functions ######
+######################################
 
 def connect_to_server(project_name):
-    
     # Get project-specific server info
     server = tutorials_utils.get_project_info(project_name, "server")
     
@@ -32,19 +34,12 @@ def connect_to_server(project_name):
     server_dict = {}
     
     if server=="AWS":
-        # Set aws account credentials
-        aws_access_key_id, aws_secret_access_key = aws_credentials()
+        # Connect to AWS as a client
+        client = get_aws_client()
         
-        # Connect to S3
-        client = connect_s3(aws_access_key_id, aws_secret_access_key)
-        
-    if server=="SNIC":
-        # Set SNIC credentials
-        snic_user, snic_pass = snic_credentials()
-        
-        # Connect to SNIC
-        client = connect_snic(snic_user, snic_pass)
-        sftp_client = create_snic_transport(snic_user, snic_pass)
+    elif server=="SNIC":
+        # Connect to SNIC as a client and get sftp
+        client, sftp_client = get_snic_client()
         
     else:
         server_dict = {}
@@ -57,42 +52,7 @@ def connect_to_server(project_name):
         
     return server_dict
 
-
-def download_csv_from_google_drive(file_url):
-
-    # Download the csv files stored in Google Drive with initial information about
-    # the movies and the species
-
-    file_id = file_url.split("/")[-2]
-    dwn_url = "https://drive.google.com/uc?export=download&id=" + file_id
-    url = requests.get(dwn_url).text.encode("ISO-8859-1").decode()
-    csv_raw = io.StringIO(url)
-    dfs = pd.read_csv(csv_raw)
-    return dfs
-
-
-def download_init_csv(gdrive_id, db_csv_info):
-    
-    # Specify the url of the file to download
-    url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
-    
-    print("Retrieving the file from ", url_input)
-    
-    # Specify the output of the file
-    zip_file = 'db_csv_info.zip'
-    
-    # Download the zip file
-    gdown.download(url_input, zip_file, quiet=False)
-    
-    # Unzip the folder with the csv files
-    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-        zip_ref.extractall(os.path.dirname(db_csv_info))
         
-        
-    # Remove the zipped file
-    os.remove(zip_file)
-    
-    
 def get_db_init_info(project_name, server_dict):
     
     # Define the path to the csv files with initial info to build the db
@@ -101,61 +61,17 @@ def get_db_init_info(project_name, server_dict):
     # Get project-specific server info
     server = tutorials_utils.get_project_info(project_name, "server")
     
+    # Create the folder to store the csv files if not exist
+    if not os.path.exists(db_csv_info):
+        os.mkdir(db_csv_info)
+            
     if server == "AWS":
-        
-        # Create the folder to store the csv files if not exist
-        if not os.path.exists(db_csv_info):
-            os.mkdir(db_csv_info)
             
-        # Provide bucket and key
-        bucket = tutorials_utils.get_project_info(project_name, "bucket")
-        key = tutorials_utils.get_project_info(project_name, "key")
-        
-        # Create empty dict
-        db_initial_info = {
-            "bucket": bucket
-        }
-                    
-        for i in ['sites', 'movies', 'species', 'surveys']:
-            # Get the server path of the csv
-            server_i_csv = get_matching_s3_keys(server_dict["client"], 
-                                                bucket, 
-                                                prefix = key+"/"+i)['Key'][0]
-            
-            # Specify the local path for the csv
-            local_i_csv = str(Path(db_csv_info,Path(server_i_csv).name))
-            
-            # Download the csv
-            download_object_from_s3(server_dict["client"],
-                                bucket=bucket,
-                                key=server_i_csv, 
-                                filename=local_i_csv)
-            
-            # Save the local and server paths in the dict
-            local_csv_str = str("local_"+i+"_csv")
-            server_csv_str = str("server_"+i+"_csv")
-            
-            db_initial_info[local_csv_str] = Path(local_i_csv)
-            db_initial_info[server_csv_str] = server_i_csv
+        # Download csv files from AWS
+        db_initial_info = download_csv_aws(project_name, server_dict, db_csv_info)
             
         if project_name == "Spyfish_Aotearoa":
-            # Get the server path of the csv with sites and survey choices
-            server_choices_csv = get_matching_s3_keys(server_dict["client"], 
-                                                bucket, 
-                                                prefix = key+"/"+"choices")['Key'][0]
-            
-            
-            # Specify the local path for the csv
-            local_choices_csv = str(Path(db_csv_info,Path(server_choices_csv).name))
-            
-            # Download the csv
-            download_object_from_s3(server_dict["client"],
-                                bucket=bucket,
-                                key=server_choices_csv, 
-                                filename=local_choices_csv)
-            
-            db_initial_info["server_choices_csv"] = server_choices_csv
-            db_initial_info["local_choices_csv"] = Path(local_choices_csv)
+            db_initial_info = spyfish_utils.get_spyfish_choices(server_dict, db_initial_info, db_csv_info)
             
         return db_initial_info
                 
@@ -280,48 +196,35 @@ def update_db_init_info(project_name, csv_to_update):
                               filename=str(csv_to_update))
             
             
-def snic_credentials():
-    # Save your access key for the SNIC server. 
-    snic_user = getpass.getpass('Enter your username for SNIC server')
-    snic_pass = getpass.getpass('Enter your password for SNIC server')
-    
-    return snic_user, snic_pass
 
 
-def connect_snic(snic_user: str, snic_pass: str):
-    # Connect to the SNIC server and return SSH client
-    client = SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
-    client.load_system_host_keys()
-    client.connect(hostname="129.16.125.130", 
-                port = 22,
-                username=snic_user,
-                password=snic_pass)
-    return client
+#####################
+### AWS functions ###
+#####################
 
-def create_snic_transport(snic_user: str, snic_pass: str):
-    # Connect to the SNIC server and return SSH client
-    t = paramiko.Transport(("129.16.125.130", 22))
-    t.connect(username=snic_user, password=snic_pass)
-    sftp = paramiko.SFTPClient.from_transport(t)
-    return sftp
-
-            
 def aws_credentials():
     # Save your access key for the s3 bucket. 
     aws_access_key_id = getpass.getpass('Enter the key id for the aws server')
     aws_secret_access_key = getpass.getpass('Enter the secret access key for the aws server')
     
-    return aws_access_key_id,aws_secret_access_key
+    return aws_access_key_id, aws_secret_access_key
 
-
+                
 def connect_s3(aws_access_key_id, aws_secret_access_key):
     # Connect to the s3 bucket
     client = boto3.client('s3',
                           aws_access_key_id = aws_access_key_id, 
                           aws_secret_access_key = aws_secret_access_key)
     return client
-    
+
+def get_aws_client():
+    # Set aws account credentials
+    aws_access_key_id, aws_secret_access_key = aws_credentials()
+
+    # Connect to S3
+    client = connect_s3(aws_access_key_id, aws_secret_access_key)
+
+    return client
 
 def get_matching_s3_objects(client, bucket, prefix="", suffix=""):
     """
@@ -381,87 +284,41 @@ def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
     
     return contents_s3_pd
 
-def get_snic_files(client, folder):
-    """ 
-    Get list of movies from SNIC server using ssh client.
+def download_csv_aws(project_name, server_dict, db_csv_info):
+    # Provide bucket and key
+    bucket = tutorials_utils.get_project_info(project_name, "bucket")
+    key = tutorials_utils.get_project_info(project_name, "key")
+
+    # Create db_initial_info dict
+    db_initial_info = {
+        "bucket": bucket,
+        "key": key
+    }
+
+    for i in ['sites', 'movies', 'species', 'surveys']:
+        # Get the server path of the csv
+        server_i_csv = get_matching_s3_keys(server_dict["client"], 
+                                            bucket, 
+                                            prefix = key+"/"+i)['Key'][0]
+
+        # Specify the local path for the csv
+        local_i_csv = str(Path(db_csv_info,Path(server_i_csv).name))
+
+        # Download the csv
+        download_object_from_s3(server_dict["client"],
+                            bucket=bucket,
+                            key=server_i_csv, 
+                            filename=local_i_csv)
+
+        # Save the local and server paths in the dict
+        local_csv_str = str("local_"+i+"_csv")
+        server_csv_str = str("server_"+i+"_csv")
+
+        db_initial_info[local_csv_str] = Path(local_i_csv)
+        db_initial_info[server_csv_str] = server_i_csv
+
+    return db_initial_info
     
-    :param client: SSH client (paramiko)
-    """
-    stdin, stdout, stderr = client.exec_command(f"ls {folder}")
-    snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
-    return snic_df
-
-def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str ='.'):
-    """
-    Download an object from SNIC with progress bar.
-    """
-
-    class TqdmWrap(tqdm):
-        def viewBar(self, a, b):
-            self.total = int(b)
-            self.update(int(a - self.n))  # update pbar with increment
-
-    # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
-        sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
-        
-        
-def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
-    """
-    Upload an object to SNIC with progress bar.
-    """
-
-    class TqdmWrap(tqdm):
-        def viewBar(self, a, b):
-            self.total = int(b)
-            self.update(int(a - self.n))  # update pbar with increment
-
-    # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
-        sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
-
-
-# def retrieve_s3_buckets_info(client, bucket, suffix):
-    
-#     # Select the relevant bucket
-#     s3_keys = [obj["Key"] for obj in get_matching_s3_objects(client=client, bucket=bucket, suffix=suffix)]
-
-#     # Set the contents as pandas dataframe
-#     contents_s3_pd = pd.DataFrame(s3_keys)
-    
-#     return contents_s3_pd
-
-    
-
-def check_movies_from_server(movies_df, sites_df, server_i):
-    if server_i=="AWS":
-        # Set aws account credentials
-        aws_access_key_id, aws_secret_access_key = aws_credentials()
-        
-        # Connect to S3
-        client = connect_s3(aws_access_key_id, aws_secret_access_key)
-        
-        # 
-        check_spyfish_movies(movies_df, client)
-        
-    # Find out files missing from the Server
-    missing_from_server = missing_info[missing_info["_merge"]=="right_only"]
-    missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
-    missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])&(missing_from_server["bucket"].isna())]
-    
-    print("There are", len(missing_from_server.index), "movies missing from", server_i)
-    print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
-    print(*missing_bad_deployment.filename.unique(), sep = "\n")
-    print(len(missing_no_bucket_info.index), "movies are good deployments but don't have bucket info. Their filenames are:")
-    print(*missing_no_bucket_info.filename.unique(), sep = "\n")
-    
-    # Find out files missing from the csv
-    missing_from_csv = missing_info[missing_info["_merge"]=="left_only"].reset_index(drop=True)
-    print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
-    print(*missing_from_csv.filename.unique(), sep = "\n")
-    
-    return missing_from_server, missing_from_csv
-
 def get_movies_from_aws(client, bucket_i, aws_folder):
         
     # Retrieve info from the bucket
@@ -528,3 +385,167 @@ def upload_file_to_s3(client, *, bucket, key, filename):
             Key=key,
             Callback=lambda bytes_transferred: pbar.update(bytes_transferred),
         )
+        
+# def retrieve_s3_buckets_info(client, bucket, suffix):
+    
+#     # Select the relevant bucket
+#     s3_keys = [obj["Key"] for obj in get_matching_s3_objects(client=client, bucket=bucket, suffix=suffix)]
+
+#     # Set the contents as pandas dataframe
+#     contents_s3_pd = pd.DataFrame(s3_keys)
+    
+#     return contents_s3_pd
+        
+
+##############################
+########SNIC functions########
+##############################
+
+def snic_credentials():
+    # Save your access key for the SNIC server. 
+    snic_user = getpass.getpass('Enter your username for SNIC server')
+    snic_pass = getpass.getpass('Enter your password for SNIC server')
+    
+    return snic_user, snic_pass
+
+
+def connect_snic(snic_user: str, snic_pass: str):
+    # Connect to the SNIC server and return SSH client
+    client = SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client.load_system_host_keys()
+    client.connect(hostname="129.16.125.130", 
+                port = 22,
+                username=snic_user,
+                password=snic_pass)
+    return client
+
+def create_snic_transport(snic_user: str, snic_pass: str):
+    # Connect to the SNIC server and return SSH client
+    t = paramiko.Transport(("129.16.125.130", 22))
+    t.connect(username=snic_user, password=snic_pass)
+    sftp = paramiko.SFTPClient.from_transport(t)
+    return sftp
+
+def get_snic_client():
+    # Set SNIC credentials
+    snic_user, snic_pass = snic_credentials()
+
+    # Connect to SNIC
+    client = connect_snic(snic_user, snic_pass)
+    sftp_client = create_snic_transport(snic_user, snic_pass)
+
+    return client, sftp_client
+
+def get_snic_files(client, folder):
+    """ 
+    Get list of movies from SNIC server using ssh client.
+    
+    :param client: SSH client (paramiko)
+    """
+    stdin, stdout, stderr = client.exec_command(f"ls {folder}")
+    snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
+    return snic_df
+
+
+
+
+def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str ='.'):
+    """
+    Download an object from SNIC with progress bar.
+    """
+
+    class TqdmWrap(tqdm):
+        def viewBar(self, a, b):
+            self.total = int(b)
+            self.update(int(a - self.n))  # update pbar with increment
+
+    # end of reusable imports/classes
+    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+        sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
+        
+        
+def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
+    """
+    Upload an object to SNIC with progress bar.
+    """
+
+    class TqdmWrap(tqdm):
+        def viewBar(self, a, b):
+            self.total = int(b)
+            self.update(int(a - self.n))  # update pbar with increment
+
+    # end of reusable imports/classes
+    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+        sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
+    
+
+def check_movies_from_server(movies_df, sites_df, server_i):
+    if server_i=="AWS":
+        # Set aws account credentials
+        aws_access_key_id, aws_secret_access_key = aws_credentials()
+        
+        # Connect to S3
+        client = connect_s3(aws_access_key_id, aws_secret_access_key)
+        
+        # 
+        check_spyfish_movies(movies_df, client)
+        
+    # Find out files missing from the Server
+    missing_from_server = missing_info[missing_info["_merge"]=="right_only"]
+    missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
+    missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])&(missing_from_server["bucket"].isna())]
+    
+    print("There are", len(missing_from_server.index), "movies missing from", server_i)
+    print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
+    print(*missing_bad_deployment.filename.unique(), sep = "\n")
+    print(len(missing_no_bucket_info.index), "movies are good deployments but don't have bucket info. Their filenames are:")
+    print(*missing_no_bucket_info.filename.unique(), sep = "\n")
+    
+    # Find out files missing from the csv
+    missing_from_csv = missing_info[missing_info["_merge"]=="left_only"].reset_index(drop=True)
+    print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
+    print(*missing_from_csv.filename.unique(), sep = "\n")
+    
+    return missing_from_server, missing_from_csv
+
+
+###################################        
+########Google Drive functions##### 
+###################################
+
+def download_csv_from_google_drive(file_url):
+
+    # Download the csv files stored in Google Drive with initial information about
+    # the movies and the species
+
+    file_id = file_url.split("/")[-2]
+    dwn_url = "https://drive.google.com/uc?export=download&id=" + file_id
+    url = requests.get(dwn_url).text.encode("ISO-8859-1").decode()
+    csv_raw = io.StringIO(url)
+    dfs = pd.read_csv(csv_raw)
+    return dfs
+
+
+def download_init_csv(gdrive_id, db_csv_info):
+    
+    # Specify the url of the file to download
+    url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
+    
+    print("Retrieving the file from ", url_input)
+    
+    # Specify the output of the file
+    zip_file = 'db_csv_info.zip'
+    
+    # Download the zip file
+    gdown.download(url_input, zip_file, quiet=False)
+    
+    # Unzip the folder with the csv files
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+        zip_ref.extractall(os.path.dirname(db_csv_info))
+        
+        
+    # Remove the zipped file
+    os.remove(zip_file)
+        
+        
