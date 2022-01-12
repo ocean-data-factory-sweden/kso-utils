@@ -25,7 +25,7 @@ def reswedify(string):
     return (
         string.encode("utf-8")
         .replace(b"a\xcc\x88", b"\xc3\xa4")
-        .replace(b"a\xcc\x88", b"\xc3\xb6")
+        .replace(b"o\xcc\x88", b"\xc3\xb6")
         .decode("utf-8")
     )
 
