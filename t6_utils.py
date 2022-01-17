@@ -1,15 +1,15 @@
 # +
+from tracemalloc import start
 import pandas as pd
 import numpy as np
 import json, io
-from ast import literal_eval
-from kso_utils.zooniverse_utils import auth_session
 #from db_setup.process_frames import filter_bboxes
-from kso_utils import db_utils
+import kso_utils.db_utils as db_utils
 from collections import OrderedDict
 from IPython.display import HTML, display, update_display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact
+from ipyfilechooser import FileChooser
 import asyncio
 
 import wandb
@@ -117,3 +117,9 @@ def choose_test_prop():
    
     display(box)
     return w, v, z, z1
+
+def choose_output_folder(start_path: str = "."):
+    # Specify the output folder
+    fc = FileChooser(start_path)
+    display(fc)
+    return fc

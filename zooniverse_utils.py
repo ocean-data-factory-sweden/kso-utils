@@ -186,7 +186,7 @@ def populate_agg_annotations(annotations, subj_type, project_name):
 
     # Get the project-specific name of the database
     db_path = tutorials_utils.get_project_info(project_name, "db_path")
-    
+
     conn = db_utils.create_connection(db_path)
     
     # Query id and subject type from the subjects table
@@ -233,7 +233,7 @@ def populate_agg_annotations(annotations, subj_type, project_name):
     if subj_type == "frame":
         
         # Select relevant columns
-        annotations_df = annotations_df[["frame_exp_sp_id", "x", "y", "w", "h", "subject_id"]]
+        annotations_df = annotations_df[["frame_exp_sp_id", "x", "y", "w", "h", "subject_ids"]]
         
         # Test table validity
         db_utils.test_table(annotations_df, "agg_annotations_frame", keys=["frame_exp_sp_id"])
