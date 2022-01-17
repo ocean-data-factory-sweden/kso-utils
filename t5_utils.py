@@ -73,14 +73,21 @@ def choose_folder():
     display(fc)
     return fc
 
-def get_species_ids(species_list: list):
+def get_species_ids(project_name: str, species_list: list):
     """
     # Get ids of species of interest
     """
-    species_id = pd.read_sql_query(
-        f'SELECT id FROM species WHERE label="{args.species}"', conn
-    ).values[0][0]
-    return get_species_ids
+    db_path = t_utils.get_project_info(project_name, "db_path")
+    conn = db_utils.create_connection(db_path)
+    if len(species_list) == 1:
+        species_ids = pd.read_sql_query(
+            f'SELECT id FROM species WHERE label=="{species_list[0]}"', conn
+        )["id"].tolist()
+    else:
+        species_ids = pd.read_sql_query(
+        f'SELECT id FROM species WHERE label IN "{tuple(species_list)}"', conn
+    )["id"].tolist()
+    return species_ids
     
 def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
     # Get info of frames already uploaded
@@ -114,9 +121,6 @@ def extract_frames(df, server_dict, project_name, frames_folder):
     
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     movie_files = s_utils.get_snic_files(server_dict["client"], movie_folder)["spath"].tolist()
-    
-    interesting_string = [i for i in movie_files if "970708" in i]
-    print(interesting_string[0].encode('utf-8'))
     
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
@@ -174,44 +178,29 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     
     if not isinstance(df, pd.DataFrame):
         df = df.df
-        
-    upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
+
+    if "modif_frame_path" in df.columns:
+        df["frame_path"] = df["modif_frame_path"]
+
+    if "movie_id" in df.columns:
+        upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
     
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
     
-    upload_to_zoo = upload_to_zoo.merge(movies_df, left_on="movie_id",
+        upload_to_zoo = upload_to_zoo.merge(movies_df, left_on="movie_id",
                                             right_on="movie_id")
     
-    created_on = upload_to_zoo["created_on"].unique()[0]
-    sitename = upload_to_zoo["siteName"].unique()[0]
+        created_on = upload_to_zoo["created_on"].unique()[0]
+        sitename = upload_to_zoo["siteName"].unique()[0]
+
+    else:
+        upload_to_zoo = df[["frame_path", "species_id"]]
+        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+        sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+        created_on = surveys_df["SurveyDate"].unique()[0]
+        sitename = sites_df["siteName"].unique()[0]
  
     return upload_to_zoo, sitename, created_on
-
-def create_frames(sp_frames_df: pd.DataFrame):
-    # Create the folder to store the frames if not exist
-    if not os.path.exists(args.frames_folder):
-        os.mkdir(args.frames_folder)
-
-    # Extract the frames and save them
-    sp_frames_df["frame_path"] = extract_frames(sp_frames_df, args.frames_folder)
-    sp_frames_df = sp_frames_df.drop_duplicates(subset=['frame_path'])
-
-    # Select koster db metadata associated with each frame
-    sp_frames_df["label"] = args.species
-    sp_frames_df["subject_type"] = "frame"
-
-    sp_frames_df = sp_frames_df[
-        [
-            "frame_path",
-            "frame_number",
-            "fps",
-            "movie_id",
-            "label",
-            "frame_exp_sp_id",
-            "subject_type",
-        ]
-    ]
-    return sp_frames_df
 
 def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames=300):
     if species_ids[0] == "":
@@ -234,6 +223,8 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
                 os.remove('linked_frames')
                 os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
+            # TODO: Add multiple species option
+            chooser.df["species_id"] = get_species_ids(project_name, species_ids)[0]
                 
         # Register callback function
         df.register_callback(build_df)
