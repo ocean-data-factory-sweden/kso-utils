@@ -141,7 +141,7 @@ def get_db_init_info(project_name, server_dict):
     
     elif server == "local":
         
-        csv_folder = tutorials_utils.get_project_info(project_name, "csv_folder")
+        csv_folder = db_csv_info
         movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
         
         # Define the path to the csv files with initial info to build the db
@@ -153,20 +153,32 @@ def get_db_init_info(project_name, server_dict):
                 sites_csv = file
             if 'movies' in file.name:
                 movies_csv = file
+            if 'photos' in file.name:
+                photos_csv = file
+            if 'survey' in file.name:
+                surveys_csv = file
             if 'species' in file.name:
                 species_csv = file
                 
-        if "movies_csv" not in vars() and os.path.exists(csv_folder):
-            logging.info("No movies found, an empty file will be created.")
+        if "movies_csv" not in vars() and "photos_csv" not in vars() and os.path.exists(csv_folder):
+            logging.info("No movies or photos found, an empty movies file will be created.")
             with open(f'{csv_folder}/movies.csv', 'w') as fp:
                 pass
                 
         try:
             db_initial_info = {
-                "local_sites_csv": sites_csv, 
-                "local_movies_csv": movies_csv, 
+                "local_sites_csv": sites_csv,  
                 "local_species_csv": species_csv
             }
+            
+            if "movies_csv" in vars():
+                db_initial_info["local_movies_csv"] = movies_csv
+                
+            if "photos_csv" in vars():
+                db_initial_info["local_photos_csv"] = photos_csv
+                
+            if "surveys_csv" in vars():
+                db_initial_info["local_surveys_csv"] = surveys_csv
             
         except:
             logging.error("Insufficient information to build the database. Please fix the path to csv files.")

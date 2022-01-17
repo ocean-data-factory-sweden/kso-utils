@@ -60,15 +60,19 @@ def initiate_db(project_name):
     
     # Populate the sites info
     if "local_sites_csv" in db_initial_info.keys():
-        db_utils.add_sites(db_initial_info["local_sites_csv"], project_name, db_path)
+        db_utils.add_sites(db_initial_info, project_name, db_path)
     
     # Populate the movies info
     if "local_movies_csv" in db_initial_info.keys():
-        db_utils.add_movies(db_initial_info["local_movies_csv"], project_name, db_path)
+        db_utils.add_movies(db_initial_info, project_name, db_path)
+        
+    # Populate the photos info
+    if "local_photos_csv" in db_initial_info.keys():
+        db_utils.add_photos(db_initial_info, project_name, db_path)
     
     # Populate the species info
     if "local_species_csv" in db_initial_info.keys():
-        db_utils.add_species(db_initial_info["local_species_csv"], project_name, db_path)
+        db_utils.add_species(db_initial_info, project_name, db_path)
     
     # Combine server/project info in a dictionary
     db_info_dict = {**db_initial_info, **server_i_dict}

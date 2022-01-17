@@ -11,6 +11,7 @@ import numpy as np
 
 import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.sgu_utils as sgu_utils
 import kso_utils.movie_utils as movie_utils
 
 
@@ -179,10 +180,10 @@ def find_duplicated_clips(conn):
 
 ### Populate sites, movies and species
 
-def add_sites(sites_csv, project_name, db_path):
+def add_sites(db_initial_info, project_name, db_path):
 
     # Load the csv with sites information
-    sites_df = pd.read_csv(sites_csv)
+    sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
     
     # Check if the project is the Spyfish Aotearoa
     if project_name == "Spyfish_Aotearoa":
@@ -205,10 +206,10 @@ def add_sites(sites_csv, project_name, db_path):
     )
 
     
-def add_movies(movies_csv, project_name, db_path):
+def add_movies(db_initial_info, project_name, db_path):
 
     # Load the csv with movies information
-    movies_df = pd.read_csv(movies_csv)
+    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
     
     # Check if the project is the Spyfish Aotearoa
     if project_name == "Spyfish_Aotearoa":
@@ -246,11 +247,36 @@ def add_movies(movies_csv, project_name, db_path):
         db_path, "movies", [tuple(i) for i in movies_db.values], 10
     )
 
+def add_photos(db_initial_info, project_name, db_path):
 
-def add_species(species_csv, project_name, db_path):
+    # Load the csv with photos information
+    photos_df = pd.read_csv(db_initial_info["local_photos_csv"])
+    
+    
+    # Check if the project is the KSO
+    if project_name == "SGU":
+        photos_df = sgu_utils.process_sgu_photos_csv(db_initial_info)
+        
+    # Select relevant fields
+    photos_df = photos_df[
+        ["ID", "filename", "created_on", "site_id", "fpath"]
+    ]
+    
+    # Roadblock to prevent empty columns
+    test_table(
+        photos_df, "photos", photos_df.columns
+    ) 
+
+    # Add values to sites table
+    add_to_table(
+        db_path, "photos", [tuple(i) for i in photos_df.values], 5
+    )
+    
+    
+def add_species(db_initial_info, project_name, db_path):
 
     # Load the csv with species information
-    species_df = pd.read_csv(species_csv)
+    species_df = pd.read_csv(db_initial_info["local_species_csv"])
     
     # Select relevant fields
     species_df = species_df[
