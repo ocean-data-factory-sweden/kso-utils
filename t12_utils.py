@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import json, io
+import logging
 from ast import literal_eval
 from kso_utils.zooniverse_utils import auth_session
 import kso_utils.db_utils as db_utils
@@ -16,24 +17,36 @@ import asyncio
 from itables import show
 
 
-def choose_project():
+# Logging
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+out_df = pd.DataFrame()
+
+#### Set up ####
+def setup_initial_info(project_name: str):
     
-    # Specify location of the latest list of projects
-    projects_csv = "../db_starter/projects_list.csv" 
+    ### Populate SQL database with sites, movies and species and connect to Zoo
+    # Initiate db
+    db_info_dict = tutorials_utils.initiate_db(project_name)
     
-    # Read the latest list of projects
-    projects_df = pd.read_csv(projects_csv)
+    # Connect to Zooniverse project
+    zoo_project = tutorials_utils.connect_zoo_project(project_name)
     
-    # Display the project options
-    choose_project = widgets.Dropdown(
-        options=projects_df.Project_name.unique().tolist(),
-        value=projects_df.Project_name.unique().tolist()[0],
-        description="Project:",
-        disabled=False,
-    )
+    # Specify the Zooniverse information required throughout the tutorial
+    zoo_info = ["subjects", "workflows", "classifications"]
+
+    zoo_info_dict = tutorials_utils.retrieve__populate_zoo_info(project_name = project_name, 
+                                                               db_info_dict = db_info_dict,
+                                                               zoo_project = zoo_project,
+                                                               zoo_info = zoo_info)
     
-    display(choose_project)
-    return choose_project
+    return db_info_dict, zoo_project, zoo_info_dict
+
+
+
+####
 
 
 def choose_agg_parameters(subject_type: str):
@@ -166,9 +179,6 @@ def choose_workflows(workflows_df):
                 clear_output()
                 workflow_version.options = choose_w_version(workflows_df, change['new'])[1]
                 workflow_name.observe(on_change)
-    
-    #display(workflow_name)
-    #display(subj_type)
     
     out = widgets.Output()
     display(out)
@@ -497,7 +507,7 @@ def process_clips(df: pd.DataFrame, project_name):
             rows_list = process_clips_koster(annotations, row["classification_id"], rows_list)
             
         # Check if the Zooniverse project is the Spyfish
-        if project_name == "Spyfish Aotearoa":
+        if project_name == "Spyfish_Aotearoa":
             rows_list = process_clips_spyfish(annotations, row["classification_id"], rows_list)
 
     # Create a data frame with annotations as rows
@@ -531,6 +541,14 @@ def process_clips(df: pd.DataFrame, project_name):
     ]
     
     return pd.DataFrame(annot_df)
+
+def launch_table(agg_class_df, subject_type):
+    if subject_type == "clip":
+        a = agg_class_df[["subject_ids","label","how_many","first_seen"]]
+    else:
+        a = agg_class_df
+    
+    return(a)
 
 
 def process_frames(df: pd.DataFrame, project_name):
