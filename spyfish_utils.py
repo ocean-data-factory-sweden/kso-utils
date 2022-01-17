@@ -9,11 +9,12 @@ import kso_utils.server_utils as server_utils
 import kso_utils.movie_utils as movie_utils
 from tqdm import tqdm
 import subprocess
+from pathlib import Path
 
 def check_spyfish_movies(movies_df, client, bucket_i):
     
     # Get dataframe of movies from AWS
-    movies_s3_pd = get_matching_s3_keys(client, bucket_i, suffix=movie_utils.get_movie_extensions())
+    movies_s3_pd = server_utils.get_matching_s3_keys(client, bucket_i, suffix=movie_utils.get_movie_extensions())
 
     # Specify the key of the movies (path in S3 of the object)
     movies_df["Key"] = movies_df["prefix"] + filename
@@ -269,7 +270,7 @@ def process_clips_spyfish(annotations, row_class_id, rows_list):
 
 def get_spyfish_choices(server_dict, db_initial_info, db_csv_info):
     # Get the server path of the csv with sites and survey choices
-    server_choices_csv = get_matching_s3_keys(server_dict["client"],
+    server_choices_csv = server_utils.get_matching_s3_keys(server_dict["client"],
                                               db_initial_info["bucket"],
                                               prefix = db_initial_info["key"]+"/"+"choices")['Key'][0]
 
@@ -278,7 +279,7 @@ def get_spyfish_choices(server_dict, db_initial_info, db_csv_info):
     local_choices_csv = str(Path(db_csv_info,Path(server_choices_csv).name))
 
     # Download the csv
-    download_object_from_s3(server_dict["client"],
+    server_utils.download_object_from_s3(server_dict["client"],
                             bucket=db_initial_info["bucket"],
                             key=server_choices_csv, 
                             filename=local_choices_csv)
