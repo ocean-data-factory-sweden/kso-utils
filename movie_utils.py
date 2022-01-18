@@ -2,14 +2,13 @@ import os, cv2, sys, io
 import operator
 import pandas as pd
 from tqdm import tqdm
+import kso_utils.tutorials_utils as t_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.spyfish_utils as spyfish_utils
 
 
 # Calculate length and fps of a movie
 def get_length(video_file):
-    
-    #final_fn = video_file if os.path.isfile(video_file) else koster_utils.unswedify(video_file)
     
     if os.path.isfile(video_file):
         cap = cv2.VideoCapture(video_file)
@@ -23,64 +22,71 @@ def get_length(video_file):
     return fps, length
 
 
-def check_fps_duration(df, movies_csv, project_name):
+def check_fps_duration(db_info_dict, project_name):
+    
+    # Load the csv with movies information
+    df = pd.read_csv(db_info_dict["local_movies_csv"])
     
     # Check if fps or duration is missing from any movie
-    if not df[["fps", "duration"]].isna().all().any():
+    if not df[["fps", "duration"]].isna().any().all():
         
         print("Fps and duration information checked")
         
     else:
 
+        # Get project server
+        server = t_utils.get_project_info(project_name, "server")
+        
         # Select only those movies with the missing parameters
-        miss_par_df = df[df[["fps", "duration"]].isna()]
+        miss_par_df = df[df["fps"].isna()|df["duration"].isna()]
         
         print("Updating the fps and duration information of:")
         print(*miss_par_df.filename.unique(), sep = "\n")
         
-        ##### Check if movies with missing fps/duration info can be mapped ####
-        # Add info about accessing the Spyfish movies from AWS
-        if project_name == "Spyfish_Aotearoa":
-            # Start AWS session
-            aws_access_key_id, aws_secret_access_key = server_utils.aws_credentials()
-            client = server_utils.connect_s3(aws_access_key_id, aws_secret_access_key)
-
-            # Check the movies are accessible
-            miss_par_df = spyfish_utils.check_spyfish_movies(miss_par_df, client)
-
-        # Add info about accessing the Koster movies
-        if project_name == "Koster_Seafloor_Obs":
-            # Specify the path of the movies 
-            movies_path = "/uploads"
-
-            # Include server's path to the movie files
-            miss_par_df["Fpath"] = movies_path + "/" + miss_par_df["filename"]
-
-            # Check that videos can be mapped
-            miss_par_df['exists'] = miss_par_df['Fpath'].map(os.path.isfile)
-
-        # Prevent missing parameters from movies that don't exists
-        if len(miss_par_df[~miss_par_df.exists]) > 0:
-            print(
-                f"There are {len(miss_par_df) - miss_par_df.exists.sum()} out of {len(miss_par_df)} movies missing from the server without {parameter} information. The movies are {miss_par_df[~miss_par_df.exists].filename.tolist()}"
-            )
-
-            return
-
         ##### Estimate the fps/duration of the movies ####
-        else:
-            # Check if the project is the Spyfish Aotearoa
-            if project_name == "Spyfish_Aotearoa":
-                # Download from s3, calculate and add fps/length info
-                df = spyfish_utils.add_fps_length_spyfish(df, miss_par_df, client)
-
-            else:    
-                # Set the fps and duration of each movie
-                df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(df["Fpath"].apply(get_length, 1).tolist(), columns=["fps", "duration"])
+        # Add info from AWS
+        if server == "AWS":
+            # Extract the key of each movie
+            miss_par_df['key_movie'] = miss_par_df['LinkToVideoFile'].apply(lambda x: x.split('/',3)[3])
             
-        # Update the local movies.csv file with the new fps/duration info
-        df.drop(["Fpath","exists"], axis=1).to_csv(movies_csv, index=False)
-        print("The fps and duration columns have been updated in movies.csv")
+            # Loop through each movie missing the info and retrieve it
+            for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
+                # generate a temp url for the movie 
+                url = db_info_dict['client'].generate_presigned_url('get_object', 
+                                                                    Params = {'Bucket': db_info_dict['bucket'], 
+                                                                              'Key': row['key_movie']}, 
+                                                                    ExpiresIn = 100)
+                # Calculate the fps and duration
+                cap = cv2.VideoCapture(url)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = frame_count/fps
+
+                # Update the fps/duration info in the miss_par_df
+                miss_par_df.at[index,'fps'] = fps
+                miss_par_df.at[index,'duration'] = duration
+                
+                cap.release()
+                
+            # Save the fps/duration info in the df
+            df["fps"] = df.fps.fillna(miss_par_df.fps)
+            df["duration"] = df.duration.fillna(miss_par_df.duration)
+            
+            
+            # Update the local and server movies.csv file with the new fps/duration info
+            df.to_csv(db_info_dict["local_movies_csv"], index=False)
+            server_utils.upload_file_to_s3(client = db_info_dict['client'],
+                                           bucket = db_info_dict['bucket'], 
+                                           key = db_info_dict["server_movies_csv"],
+                                           filename = db_info_dict["local_movies_csv"])
+            print("The fps and duration columns have been updated in movies.csv")
+
+        else:   
+            print("updating the fps/duration not using AWS is a work in progress")
+            # Set the fps and duration of each movie
+#             df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(df["Fpath"].apply(get_length, 1).tolist(), columns=["fps", "duration"])
+        
+        print("Fps and duration information updated")
         
     return df
                     

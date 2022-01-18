@@ -2,18 +2,25 @@ import pandas as pd
 import numpy as np
 import json, io
 from ast import literal_eval
-from utils import db_utils
+import kso_utils.db_utils as db_utils
 from collections import OrderedDict
 from IPython.display import HTML, display, update_display, clear_output
 from datetime import date
 import ipywidgets as widgets
 import kso_utils.movie_utils as movie_utils
+import kso_utils.spyfish_utils as spyfish_utils
 
-def check_sites_csv(sites_csv):
+
+def check_sites_csv(db_initial_info, project_name):
 
     # Load the csv with sites information
-    sites_df = pd.read_csv(sites_csv)
+    sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
     
+    # Check if the project is the Spyfish Aotearoa
+    if project_name == "Spyfish_Aotearoa":
+        # Rename columns to match schema fields
+        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
+        
     # Select relevant fields
     sites_df = sites_df[
         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
@@ -29,13 +36,44 @@ def check_sites_csv(sites_csv):
     return sites_df
 
     
-def check_movies_csv(movies_csv, sites_df, project_name):
+def check_movies_csv(db_initial_info, project_name):
 
-    # Load the csv with movies information
-    movies_df = pd.read_csv(movies_csv)
-    
     # Check for missing fps and duration info
-    movies_df = movie_utils.check_fps_duration(movies_df, movies_csv, project_name)
+    movies_df = movie_utils.check_fps_duration(db_initial_info, project_name)
+    
+    # Check if the project is the Spyfish Aotearoa
+    if project_name == "Spyfish_Aotearoa":
+        movies_df = spyfish_utils.process_spyfish_movies(movies_df)
+        
+        
+    # Check if the project is the KSO
+    if project_name == "Koster_Seafloor_Obs":
+        movies_df = koster_utils.process_koster_movies_csv(movies_df)
+    
+    
+    # Connect to database
+    conn = db_utils.create_connection(db_initial_info['db_path'])
+    
+    # Reference movies with their respective sites
+    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
+    sites_df = sites_df.rename(columns={"id": "Site_id"})
+
+    # Merge movies and sites dfs
+    movies_df = pd.merge(
+        movies_df, sites_df, how="left", on="siteName"
+    )
+    
+    # Select only those fields of interest
+    movies_db = movies_df[
+        ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
+    ]
+
+    # Roadblock to prevent empty information
+    db_utils.test_table(
+        movies_db, "movies", movies_db.columns
+    )
+    
+    
     
     # Check for survey_start and survey_end info
     movies_df = movie_utils.check_survey_start_end(movies_df, movies_csv)
@@ -131,22 +169,22 @@ def upload_info_movies():
     
     
     
-    # Missing info for files in the "buv-zooniverse-uploads"
-missing_info = zoo_contents_s3_pd_movies.merge(movies_df, 
-                                        on=['Key'], 
-                                        how='outer', 
-                                        indicator=True)
+# # Missing info for files in the "buv-zooniverse-uploads"
+# missing_info = zoo_contents_s3_pd_movies.merge(movies_df, 
+#                                         on=['Key'], 
+#                                         how='outer', 
+#                                         indicator=True)
 
-# Find out about those files missing from the S3
-missing_from_s3 = missing_info[missing_info["_merge"]=="right_only"]
-missing_bad_deployment = missing_from_s3[missing_from_s3["IsBadDeployment"]]
-missing_no_bucket_info = missing_from_s3[~(missing_from_s3["IsBadDeployment"])&(missing_from_s3["bucket"].isna())]
+# # Find out about those files missing from the S3
+# missing_from_s3 = missing_info[missing_info["_merge"]=="right_only"]
+# missing_bad_deployment = missing_from_s3[missing_from_s3["IsBadDeployment"]]
+# missing_no_bucket_info = missing_from_s3[~(missing_from_s3["IsBadDeployment"])&(missing_from_s3["bucket"].isna())]
 
-print("There are", len(missing_from_s3.index), "movies missing from the S3")
-print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
-print(*missing_bad_deployment.filename.unique(), sep = "\n")
-print(len(missing_no_bucket_info.index), "movies are good deployments but don't have bucket info. Their filenames are:")
-print(*missing_no_bucket_info.filename.unique(), sep = "\n")
+# print("There are", len(missing_from_s3.index), "movies missing from the S3")
+# print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
+# print(*missing_bad_deployment.filename.unique(), sep = "\n")
+# print(len(missing_no_bucket_info.index), "movies are good deployments but don't have bucket info. Their filenames are:")
+# print(*missing_no_bucket_info.filename.unique(), sep = "\n")
 
 
 # Select multiple movies to include information of
