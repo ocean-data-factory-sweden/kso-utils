@@ -331,28 +331,7 @@ def download_csv_aws(project_name, server_dict, db_csv_info):
 
     return db_initial_info
     
-def get_movies_from_aws(client, bucket_i, aws_folder):
-        
-    # Retrieve info from the bucket
-    contents_s3_pd = retrieve_s3_buckets_info(client, bucket_i)
-
-    # Specify the filename of the objects (videos)        
-    contents_s3_pd['raw_filename'] = contents_s3_pd['Key'].str.split('/').str[-1]
-
-    # Specify the prefix (directory) of the objects        
-    contents_s3_pd['prefix'] = contents_s3_pd['Key'].str.rsplit('/',1).str[0]
     
-    # Select only files within the buv-zooniverse-uploads bucket
-    zoo_contents_s3_pd = contents_s3_pd[contents_s3_pd['prefix'].str.contains(aws_folder)].reset_index(drop = True)
-
-    # Specify the formats of the movies to select
-    movie_formats = tuple(['wmv', 'mpg', 'mov', 'avi', 'mp4', 'MOV', 'MP4'])
-
-    # Select only files of interest (movies)
-    zoo_contents_s3_pd_movies = zoo_contents_s3_pd[zoo_contents_s3_pd['raw_filename'].str.endswith(movie_formats)]
-    
-    return zoo_contents_s3_pd_movies
-
 def download_object_from_s3(client, *, bucket, key, version_id=None, filename):
     """
     Download an object from S3 with a progress bar.
@@ -389,15 +368,22 @@ def upload_file_to_s3(client, *, bucket, key, filename):
     
     # Get the size of the file to upload
     file_size = os.stat(filename).st_size
-
-    with tqdm(total=file_size, unit="B", unit_scale=True, desc=filename, position=0, leave=True) as pbar:
+    
+    # prvent issues with small files and tqdm
+    if file_size > 10000:
+        with tqdm(total=file_size, unit="B", unit_scale=True, desc=filename, position=0, leave=True) as pbar:
+            client.upload_file(
+                Filename=filename,
+                Bucket=bucket,
+                Key=key,
+                Callback=lambda bytes_transferred: pbar.update(bytes_transferred),
+            )
+    else:
         client.upload_file(
-            Filename=filename,
-            Bucket=bucket,
-            Key=key,
-            Callback=lambda bytes_transferred: pbar.update(bytes_transferred),
-        )
-        
+                Filename=filename,
+                Bucket=bucket,
+                Key=key,
+            )
 # def retrieve_s3_buckets_info(client, bucket, suffix):
     
 #     # Select the relevant bucket

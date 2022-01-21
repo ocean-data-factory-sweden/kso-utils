@@ -169,7 +169,7 @@ def select_clip_n_len(movie_i, db_info_dict):
                                                                   step=1,
                                                                   description='Range in seconds:',
                                                                   style = {'description_width': 'initial'},
-                                                                  layout=widgets.Layout(width='100%')
+                                                                  layout=widgets.Layout(width='90%')
                                                                  ))
 
                                    
@@ -248,13 +248,11 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
     if server == "AWS":
 
-        bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
-
         if not os.path.exists(movie_i_df.filename_ext[0]):
             # Download the movie of interest
             server_utils.download_object_from_s3(
                             db_info_dict["client"],
-                            bucket=bucket_i,
+                            bucket=db_info_dict["bucket"],
                             key=movie_i_df.spath.unique()[0].replace("http://marine-buv.s3.ap-southeast-2.amazonaws.com/",""),
                             filename=movie_i_df.filename_ext[0],
             )

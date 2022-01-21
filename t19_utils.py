@@ -11,6 +11,8 @@ import numpy as np
 import subprocess
 import datetime
 import logging
+from tqdm import tqdm
+
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -35,7 +37,7 @@ def select_survey(db_info_dict):
                 options = exisiting_surveys,
                 description = 'Survey Name:',
                 disabled = False,
-                layout=Layout(width='50%'),
+                layout=Layout(width='80%'),
                 style = {'description_width': 'initial'}
             )
             
@@ -136,7 +138,7 @@ def select_survey(db_info_dict):
                         options = ['Existing','New survey'],
                         description = 'Existing or new survey:',
                         disabled = False,
-                        layout=Layout(width='50%'),
+                        layout=Layout(width='90%'),
                         style = {'description_width': 'initial'}
                     )
                    )
@@ -152,7 +154,7 @@ def record_encoder():
         placeholder='First and last name',
         description='Name of the person encoding this survey information:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(EncoderName_widget)
@@ -165,7 +167,7 @@ def select_SurveyStartDate():
     SurveyStartDate_widget = widgets.DatePicker(
         description='Offical date when survey started as a research event',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(SurveyStartDate_widget)
@@ -179,7 +181,7 @@ def write_SurveyName():
         placeholder='Baited Underwater Video Taputeranga Apr 2015',
         description='A name for this survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(SurveyName_widget)
@@ -192,7 +194,7 @@ def select_OfficeName(OfficeName_options):
         options=OfficeName_options,
         description='Department of Conservation Office responsible for this survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(OfficeName_widget)
@@ -206,7 +208,7 @@ def write_ContractorName():
         placeholder='No contractor',
         description='Person/company contracted to carry out the survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(ContractorName_widget)
@@ -219,7 +221,7 @@ def write_ContractNumber():
     ContractNumber_widget = widgets.Text(
         description='Contract number for this survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(ContractNumber_widget)
@@ -231,7 +233,7 @@ def write_LinkToContract():
     LinkToContract_widget = widgets.Text(
         description='Hyperlink to the DOCCM for the contract related to this survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(LinkToContract_widget)
@@ -245,7 +247,7 @@ def write_SurveyLeaderName():
         placeholder='First and last name',
         description='Name of the person in charge of this survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(SurveyLeaderName_widget)
@@ -259,7 +261,7 @@ def select_LinkToMarineReserve(reserves_available):
         options=reserves_available,
         description='Marine Reserve linked to the survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(LinkToMarineReserve_widget)
@@ -279,7 +281,7 @@ def select_FishMultiSpecies():
                         options=["No", "Yes"],
                         description='Does this survey look at a single species?',
                         disabled=False,
-                        layout=Layout(width='50%'),
+                        layout=Layout(width='95%'),
                         style = {'description_width': 'initial'}
                     )
                    )
@@ -294,7 +296,7 @@ def select_StratifiedBy(StratifiedBy_choices):
         options=StratifiedBy_choices,
         description='Stratified factors for the sampling design',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(StratifiedBy_widget)
@@ -315,7 +317,7 @@ def select_IsLongTermMonitoring():
                         options=["Yes", "No"],
                         description='Is the survey part of a long-term monitoring?',
                         disabled=False,
-                        layout=Layout(width='50%'),
+                        layout=Layout(width='95%'),
                         style = {'description_width': 'initial'}
                     )
                    )
@@ -330,7 +332,7 @@ def select_SiteSelectionDesign(site_selection_options):
         options=site_selection_options,
         description='What was the design for site selection?',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(SiteSelectionDesign_widget)
@@ -344,7 +346,7 @@ def select_UnitSelectionDesign(unit_selection_options):
         options=unit_selection_options,
         description='What was the design for site selection?',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(UnitSelectionDesign_widget)
@@ -358,7 +360,7 @@ def select_RightsHolder(RightsHolder_options):
         options=RightsHolder_options,
         description='Person(s) or organization(s) owning or managing rights over the resource',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(RightsHolder_widget)
@@ -372,7 +374,7 @@ def select_AccessRights():
         placeholder='',
         description='Who can access the resource?',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(AccessRights_widget)
@@ -386,7 +388,7 @@ def write_SurveyVerbatim():
         placeholder='',
         description='Provide an exhaustive description of the survey design and objectives',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(SurveyVerbatim_widget)
@@ -400,7 +402,7 @@ def select_BUVType(BUVType_choices):
         options=BUVType_choices,
         description='Type of BUV used for the survey:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(BUVType_widget)
@@ -413,7 +415,7 @@ def write_LinkToPicture():
     LinkToPicture_widget = widgets.Text(
         description='Hyperlink to the DOCCM folder for this survey photos:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(LinkToPicture_widget)
@@ -426,7 +428,7 @@ def write_Vessel():
     Vessel_widget = widgets.Text(
         description='Vessel used to deploy the unit:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )
     display(Vessel_widget)
@@ -437,7 +439,7 @@ def write_LinkToFieldSheets():
     LinkToFieldSheets = widgets.Text(
         description='Hyperlink to the DOCCM for the field sheets used to gather the survey information:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkToFieldSheets)
@@ -449,7 +451,7 @@ def write_LinkReport01():
     LinkReport01 = widgets.Text(
         description='Hyperlink to the first (of up to four) DOCCM report related to these data:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkReport01)
@@ -460,7 +462,7 @@ def write_LinkReport02():
     LinkReport02 = widgets.Text(
         description='Hyperlink to the second DOCCM report related to these data:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkReport02)
@@ -471,7 +473,7 @@ def write_LinkReport03():
     LinkReport03 = widgets.Text(
         description='Hyperlink to the third DOCCM report related to these data:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkReport03)
@@ -482,7 +484,7 @@ def write_LinkReport04():
     LinkReport04 = widgets.Text(
         description='Hyperlink to the fourth DOCCM report related to these data:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkReport04)
@@ -493,7 +495,7 @@ def write_LinkToOriginalData():
     LinkToOriginalData = widgets.Text(
         description='Hyperlink to the DOCCM for the spreadsheet where these data were intially encoded:',
         disabled=False,
-        layout=Layout(width='50%'),
+        layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
     )    
     display(LinkToOriginalData)
@@ -539,12 +541,13 @@ def confirm_survey(survey_i, db_info_dict):
         # Load the csv with with sites and survey choices
         choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
         
+        
         # Get prepopulated fields for the survey
-        new_survey_row["OfficeContact"] = choices_df[choices_df["OfficeName"]==new_survey_row.OfficeName.values[0]]["OfficeContact"]
-        new_survey_row[["SurveyLocation","Region"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["MarineReserveAbreviation", "Region"]]
+        new_survey_row["OfficeContact"] = choices_df[choices_df["OfficeName"]==new_survey_row.OfficeName.values[0]]["OfficeContact"].values[0]
+        new_survey_row[["SurveyLocation","Region"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["MarineReserveAbreviation", "Region"]].values[0]
         new_survey_row["DateEntry"] = datetime.date.today() 
         new_survey_row["SurveyType"] = 'BUV'
-        new_survey_row["SurveyID"] = new_survey_row["SurveyLocation"]+ "_" + new_survey_row["DateEntry"].values[0].strftime("%Y%m%d") + "_" + new_survey_row["SurveyType"]
+        new_survey_row["SurveyID"] = new_survey_row["SurveyLocation"]+ "_" + new_survey_row["SurveyStartDate"].values[0].strftime("%Y%m%d") + "_" + new_survey_row["SurveyType"]
         
         # Review details
         print("The details of the new survey are:")
@@ -572,12 +575,12 @@ def confirm_survey(survey_i, db_info_dict):
                 
                 # Save the updated df locally
                 surveys_df.to_csv(db_info_dict["local_surveys_csv"],index=False)
-               
+            
                 # Save the updated df in the server
                 server_utils.upload_file_to_s3(db_info_dict["client"],
                                                bucket=db_info_dict["bucket"], 
                                                key=db_info_dict["server_surveys_csv"], 
-                                               filename=db_info_dict["local_surveys_csv"])
+                                               filename=db_info_dict["local_surveys_csv"].__str__())
                 
                 print("Survey information updated!")
                 
@@ -616,28 +619,265 @@ def confirm_survey(survey_i, db_info_dict):
 ############### MOVIES FUNCTIONS ###################
 ####################################################
 
-def select_go_pro_folder():
-    # Create and display a FileChooser widget
-    fc = FileChooser('/')
-    
-    display(fc)
-    
-    return fc
+def select_go_pro_folder(db_info_dict):
+    # Define function to select folder with go-pro files
+    def f(server_or_locally):
+        # If cloud slected...
+        if server_or_locally == 'Cloud':
+            # Define function for cloud option to select subfolder within the survey folder
+            def sel_subfolder(survey_folder):
+                # Retrieve info from the survey folders in the cloud
+                survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+                                                                        Prefix=survey_folder, 
+                                                                        Delimiter='/')
 
-def select_go_pro_movies(go_pro_folder):
-    # Save the names of the go_pro files
-    go_pro_files_i = [go_pro_folder + movie for movie in os.listdir(go_pro_folder)]
+                # Convert info to dataframe
+                survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
+
+                # Widget to select the local folder of interest
+                survey_subfolder = widgets.Dropdown(
+                                        options = survey_subfolders.Prefix.unique(),
+                                        description = 'Select the folder of the deployment to process:',
+                                        disabled = False,
+                                        layout=Layout(width='80%'),
+                                        style = {'description_width': 'initial'}
+                )
+                display(survey_subfolder)
+
+                return survey_subfolder
+
+            # Retrieve info from the survey folders in the cloud
+            survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+                                                                Prefix="", 
+                                                                Delimiter='/')
+
+            # Convert info to dataframe
+            survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
+
+            # Widget to select the survey folder of interest
+            w1 = interactive(sel_subfolder,
+                             survey_folder = widgets.Dropdown(
+                                 options = survey_folders.Prefix.unique(),
+                                 description = 'Select the folder of the survey to process:',
+                                 disabled = False,
+                                 layout=Layout(width='90%'),
+                                 style = {'description_width': 'initial'}
+                             )
+                            )
+            display(w1)
+
+            return w1
+        
     
+        # If local slected...
+        if server_or_locally == 'Local':
+            # Widget to select the local folder of interest
+            fc = FileChooser('/')
+            fc.title = '<b>Select the local folder with the Go-pro videos</b>'
+            # Switch to folder-only mode
+            fc.show_only_dirs = True
+            display(fc)
+
+            return fc
+    
+    
+    # Display the options
+    w = interactive(f,
+                    server_or_locally = widgets.Dropdown(
+                        options = ['Local','Cloud'],
+                        description = 'Select files stored on the cloud or locally:',
+                        disabled = False,
+                        layout=Layout(width='90%'),
+                        style = {'description_width': 'initial'}
+                    )
+                   )
+
+    display(w)
+
+    return w
+
+def select_go_pro_files(go_pro_folder, db_info_dict):
+    if go_pro_folder.kwargs['server_or_locally']=="Cloud":
+        # Retrieve info from the survey folders in the cloud
+        go_pro_files_i = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
+                                               bucket = db_info_dict["bucket"], 
+                                               prefix = go_pro_folder.result.result.value)
+
+        go_pro_files_i = go_pro_files_i.Key.unique()        
+        
+    else:
+        go_pro_files_i = [go_pro_folder.result.value + movie for movie in os.listdir(go_pro_folder.result.value)]
+
     # Specify the formats of the movies to select
     movie_formats = movie_utils.get_movie_extensions()
-    
+
     # Select only movie files
     go_pro_movies_i = [s for s in go_pro_files_i if any(xs in s for xs in movie_formats)]
-    
+
     print("The movies selected are:")
     print(*go_pro_movies_i, sep='\n')
 
     return go_pro_movies_i
+    
+# def select_go_pro_folder1(db_info_dict): 
+    
+    
+#     # Define function to select folder with go-pro files
+#     def f(server_or_locally):
+#         # If cloud slected...
+#         if server_or_locally == 'Cloud':
+#             # Retrieve info from the survey folders in the cloud
+#             survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+#                                                                 Prefix="", 
+#                                                                 Delimiter='/')
+            
+#             # Convert info to dataframe
+#             survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
+            
+#             # Widget to select the survey folder of interest
+#             w1 = interactive(sel_subfolder,
+#                              survey_folder = widgets.Dropdown(
+#                                  options = survey_folders.Prefix.unique(),
+#                                  description = 'Select the folder of the survey to process:',
+#                                  disabled = False,
+#                                  layout=Layout(width='90%'),
+#                                  style = {'description_width': 'initial'}
+#                              )
+#                             )
+#             display(w1)
+            
+#             return w1
+
+
+#         # If local slected...
+#         if server_or_locally == 'Local':
+#             # Widget to select the local folder of interest
+#             fc = FileChooser('/')
+#             fc.title = '<b>Select the local folder with the Go-pro videos</b>'
+
+#             display(fc)
+            
+#             return fc
+        
+#     # Widget to select and confirm the local folder of interest
+#     def file_choose_confirm():
+#         # Widget to select the local folder of interest
+#         fc = FileChooser('/')
+#         fc.title = '<b>Select the local folder with the Go-pro videos</b>'
+
+#         # Widget to find the movies
+#         buttons = widgets.Button(
+#             description="Check the filenames of the videos",
+#             button_style="primary",
+#             layout=Layout(width='280px'),
+#         )
+
+
+#         # Combine both widgets
+#         filechooser_widget = widgets.VBox([fc, buttons])
+
+#         # Set empty go_pro_files
+#         go_pro_files_i = ""
+
+#         # define what happens after the user press the button
+#         def button_click(change):
+#             print("made it")
+#             go_pro_files_i = [fc.selected + movie for movie in os.listdir(fc.selected)]
+#             return go_pro_files_i
+
+#         buttons.on_click(button_click)
+
+#         display(filechooser_widget)
+
+#         return go_pro_files_i
+            
+        
+#     # Define function to list files inside the local folder selected
+#     def local_files_to_list(fc):
+        
+#         go_pro_files = list_go_files(go_pro_files_i)
+#         # Save the names of the go_pro files
+#         print(fc.selected)
+#         go_pro_files_i = [fc + movie for movie in os.listdir(fc.selected)]
+#         print(go_pro_files_i)
+#         go_pro_files = list_go_files(go_pro_files_i)
+
+#         return go_pro_files
+        
+    
+#     # Define function for cloud option to select subfolder within the survey folder
+#     def sel_subfolder(survey_folder):
+#         # Retrieve info from the survey folders in the cloud
+#         survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+#                                                                 Prefix=survey_folder, 
+#                                                                 Delimiter='/')
+        
+#         # Convert info to dataframe
+#         survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
+        
+#         # Widget to select the local folder of interest
+#         w3 = interactive(files_subfolder,
+#                          survey_subfolder = widgets.Dropdown(
+#                                 options = survey_subfolders.Prefix.unique(),
+#                                 description = 'Select the folder of the deployment to process:',
+#                                 disabled = False,
+#                                 layout=Layout(width='80%'),
+#                                 style = {'description_width': 'initial'}
+#                             ))
+#         display(w3)
+
+#         return w3
+    
+#     def files_subfolder(survey_subfolder):
+#          # Retrieve info from the survey folders in the cloud
+#         files_subfolder = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
+#                                                bucket = db_info_dict["bucket"], 
+#                                                prefix = survey_subfolder)
+        
+        
+        
+#         # Get a list of the go_pro_folders
+#         go_pro_files = list_go_files(files_subfolder.Key.unique())
+
+#         return go_pro_files
+        
+
+#     # Define function to return the filenames of the go-pro movies inside a folder
+#     def list_go_files(list_of_files):
+        
+#         if list_of_files != "":
+#             # Specify the formats of the movies to select
+#             movie_formats = movie_utils.get_movie_extensions()
+
+#             # Select only movie files
+#             go_pro_movies_i = [s for s in list_of_files if any(xs in s for xs in movie_formats)]
+
+#             print("The movies selected are:")
+#             print(*go_pro_movies_i, sep='\n')
+
+#             return go_pro_movies_i
+        
+#         else: 
+#             return None 
+
+
+    
+#     # Display the options
+#     w = interactive(f,
+#                     server_or_locally = widgets.Dropdown(
+#                         options = ['Local','Cloud'],
+#                         description = 'Select files stored on the cloud or locally:',
+#                         disabled = False,
+#                         layout=Layout(width='90%'),
+#                         style = {'description_width': 'initial'}
+#                     )
+#                    )
+
+#     display(w)
+
+#     return w
+    
+    
     
 
 # Select site and date of the video
@@ -675,7 +915,7 @@ def select_eventdate():
     
 
 # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
-def concatenate_go_pro_videos(SiteID, EventDate, go_pro_folder, go_pro_files):
+def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go_pro_files):
 
     # Save eventdate as str
     EventDate_str = EventDate.isoformat().replace("-","_")
@@ -683,9 +923,28 @@ def concatenate_go_pro_videos(SiteID, EventDate, go_pro_folder, go_pro_files):
     # Specify the name of the deployment
     deployment_name = SiteID+"_"+EventDate_str
 
-    # Specify temp folder to host the concat video
-    concat_folder = go_pro_folder+"concat_video/"
+    
    
+    if go_pro_folder.kwargs['server_or_locally']=="Cloud":
+        concat_folder = "concat_video/"
+        local_go_pro_files = [i.split('/', 2)[-1] for i in go_pro_files]
+        
+        print("Downloading the go_pro files")
+        # Download the movies from the S3
+        for movie_key in tqdm(go_pro_files, total=len(go_pro_files)):
+            local_filename = local_go_pro_files[go_pro_files.index(movie_key)]
+            if not os.path.exists(local_filename):
+                server_utils.download_object_from_s3(client = db_info_dict["client"],
+                                                bucket = db_info_dict["bucket"], 
+                                                key = movie_key,
+                                                filename = local_filename)
+        go_pro_files = local_go_pro_files
+        
+    else:
+        # Specify temp folder to host the concat video
+        concat_folder = go_pro_folder+"concat_video/"
+
+
     # Specify the filename and path for the concatenated movie
     filename = deployment_name+".MP4"
     concat_video = concat_folder+filename
@@ -1194,7 +1453,7 @@ def confirm_deployment_details(video_info_dict,
     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
     
     # Save the name of the survey
-    if isinstance(survey_i.result, tuple):
+    if isinstance(survey_i.result, dict):
         
         # Load the csv with survey information
         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
@@ -1281,7 +1540,7 @@ def upload_concat_movie(db_info_dict, video_info_dict_i, new_deployment_row):
         print("Movie uploaded to", new_deployment_row["LinkToVideoFile"])
     
         # Add the new row to the movies df
-        movies_df = movies_df.append(new_deployment_row, ignore_index=True)
+        movies_df = movies_df.append(new_movie_row, ignore_index=True)
 
         # Save the updated df locally
         movies_df.to_csv(db_info_dict["local_movies_csv"],index=False)
