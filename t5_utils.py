@@ -139,6 +139,7 @@ def extract_frames(df, server_dict, project_name, frames_folder):
         + df["species_id"].astype(str)
         + ".jpg"
     )
+    
 
     # Download movies that are not available locally
     if len(df["fpath"].unique()) > 5:
