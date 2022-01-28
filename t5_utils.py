@@ -41,7 +41,7 @@ def setup_frame_info(project_name: str):
     db_info_dict = t_utils.initiate_db(project_name)
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     zoo_number = t_utils.get_project_info(project_name, "Zooniverse_number")
-    if zoo_number.isdigit():
+    if str(zoo_number).isdigit():
         # Connect to Zooniverse project
         zoo_project = t_utils.connect_zoo_project(project_name)
         zoo_info_dict = t_utils.retrieve__populate_zoo_info(project_name = project_name, 
@@ -180,7 +180,7 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     if not isinstance(df, pd.DataFrame):
         df = df.df
 
-    if "modif_frame_path" in df.columns:
+    if "modif_frame_path" in df.columns and "no_modification" not in df["modif_frame_path"].values:
         df["frame_path"] = df["modif_frame_path"]
 
     if "movie_id" in df.columns:
@@ -200,6 +200,9 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
         sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
         created_on = surveys_df["SurveyDate"].unique()[0]
         sitename = sites_df["siteName"].unique()[0]
+        
+    # Add information about the type of subject
+    upload_to_zoo["subject_type"] = "frame"
  
     return upload_to_zoo, sitename, created_on
 
