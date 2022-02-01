@@ -190,6 +190,11 @@ def choose_workflows(workflows_df):
 class WidgetMaker(widgets.VBox):
 
     def __init__(self, workflows_df):
+        '''
+        The function creates a widget that allows the user to select which workflows to run
+        
+        :param workflows_df: the dataframe of workflows
+        '''
         self.workflows_df = workflows_df
         self.widget_count = widgets.IntText(description='Number of workflows:',
                                             display="flex",
@@ -254,6 +259,8 @@ def choose_w_version(workflows_df, workflow_id):
 
 
 def get_workflow_ids(workflows_df, workflow_names):
+    # The function that takes a list of workflow names and returns a list of workflow
+    # ids.
     return [workflows_df[workflows_df.display_name==wf_name].workflow_id.unique()[0] for 
             wf_name in workflow_names]
 
@@ -284,11 +291,11 @@ def get_classifications(
     
     if subj_type == "frame":
         # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, frame_number, movie_id FROM subjects", conn)
+        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, filename, frame_number, movie_id FROM subjects", conn)
         
     else:
         # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, clip_start_time, movie_id FROM subjects", conn)
+        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, filename, clip_start_time, movie_id FROM subjects", conn)
     
     # Ensure id format matches classification's subject_id
     classes_df["subject_ids"] = classes_df["subject_ids"].astype('Int64')
@@ -304,11 +311,10 @@ def get_classifications(
         right_on="id",
     )
     
-    if classes_df[["subject_type", "https_location","movie_id"]].isna().any().any():
+    if classes_df[["subject_type", "https_location", "filename"]].isna().any().any():
         # Exclude classifications from missing subjects
         filtered_class_df = classes_df.dropna(subset=["subject_type",
-                                                    "https_location",
-                                                    "movie_id"], 
+                                                    "https_location", "filename"], 
                                             how='any').reset_index(drop=True)
         
         # Report on the issue
@@ -353,6 +359,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
 
     print("Aggregrating the classifications")
     
+    # We take the raw classifications and process them to get the aggregated labels.
     if subj_type == "frame":
         
         # Get the aggregration parameters
@@ -396,11 +403,11 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
         # Get prepared annotations
         new_rows = []
         
-        for name, group in agg_labels_df.groupby(["movie_id", "label", "frame_number"]):
-            movie_id, label, start_frame = name
+        for name, group in agg_labels_df.groupby(["filename", "label", "frame_number"]):
+            filename, label, start_frame = name
 
             total_users = agg_labels_df[
-                (agg_labels_df.movie_id == movie_id)
+                (agg_labels_df.filename == filename)
                 & (agg_labels_df.label == label)
                 & (agg_labels_df.frame_number == start_frame)
             ]["user_name"].nunique()
@@ -424,7 +431,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
             for ix, box in zip(subject_ids, new_group):
                 new_rows.append(
                     (
-                        movie_id,
+                        filename,
                         label,
                         start_frame,
                         ix,
@@ -435,7 +442,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
         agg_class_df = pd.DataFrame(
             new_rows,
             columns=[
-                "movie_id",
+                "filename",
                 "label",
                 "start_frame",
                 "subject_ids",
@@ -457,7 +464,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
         # Add the http info
         agg_class_df =  pd.merge(
         agg_class_df,
-        raw_class_df[["subject_ids","https_location","subject_type", "movie_id"]].drop_duplicates(),
+        raw_class_df[["subject_ids","https_location","subject_type", "filename"]].drop_duplicates(),
         how="left",
         on="subject_ids"
     )

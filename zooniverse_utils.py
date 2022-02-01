@@ -115,6 +115,15 @@ def extract_metadata(subj_df):
 
 
 def populate_subjects(subjects, project_name, db_path):
+    '''
+    Populate the subjects table with the subject metadata
+    
+    :param subjects: the subjects dataframe
+    :param project_name: The name of the Zooniverse project
+    :param db_path: the path to the database
+    '''
+
+    movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
     
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
@@ -139,6 +148,10 @@ def populate_subjects(subjects, project_name, db_path):
 
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(lambda x: literal_eval(x)["0"])
+    
+    # Set movie_id column to None if no movies are linked to the subject
+    if movie_folder == "None":
+        subjects["movie_id"] = None
     
     # Set the columns in the right order
     subjects = subjects[
@@ -165,7 +178,7 @@ def populate_subjects(subjects, project_name, db_path):
     subjects = subjects.drop_duplicates(subset="id")
 
     # Test table validity
-    db_utils.test_table(subjects, "subjects", keys=["movie_id"])
+    db_utils.test_table(subjects, "subjects", keys=["id"])
 
     # Add values to subjects
     db_utils.add_to_table(db_path, "subjects", [tuple(i) for i in subjects.values], 15)
