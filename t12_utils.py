@@ -403,14 +403,26 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
         # Get prepared annotations
         new_rows = []
         
-        for name, group in agg_labels_df.groupby(["filename", "label", "frame_number"]):
-            filename, label, start_frame = name
-
-            total_users = agg_labels_df[
-                (agg_labels_df.filename == filename)
-                & (agg_labels_df.label == label)
-                & (agg_labels_df.frame_number == start_frame)
-            ]["user_name"].nunique()
+        if agg_labels_df["frame_number"].isnull().all():
+            group_cols = ["filename", "label"]
+        else:
+            group_cols = ["filename", "label", "frame_number"]
+        
+        for name, group in agg_labels_df.groupby(group_cols):
+            if "frame_number" in group_cols:
+                filename, label, start_frame = name
+                total_users = agg_labels_df[
+                    (agg_labels_df.filename == filename)
+                    & (agg_labels_df.label == label)
+                    & (agg_labels_df.frame_number == start_frame)
+                ]["user_name"].nunique()
+            else:
+                filename, label = name
+                start_frame = np.nan
+                total_users = agg_labels_df[
+                    (agg_labels_df.filename == filename)
+                    & (agg_labels_df.label == label)
+                ]["user_name"].nunique()
             
             # Filter bboxes using IOU metric (essentially a consensus metric)
             # Keep only bboxes where mean overlap exceeds this threshold
@@ -572,7 +584,7 @@ def process_frames(df: pd.DataFrame, project_name):
         for ann_i in annotations:
             if ann_i["task"] == "T0":
 
-                if not ann_i["value"]:
+                if ann_i["value"] == []:
                     # Specify the frame was classified as empty
                     choice_i = {
                             "classification_id": row["classification_id"],
@@ -622,6 +634,7 @@ def process_frames(df: pd.DataFrame, project_name):
             "x", "y", "w", "h", 
             "label",
             "https_location",
+            "filename",
             "subject_type",
             "subject_ids",
             "frame_number",
