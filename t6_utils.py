@@ -75,12 +75,14 @@ def choose_test_prop():
     )
     
     v = widgets.FloatLogSlider(
-        value=3,
+        value=8,
         base=2,
         min=0, # max exponent of base
         max=10, # min exponent of base
         step=1, # exponent step
-        description='Batch size:'
+        description='Batch size:',
+        readout=True,
+        readout_format='d'
     )
     
     z = widgets.IntSlider(
