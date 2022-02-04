@@ -24,7 +24,7 @@ def get_project_info(project_name, info_interest):
     
     return project_info
 
-    
+
 def choose_project():
     
     # Specify location of the latest list of projects
@@ -81,8 +81,8 @@ def initiate_db(project_name):
     db_info_dict["db_path"] = db_path
     
     return db_info_dict
-    
-    
+
+
 def connect_zoo_project(project_name):
     # Save your Zooniverse user name and password.
     zoo_user, zoo_pass = zooniverse_utils.zoo_credentials()
@@ -94,7 +94,7 @@ def connect_zoo_project(project_name):
     project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
     
     return project
-    
+
 def retrieve__populate_zoo_info(project_name, db_info_dict, zoo_project, zoo_info):
     
     if zoo_project is None:
@@ -109,7 +109,7 @@ def retrieve__populate_zoo_info(project_name, db_info_dict, zoo_project, zoo_inf
                                            project_name,
                                            db_info_dict["db_path"])
         return zoo_info_dict
-    
+
 def choose_single_workflow(workflows_df):
 
     layout = widgets.Layout(width="auto", height="40px")  # set width and height
@@ -146,7 +146,7 @@ def choose_single_workflow(workflows_df):
 #         disabled=False,
 #     )
 
-    
+
 #     display(workflow_name)
 
 #     return workflow_name

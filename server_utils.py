@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 ###################################### 
-####### Common server functions ######
-######################################
+# ###### Common server functions ######
+# #####################################
 
 def connect_to_server(project_name):
     # Get project-specific server info
@@ -211,8 +211,8 @@ def update_db_init_info(project_name, csv_to_update):
 
 
 #####################
-### AWS functions ###
-#####################
+# ## AWS functions ###
+# ####################
 
 def aws_credentials():
     # Save your access key for the s3 bucket. 
@@ -396,8 +396,8 @@ def upload_file_to_s3(client, *, bucket, key, filename):
         
 
 ##############################
-########SNIC functions########
-##############################
+# #######SNIC functions########
+# #############################
 
 def snic_credentials():
     # Save your access key for the SNIC server. 
@@ -509,8 +509,8 @@ def check_movies_from_server(movies_df, sites_df, server_i):
 
 
 ###################################        
-########Google Drive functions##### 
-###################################
+# #######Google Drive functions##### 
+# ##################################
 
 def download_csv_from_google_drive(file_url):
 

@@ -25,7 +25,7 @@ def transfer_model(model_name: str, project_name: str, user: str, password: str)
     collection = [
         coll for coll in api.artifact_type(type_name='model', project=project_name).collections()
     ][-1]
-    artifact = api.artifact("koster/koster-ml/" + collection.name + ":latest")
+    artifact = api.artifact(f"{project_name}/" + collection.name + ":latest")
     # Download the artifact's contents
     artifact_dir = artifact.download()
     ssh = SSHClient()
