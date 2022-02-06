@@ -206,13 +206,14 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
  
     return upload_to_zoo, sitename, created_on
 
-def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames=300):
+def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3):
     if species_ids[0] == "":
         logging.error("No species were selected. Please select at least one species before continuing.")
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     df = pd.DataFrame()
+    server = t_utils.get_project_info(project_name, "server")
     
-    if movie_folder == "None":
+    if movie_folder == "None" and server != "AWS":
         
         df = FileChooser('.')
         df.title = '<b>Select frame folder location</b>'
@@ -251,9 +252,8 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
         
             agg_clips_df, raw_clips_df = t12.aggregrate_classifications(clips_df, "clip", project_name, agg_params=agg_params)
             agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
-
             populate_agg_annotations(agg_clips_df, "clip", project_name)
-            frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames)
+            frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames_subject)
             frame_df = check_frames_uploaded(frame_df, project_name, species_ids, conn)
             chooser.df = extract_frames(frame_df, server_dict, project_name, chooser.selected)
             try:
@@ -327,7 +327,7 @@ def view_frames(df, frame_path):
     return HTML(html_code)
 
     
-def get_species_frames(species_ids: list, server_dict: dict, conn, project_name, n_frames):
+def get_species_frames(species_ids: list, server_dict: dict, conn, project_name, n_frames_subject):
     """
     # Function to identify up to n number of frames per classified clip
     # that contains species of interest after the first time seen
@@ -393,7 +393,7 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         # Identify the ordinal number of the frames expected to be extracted
         frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
             lambda x: [
-                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames)
+                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
             ], 1
         )
 
@@ -412,6 +412,66 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         # Drop unnecessary columns
         frames_df.drop(["subject_id"], inplace=True, axis=1)
 
+    if server == "AWS":
+        # Retrieve sql info of species of interest and frames with those species
+        if len(species_ids) <= 1:
+            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
+            frames_df = pd.read_sql_query(
+            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id== '{species_ids[0]}'",
+            conn,
+        )
+        else:
+            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
+            frames_df = pd.read_sql_query(
+            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
+            conn,
+        )
+
+        # Retrieve information of subjects with the species of interest
+        subjects_df = pd.read_sql_query(
+                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
+                    conn,)
+
+        # Get start time of the clips and ids of the original movies
+        frames_df = pd.merge(frames_df, subjects_df, how="left", left_on="subject_id", right_on="id").drop(columns=["id"])
+        
+        # Identify the second of the original movie when the species first appears
+        frames_df["first_seen_movie"] = (
+            frames_df["clip_start_time"] + frames_df["first_seen"]
+        )
+        
+        #####Add information about the fps of each movie
+        # Get the filepath and fps of the original movies
+        f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
+        
+        print(frames_df)
+        print(f_paths)
+        
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
+       
+        # Identify the ordinal number of the frames expected to be extracted
+        frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
+            lambda x: [
+                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
+            ], 1
+        )
+
+        # Reshape df to have each frame as rows
+        lst_col = "frame_number"
+
+        frames_df = pd.DataFrame(
+            {
+                col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
+                for col in frames_df.columns.difference([lst_col])
+            }
+        ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
+            frames_df.columns.tolist()
+        ]
+
+        # Drop unnecessary columns
+        frames_df.drop(["subject_id"], inplace=True, axis=1)
+        
     return frames_df
 
 def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_on, project):
