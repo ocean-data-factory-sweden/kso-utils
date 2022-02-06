@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 out_df = pd.DataFrame()
 
+# Function to set up and collect project-specific information
 def setup_frame_info(project_name: str):
     # Initiate db
     db_info_dict = t_utils.initiate_db(project_name)
@@ -52,6 +53,7 @@ def setup_frame_info(project_name: str):
         zoo_project, zoo_info_dict = None, None
     return db_info_dict, zoo_project, zoo_info_dict
 
+# Function to select the species of interest from those available
 def choose_species(db_path: str = "koster_lab.db"):
     conn = db_utils.create_connection(db_path)
     species_list = pd.read_sql_query("SELECT label from species", conn)["label"].tolist()
@@ -68,11 +70,13 @@ def choose_species(db_path: str = "koster_lab.db"):
     display(w)
     return w
 
+#Function to choose a folder path
 def choose_folder():
     fc = FileChooser('.')
     display(fc)
     return fc
 
+# Function to match species selected to species id
 def get_species_ids(project_name: str, species_list: list):
     """
     # Get ids of species of interest
@@ -89,6 +93,7 @@ def get_species_ids(project_name: str, species_list: list):
     )["id"].tolist()
     return species_ids
     
+# Function to gather information of frames already uploaded
 def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
     # Get info of frames already uploaded
     # Set the columns in the right order
@@ -114,10 +119,15 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, co
             logging.error("All of the frames you have selected are already uploaded.")
     return frames_df
 
+# Function to extract selected frames from videos
 def extract_frames(df, server_dict, project_name, frames_folder):
     """
     Extract frames and save them in chosen folder.
     """
+    
+    
+    ###TO DO: if server AWS create a temp link to the movie and retrieve the frames of interest using cv2.
+    
     
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
     movie_files = s_utils.get_snic_files(server_dict["client"], movie_folder)["spath"].tolist()
@@ -175,6 +185,7 @@ def extract_frames(df, server_dict, project_name, frames_folder):
         print("Frames extracted successfully")
         return df
 
+# Function to set the metadata of the frames to be uploaded to Zooniverse
 def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     
     if not isinstance(df, pd.DataFrame):
@@ -206,6 +217,7 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
  
     return upload_to_zoo, sitename, created_on
 
+# Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3):
     if species_ids[0] == "":
         logging.error("No species were selected. Please select at least one species before continuing.")
@@ -268,6 +280,7 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
         
     return df
 
+# Function to compare original to modified frames
 def compare_frames(df):
     
     if not isinstance(df, pd.DataFrame):
@@ -303,7 +316,7 @@ def compare_frames(df):
                    
     clip_path_widget.observe(on_change, names='value')
     
-# Display the clips using html
+# Display the frames using html
 def view_frames(df, frame_path):
     
     # Get path of the modified clip selected
@@ -474,6 +487,7 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         
     return frames_df
 
+# Function to upload frames to Zooniverse
 def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_on, project):
     
     # Estimate the number of clips
@@ -516,6 +530,7 @@ def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_o
     subject_set.add(new_subjects)
     print("Subjects uploaded to Zooniverse")
     
+# Function to specify the frame modification
 def select_modification():
     # Widget to select the clip modification
     
@@ -561,7 +576,7 @@ def select_modification():
     return select_modification_widget
 
 
-
+# Function modify the frames
 def modify_frames(frames_to_upload_df, species_i, frame_modification, modification_details):
 
     # Specify the folder to host the modified clips
