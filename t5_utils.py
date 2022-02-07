@@ -210,10 +210,12 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
         sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
         created_on = surveys_df["SurveyDate"].unique()[0]
-        sitename = sites_df["siteName"].unique()[0]
+        folder_name = os.path.split(os.path.dirname(df["frame_path"].iloc[0]))[1]
+        sitename = folder_name
         
     # Add information about the type of subject
     upload_to_zoo["subject_type"] = "frame"
+    upload_to_zoo = upload_to_zoo.rename(columns={"species_id": "frame_exp_sp_id"})
  
     return upload_to_zoo, sitename, created_on
 
@@ -639,7 +641,7 @@ def modify_frames(frames_to_upload_df, species_i, frame_modification, modificati
     else:
         
         # Save the modification details to include as subject metadata
-        frames_to_upload_df["modif_frame_path"] = "no_modification"
+        frames_to_upload_df["modif_frame_path"] = frames_to_upload_df["frame_path"]
         
         return frames_to_upload_df
     

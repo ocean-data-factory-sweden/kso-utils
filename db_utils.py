@@ -195,8 +195,6 @@ def add_sites(db_initial_info, project_name, db_path):
         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
     ]
     
-    print(sites_df.head())
-    
     # Roadblock to prevent empty lat/long/datum/countrycode
     test_table(
         sites_df, "sites", sites_df.columns
