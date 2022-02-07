@@ -4,9 +4,9 @@ import sqlite3
 import pandas as pd
 import numpy as np
 
-import kso_utils.db_utils as db_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.movie_utils as movie_utils
+import kso_utils.db_utils as db_utils
 from tqdm import tqdm
 import subprocess
 from pathlib import Path
