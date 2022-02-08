@@ -13,11 +13,10 @@ from panoptes_client import (
 )
 
 from ast import literal_eval
-from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
-from kso_utils.spyfish_utils import process_spyfish_subjects
-
 import kso_utils.tutorials_utils as tutorials_utils
 import kso_utils.db_utils as db_utils
+import kso_utils.koster_utils as koster_utils
+import kso_utils.spyfish_utils as spyfish_utils
 
 # Logging
 
@@ -74,11 +73,11 @@ def retrieve_zoo_info(project_name, zoo_project, zoo_info: str):
 
                 # Clear duplicated subjects
                 if info_n == "subjects":
-                    export_df = clean_duplicated_subjects(export_df)
+                    export_df = koster_utils.clean_duplicated_subjects(export_df)
 
                 # Combine classifications from duplicated subjects to unique subject id
                 if info_n == "classifications":
-                    export_df = combine_annot_from_duplicates(export_df)
+                    export_df = koster_utils.combine_annot_from_duplicates(export_df)
 
         except:
             raise ValueError("Request time out, please try again in 1 minute.")
@@ -129,7 +128,7 @@ def populate_subjects(subjects, project_name, db_path):
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
 
-        subjects = process_koster_subjects(subjects, db_path)
+        subjects = koster_utils.process_koster_subjects(subjects, db_path)
 
     else:
 
@@ -142,7 +141,7 @@ def populate_subjects(subjects, project_name, db_path):
         # Check if the Zooniverse project is the Spyfish
         if project_name == "Spyfish_Aotearoa":
 
-            subjects = process_spyfish_subjects(subjects, db_path)
+            subjects = spyfish_utils.process_spyfish_subjects(subjects, db_path)
 
     # Set subject_id information as id
     subjects = subjects.rename(columns={"subject_id": "id"})
