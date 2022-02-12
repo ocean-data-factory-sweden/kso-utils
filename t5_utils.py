@@ -95,14 +95,11 @@ def get_species_ids(project_name: str, species_list: list):
     
 # Function to gather information of frames already uploaded
 def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
-    # Get info of frames already uploaded
-    # Set the columns in the right order
+    # Get info of frames of the species of interest already uploaded
     if len(species_ids) <= 1:
-        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
         uploaded_frames_df = pd.read_sql_query(f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id=='{species_ids[0]}' AND subject_type='frame'", conn)
     
     else:
-        species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
         uploaded_frames_df = pd.read_sql_query(
         f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN {tuple(species_ids)} AND subject_type='frame'",
     conn,
@@ -110,80 +107,109 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, co
     
     # Filter out frames that have already been uploaded
     if len(uploaded_frames_df) > 0:
-        
-        merge_df = pd.merge(frames_df, uploaded_frames_df, left_on=["movie_id", "frame_number", "species_id"], right_on=["movie_id", "frame_number", "frame_exp_sp_id"],how='left', indicator=True)['_merge'] == 'both'
+        print("There are some frames already uploaded in Zooniverse for the species selected. Checking if those are the frames you are trying to upload")
+        merge_df = pd.merge(frames_df, uploaded_frames_df, 
+                            left_on=["movie_id", "frame_number"], 
+                            right_on=["movie_id", "frame_number"],
+                            how='left', indicator=True)['_merge'] == 'both'
 
         # Exclude frames that have already been uploaded
         frames_df = frames_df[merge_df == False]
         if len(frames_df) == 0:
             logging.error("All of the frames you have selected are already uploaded.")
+        else:
+            print("There are", len(frames_df), "frames with the species of interest not uploaded to Zooniverse yet.")
+            
+    else:
+        print("There are no frames uploaded in Zooniverse for the species selected.")
+            
     return frames_df
 
 # Function to extract selected frames from videos
-def extract_frames(df, server_dict, project_name, frames_folder):
+def extract_frames(df, server, server_dict, project_name, frames_folder):
     """
     Extract frames and save them in chosen folder.
     """
     
-    
-    ###TO DO: if server AWS create a temp link to the movie and retrieve the frames of interest using cv2.
-    
-    
-    movie_folder = t_utils.get_project_info(project_name, "movie_folder")
-    movie_files = s_utils.get_snic_files(server_dict["client"], movie_folder)["spath"].tolist()
-    
-    # Create the folder to store the frames if not exist
-    if not os.path.exists(frames_folder):
-        os.mkdir(frames_folder)
+    #WIP
+    if server == "AWS":
+#         # Create a temp link to the movie and retrieve the frames of interest using cv2.
+#         # Loop through each movie missing the info and retrieve it
+#         for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
+#             # generate a temp url for the movie 
+#             url = db_info_dict['client'].generate_presigned_url('get_object', 
+#                                                                 Params = {'Bucket': db_info_dict['bucket'], 
+#                                                                           'Key': row['key_movie']}, 
+#                                                                 ExpiresIn = 100)
+#             # Calculate the fps and duration
+#             cap = cv2.VideoCapture(url)
+#             fps = cap.get(cv2.CAP_PROP_FPS)
+#             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#             duration = frame_count/fps
 
-    # Get movies filenames from their path
-    df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
+#             # Update the fps/duration info in the miss_par_df
+#             miss_par_df.at[index,'fps'] = fps
+#             miss_par_df.at[index,'duration'] = duration
 
-    # Set the filename of the frames
-    df["frame_path"] = (
-        frames_folder
-        + df["movie_filename"].astype(str)
-        + "_frame_"
-        + df["frame_number"].astype(str)
-        + "_"
-        + df["species_id"].astype(str)
-        + ".jpg"
-    )
+#             cap.release()
     
+    
+    if server == "SNIC":
+        movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+        movie_files = s_utils.get_snic_files(server_dict["client"], movie_folder)["spath"].tolist()
 
-    # Download movies that are not available locally
-    if len(df["fpath"].unique()) > 5:
-        logging.error(f"You are about to download {len(df['fpath'].unique())} movies to your local machine. We recommend running this notebook on your SNIC server environment directly instead to limit transfer volume.")
-    
-    else:
-        for k in df["fpath"].unique():
-            if not os.path.exists(k):
-                print(k, (os.path.basename(k) not in movie_files), (k_utils.reswedify(os.path.basename(k)) not in movie_files), (k_utils.reswedify(os.path.basename(k)) not in movie_files), os.path.basename(k).encode('utf-8'), k_utils.reswedify(os.path.basename(k)).encode('utf-8'), k_utils.unswedify(os.path.basename(k)).encode('utf-8'))
-                if os.path.basename(k) not in movie_files and k_utils.reswedify(os.path.basename(k)) in movie_files:
-                    k = k_utils.reswedify(k)
-                elif os.path.basename(k) not in movie_files and k_utils.reswedify(os.path.basename(k)) not in movie_files:
-                    k = k_utils.unswedify(k)
-                # Download the movie of interest
-                s_utils.download_object_from_snic(
-                                server_dict["sftp_client"],
-                                remote_fpath=k,
-                                local_fpath=str(Path(".", k_utils.unswedify(os.path.basename(k))))
-                )
-    
-        video_dict = {k: pims.Video(str(Path(".", k_utils.unswedify(os.path.basename(k))))) for k in df["fpath"].unique()}
+        # Create the folder to store the frames if not exist
+        if not os.path.exists(frames_folder):
+            os.mkdir(frames_folder)
 
-        # Save the frame as matrix
-        df["frames"] = df[["fpath", "frame_number"]].apply(
-            lambda x: video_dict[x["fpath"]][int(x["frame_number"])],
-            1,
+        # Get movies filenames from their path
+        df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
+
+        # Set the filename of the frames
+        df["frame_path"] = (
+            frames_folder
+            + df["movie_filename"].astype(str)
+            + "_frame_"
+            + df["frame_number"].astype(str)
+            + "_"
+            + df["species_id"].astype(str)
+            + ".jpg"
         )
 
-        # Extract and save frames
-        for frame, filename in zip(df["frames"], df["frame_path"]):
-            Image.fromarray(frame).save(f"{filename}")
 
-        print("Frames extracted successfully")
-        return df
+        # Download movies that are not available locally
+        if len(df["fpath"].unique()) > 5:
+            logging.error(f"You are about to download {len(df['fpath'].unique())} movies to your local machine. We recommend running this notebook on your SNIC server environment directly instead to limit transfer volume.")
+
+        else:
+            for k in df["fpath"].unique():
+                if not os.path.exists(k):
+                    print(k, (os.path.basename(k) not in movie_files), (k_utils.reswedify(os.path.basename(k)) not in movie_files), (k_utils.reswedify(os.path.basename(k)) not in movie_files), os.path.basename(k).encode('utf-8'), k_utils.reswedify(os.path.basename(k)).encode('utf-8'), k_utils.unswedify(os.path.basename(k)).encode('utf-8'))
+                    if os.path.basename(k) not in movie_files and k_utils.reswedify(os.path.basename(k)) in movie_files:
+                        k = k_utils.reswedify(k)
+                    elif os.path.basename(k) not in movie_files and k_utils.reswedify(os.path.basename(k)) not in movie_files:
+                        k = k_utils.unswedify(k)
+                    # Download the movie of interest
+                    s_utils.download_object_from_snic(
+                                    server_dict["sftp_client"],
+                                    remote_fpath=k,
+                                    local_fpath=str(Path(".", k_utils.unswedify(os.path.basename(k))))
+                    )
+
+            video_dict = {k: pims.Video(str(Path(".", k_utils.unswedify(os.path.basename(k))))) for k in df["fpath"].unique()}
+
+            # Save the frame as matrix
+            df["frames"] = df[["fpath", "frame_number"]].apply(
+                lambda x: video_dict[x["fpath"]][int(x["frame_number"])],
+                1,
+            )
+
+            # Extract and save frames
+            for frame, filename in zip(df["frames"], df["frame_path"]):
+                Image.fromarray(frame).save(f"{filename}")
+
+            print("Frames extracted successfully")
+    return df
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
 def set_zoo_metadata(df, species_list, project_name, db_info_dict):
@@ -220,15 +246,23 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     return upload_to_zoo, sitename, created_on
 
 # Function to the provide drop-down options to select the frames to be uploaded
-def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3):
-    if species_ids[0] == "":
+def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3):
+    
+    ### Transform species names to species ids##
+    if species_names[0] == "":
         logging.error("No species were selected. Please select at least one species before continuing.")
+        
+    else:
+        species_ids = get_species_ids(project_name, species_names)
+        
+    
+    ### Retrieve project-specific information and connect to db
     movie_folder = t_utils.get_project_info(project_name, "movie_folder")
-    df = pd.DataFrame()
     server = t_utils.get_project_info(project_name, "server")
+    conn = db_utils.create_connection(db_path)
     
     if movie_folder == "None" and server != "AWS":
-        
+        # Extract frames of interest from a folder with frames
         df = FileChooser('.')
         df.title = '<b>Select frame folder location</b>'
             
@@ -243,33 +277,52 @@ def get_frames(species_ids: list, db_path: str, zoo_info_dict: dict, server_dict
                 os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
             # TODO: Add multiple species option
-            chooser.df["species_id"] = get_species_ids(project_name, species_ids)[0]
+            chooser.df["species_id"] = species_ids
                 
         # Register callback function
         df.register_callback(build_df)
         display(df)
         
     else:
-        # Connect to koster_db
-        conn = db_utils.create_connection(db_path)
+        ## Choose the Zooniverse workflow/s with classified clips to extract the frames from ####
+        # Select the Zooniverse workflow/s of interest
         workflows_out = t12.WidgetMaker(zoo_info_dict["workflows"])
         display(workflows_out)
+        
+        # Select the agreement threshold to aggregrate the responses
         agg_params = t12.choose_agg_parameters("clip")
 
+        # Select the temp location to store frames before uploading them to Zooniverse
         df = FileChooser('.')
         df.title = '<b>Choose location to store frames</b>'
             
         # Callback function
         def extract_files(chooser):
+            # Get the aggregated classifications based on the specified aggrement threshold
             clips_df = t12.get_classifications(workflows_out.checks,
                                                zoo_info_dict["workflows"], "clip", zoo_info_dict["classifications"], db_path)
         
             agg_clips_df, raw_clips_df = t12.aggregrate_classifications(clips_df, "clip", project_name, agg_params=agg_params)
-            agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
-            populate_agg_annotations(agg_clips_df, "clip", project_name)
-            frame_df = get_species_frames(species_ids, server_dict, conn, project_name, n_frames_subject)
+#             agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
+            
+            # Match format of species name to Zooniverse labels
+            species_names_zoo = [species_name.upper() for species_name in species_names]
+            species_names_zoo = [species_name.replace(" ", "") for species_name in species_names_zoo]
+            
+            # Select only aggregated classifications of species of interest:
+            sp_agg_clips_df = agg_clips_df[agg_clips_df["label"].isin(species_names_zoo)]
+            
+            # Populate the db with the aggregated classifications
+            populate_agg_annotations(sp_agg_clips_df, "clip", project_name)
+            
+            # Get df of frames to be extracted
+            frame_df = get_species_frames(sp_agg_clips_df, species_ids, server_dict, conn, project_name, n_frames_subject)
+            
+            # Check the frames haven't been uploaded to Zooniverse
             frame_df = check_frames_uploaded(frame_df, project_name, species_ids, conn)
-            chooser.df = extract_frames(frame_df, server_dict, project_name, chooser.selected)
+            
+            # Extract the frames from the videos and store them in the temp location
+            chooser.df = extract_frames(frame_df, server, server_dict, project_name, chooser.selected)
             try:
                 os.symlink(chooser.selected[:-1], 'linked_frames')
             except FileExistsError:
@@ -342,48 +395,36 @@ def view_frames(df, frame_path):
     return HTML(html_code)
 
     
-def get_species_frames(species_ids: list, server_dict: dict, conn, project_name, n_frames_subject):
+def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn, project_name, n_frames_subject):
     """
     # Function to identify up to n number of frames per classified clip
     # that contains species of interest after the first time seen
 
     # Find classified clips that contain the species of interest
     """
+        
+    # Retrieve list of subjects
+    subjects_df = pd.read_sql_query(
+                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
+                    conn,)
+
+    # Combine the aggregated clips and subjects dataframes
+    frames_df = pd.merge(agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id").drop(columns=["id"])
+
+    # Identify the second of the original movie when the species first appears
+    frames_df["first_seen_movie"] = (
+        frames_df["clip_start_time"] + frames_df["first_seen"]
+    )
+            
+    # Get the filepath and fps info of the original movies
+    f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)        
+            
     server = t_utils.get_project_info(project_name, "server")
     
     if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
         
         movie_folder = t_utils.get_project_info(project_name, "movie_folder")
-        
-        # Set the columns in the right order
-        if len(species_ids) <= 1:
-            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
-            frames_df = pd.read_sql_query(
-            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id== '{species_ids[0]}'",
-            conn,
-        )
-        else:
-            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
-            frames_df = pd.read_sql_query(
-            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
-            conn,
-        )
-
-        subjects_df = pd.read_sql_query(
-                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
-                    conn,)
-
-        # Get start time of the clips and ids of the original movies
-        frames_df = pd.merge(frames_df, subjects_df, how="left", left_on="subject_id", right_on="id").drop(columns=["id"])
-        
-        # Identify the second of the original movie when the species first appears
-        frames_df["first_seen_movie"] = (
-            frames_df["clip_start_time"] + frames_df["first_seen"]
-        )
-       
-
-        # Get the filepath and fps of the original movies
-        f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
+          
         f_paths["fpath"] = movie_folder + f_paths["fpath"]
 
         # Ensure swedish characters don't cause issues
@@ -428,39 +469,6 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         frames_df.drop(["subject_id"], inplace=True, axis=1)
 
     if server == "AWS":
-        # Retrieve sql info of species of interest and frames with those species
-        if len(species_ids) <= 1:
-            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label=='{species_ids[0]}'", conn).species_id.values
-            frames_df = pd.read_sql_query(
-            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id== '{species_ids[0]}'",
-            conn,
-        )
-        else:
-            species_ids = pd.read_sql_query(f"SELECT id as species_id FROM species WHERE label IN {tuple(species_ids)}", conn).species_id.values
-            frames_df = pd.read_sql_query(
-            f"SELECT subject_id, first_seen, species_id FROM agg_annotations_clip WHERE agg_annotations_clip.species_id IN {tuple(species_ids)}",
-            conn,
-        )
-
-        # Retrieve information of subjects with the species of interest
-        subjects_df = pd.read_sql_query(
-                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
-                    conn,)
-
-        # Get start time of the clips and ids of the original movies
-        frames_df = pd.merge(frames_df, subjects_df, how="left", left_on="subject_id", right_on="id").drop(columns=["id"])
-        
-        # Identify the second of the original movie when the species first appears
-        frames_df["first_seen_movie"] = (
-            frames_df["clip_start_time"] + frames_df["first_seen"]
-        )
-        
-        #####Add information about the fps of each movie
-        # Get the filepath and fps of the original movies
-        f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)
-        
-        print(frames_df)
-        print(f_paths)
         
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
@@ -485,7 +493,9 @@ def get_species_frames(species_ids: list, server_dict: dict, conn, project_name,
         ]
 
         # Drop unnecessary columns
-        frames_df.drop(["subject_id"], inplace=True, axis=1)
+        frames_df.drop(["subject_ids"], inplace=True, axis=1)
+        
+        
         
     return frames_df
 
