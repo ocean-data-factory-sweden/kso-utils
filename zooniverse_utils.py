@@ -123,8 +123,6 @@ def populate_subjects(subjects, project_name, db_path):
     :param db_path: the path to the database
     '''
 
-    movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
-    
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
 
@@ -149,9 +147,12 @@ def populate_subjects(subjects, project_name, db_path):
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(lambda x: literal_eval(x)["0"])
     
-    # Set movie_id column to None if no movies are linked to the subject
-    if movie_folder == "None":
-        subjects["movie_id"] = None
+    ### To review by Jannes, if not needed delete it as it breaks the Spyfish code###
+#     movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+    
+#     # Set movie_id column to None if no movies are linked to the subject
+#     if movie_folder == "None":
+#         subjects["movie_id"] = None
     
     # Set the columns in the right order
     subjects = subjects[
