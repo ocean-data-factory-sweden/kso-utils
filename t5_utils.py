@@ -232,7 +232,7 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
         sitename = upload_to_zoo["siteName"].unique()[0]
 
     else:
-        upload_to_zoo = df[["frame_path", "species_id"]]
+        upload_to_zoo = df[["frame_path", "species_id", "filename"]]
         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
         sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
         created_on = surveys_df["SurveyDate"].unique()[0]
