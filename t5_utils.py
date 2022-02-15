@@ -333,6 +333,7 @@ def extract_frames(df, server, server_dict, project_name, frames_folder):
     
     return df
 
+
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3, subsample_up_to=100):
     
@@ -648,6 +649,11 @@ def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     # Add information about the type of subject
     upload_to_zoo["subject_type"] = "frame"
     upload_to_zoo = upload_to_zoo.rename(columns={"species_id": "frame_exp_sp_id"})
+    
+    # Check there are no empty values (prevent issues uploading subjects)
+    if upload_to_zoo.isnull().values.any():
+        logging.error("There are some values missing from the data you are trying to upload.")
+        
         
     return upload_to_zoo
 
