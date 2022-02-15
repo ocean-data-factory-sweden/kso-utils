@@ -290,5 +290,58 @@ def get_spyfish_choices(server_dict, db_initial_info, db_csv_info):
     return db_initial_info
 
 
+def spyfish_subject_metadata(df, db_info_dict):
+    
+    # Get extra movie information
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    
+    df = df.merge(movies_df.drop(columns=["filename"]), how="left", on="movie_id")
+    
+    # Get extra survey information
+    surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+    
+    df = df.merge(surveys_df, how="left", on="SurveyID")
+    
+    # Get extra site information
+    sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+    
+    df = df.merge(sites_df.drop(columns=["LinkToMarineReserve"]), how="left", on="SiteID")
+        
+    # Convert datetime to string to avoid JSON seriazible issues
+    df['EventDate'] = df['EventDate'].astype(str)
 
+    df = df.rename(columns={
+        "LinkToMarineReserve": "!LinkToMarineReserve", 
+        "UID": "#UID",
+        "scientificName": "ScientificName",
+        "EventDate": "#EventDate",
+        "first_seen_movie": "#TimeOfMaxSeconds",
+        "frame_number": "#frame_number",
+        "filename": "#VideoFilename",
+        "SiteID": "#SiteID",
+        "SiteCode": "#SiteCode",
+        "clip_start_time": "upl_seconds",
+        })
+
+    # Select only columns of interest
+    upload_to_zoo = df[
+                                [
+                                 "frame_path",
+                                 "Year",
+                                 "ScientificName",
+                                 "Depth",
+                                 "!LinkToMarineReserve",
+                                 "#EventDate",
+                                 "#TimeOfMaxSeconds",
+                                 "#frame_number",
+                                 "#VideoFilename",
+                                 "#SiteID",
+                                 "#SiteCode",
+                                 "species_id",
+                                 ]
+                                ].reset_index(drop=True) 
+                                                        
+    
+    return upload_to_zoo
+    
 

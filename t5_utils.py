@@ -8,6 +8,7 @@ import subprocess
 import shutil
 import logging
 import pims
+import cv2
 
 from tqdm import tqdm
 from PIL import Image
@@ -19,8 +20,10 @@ import kso_utils.tutorials_utils as t_utils
 import kso_utils.server_utils as s_utils
 import kso_utils.t12_utils as t12
 import kso_utils.koster_utils as k_utils
+import kso_utils.spyfish_utils as spyfish_utils
 from ipyfilechooser import FileChooser
 from pathlib import Path
+from datetime import date
 
 from panoptes_client import (
     SubjectSet,
@@ -93,6 +96,103 @@ def get_species_ids(project_name: str, species_list: list):
     )["id"].tolist()
     return species_ids
     
+def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn, project_name, n_frames_subject):
+    """
+    # Function to identify up to n number of frames per classified clip
+    # that contains species of interest after the first time seen
+
+    # Find classified clips that contain the species of interest
+    """
+        
+    # Retrieve list of subjects
+    subjects_df = pd.read_sql_query(
+                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
+                    conn,)
+
+    # Combine the aggregated clips and subjects dataframes
+    frames_df = pd.merge(agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id").drop(columns=["id"])
+
+    # Identify the second of the original movie when the species first appears
+    frames_df["first_seen_movie"] = (
+        frames_df["clip_start_time"] + frames_df["first_seen"]
+    )
+            
+    # Get the filepath and fps info of the original movies
+    f_paths = pd.read_sql_query(f"SELECT id, filename, fpath, fps FROM movies", conn)        
+            
+    server = t_utils.get_project_info(project_name, "server")
+    
+    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
+        
+        movie_folder = t_utils.get_project_info(project_name, "movie_folder")
+          
+        f_paths["fpath"] = movie_folder + f_paths["fpath"]
+
+        # Ensure swedish characters don't cause issues
+        f_paths["fpath"] = f_paths["fpath"].apply(k_utils.unswedify)
+        
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
+        
+        # Specify if original movies can be found
+        # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
+        movie_paths = [k_utils.unswedify(str(Path(movie_folder, x))) for x in s_utils.get_snic_files(server_dict["client"], movie_folder).spath.values]
+        frames_df["exists"] = frames_df["fpath"].apply(lambda x: True if x in movie_paths else False)
+                                                      
+        if len(frames_df[~frames_df.exists]) > 0:
+            logging.error(
+                f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
+            )
+
+        # Select only frames from movies that can be found
+        frames_df = frames_df[frames_df.exists]
+
+    if server == "AWS":
+        
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
+        
+        ##### Add species_id info ####
+        # Retrieve species info
+        species_ids = pd.read_sql_query(
+            f"SELECT id, label, scientificName FROM species",
+            conn,)
+
+        # Retrieve species info
+        species_ids = species_ids.rename(columns={"id": "species_id"})
+        
+        # Match format of species name to Zooniverse labels
+        species_ids["label"] = species_ids["label"].str.upper()
+        species_ids["label"] = species_ids["label"].str.replace(" ", "")
+        
+        # Combine the aggregated clips and subjects dataframes
+        frames_df = pd.merge(frames_df, species_ids, how="left", on="label").drop(columns=["id"])
+  
+    # Identify the ordinal number of the frames expected to be extracted
+    frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
+        lambda x: [
+            int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
+        ], 1
+    )
+
+    # Reshape df to have each frame as rows
+    lst_col = "frame_number"
+
+    frames_df = pd.DataFrame(
+        {
+            col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
+            for col in frames_df.columns.difference([lst_col])
+        }
+    ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
+        frames_df.columns.tolist()
+    ]
+
+    # Drop unnecessary columns
+    frames_df.drop(["subject_ids"], inplace=True, axis=1)
+        
+        
+    return frames_df
+
 # Function to gather information of frames already uploaded
 def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, conn):
     # Get info of frames of the species of interest already uploaded
@@ -125,6 +225,8 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project_name, species_ids, co
             
     return frames_df
 
+
+
 # Function to extract selected frames from videos
 def extract_frames(df, server, server_dict, project_name, frames_folder):
     """
@@ -133,26 +235,45 @@ def extract_frames(df, server, server_dict, project_name, frames_folder):
     
     #WIP
     if server == "AWS":
-#         # Create a temp link to the movie and retrieve the frames of interest using cv2.
-#         # Loop through each movie missing the info and retrieve it
-#         for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
-#             # generate a temp url for the movie 
-#             url = db_info_dict['client'].generate_presigned_url('get_object', 
-#                                                                 Params = {'Bucket': db_info_dict['bucket'], 
-#                                                                           'Key': row['key_movie']}, 
-#                                                                 ExpiresIn = 100)
-#             # Calculate the fps and duration
-#             cap = cv2.VideoCapture(url)
-#             fps = cap.get(cv2.CAP_PROP_FPS)
-#             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-#             duration = frame_count/fps
+        
+        # Extract the key of each movie
+        df['key_movie'] = df['fpath'].apply(lambda x: x.split('/',3)[3])
+        
+        # Set the filename of the frames
+        df["frame_path"] = (
+            frames_folder
+            + df["filename"].astype(str)
+            + "_frame_"
+            + df["frame_number"].astype(str)
+            + "_"
+            + df["label"].astype(str)
+            + ".jpg"
+        )
+        
+        for key_movie in df["key_movie"].unique():
+            # generate a temp url for the movie 
+            url = server_dict['client'].generate_presigned_url('get_object', 
+                                                            Params = {'Bucket': server_dict['bucket'], 
+                                                                      'Key': key_movie}, 
+                                                            ExpiresIn = 200)
+            if url is None:
+                logging.error(f"Movie {key_movie} couldn't be found in the server.")
+            else:
+                
+                # Select the frames to download from the movie
+                key_movie_df =  df[df['key_movie'] == key_movie].reset_index()
 
-#             # Update the fps/duration info in the miss_par_df
-#             miss_par_df.at[index,'fps'] = fps
-#             miss_par_df.at[index,'duration'] = duration
+                # Read the movie on cv2 and prepare to extract frames
+                cap = cv2.VideoCapture(url)
 
-#             cap.release()
-    
+                # Get the frame numbers for each movie the fps and duration
+                for index, row in tqdm(key_movie_df.iterrows(), total=key_movie_df.shape[0]):
+                    # Create the folder to store the frames if not exist
+                    if not os.path.exists(row["frame_path"]):
+                        cap.set(1, row["frame_number"])
+                        ret, frame = cap.read()
+                        cv2.imwrite(row["frame_path"], frame)
+       
     
     if server == "SNIC":
         movie_folder = t_utils.get_project_info(project_name, "movie_folder")
@@ -209,44 +330,12 @@ def extract_frames(df, server, server_dict, project_name, frames_folder):
                 Image.fromarray(frame).save(f"{filename}")
 
             print("Frames extracted successfully")
+    
     return df
 
-# Function to set the metadata of the frames to be uploaded to Zooniverse
-def set_zoo_metadata(df, species_list, project_name, db_info_dict):
-    
-    if not isinstance(df, pd.DataFrame):
-        df = df.df
-
-    if "modif_frame_path" in df.columns and "no_modification" not in df["modif_frame_path"].values:
-        df["frame_path"] = df["modif_frame_path"]
-
-    if "movie_id" in df.columns:
-        upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
-    
-        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-    
-        upload_to_zoo = upload_to_zoo.merge(movies_df, left_on="movie_id",
-                                            right_on="movie_id")
-    
-        created_on = upload_to_zoo["created_on"].unique()[0]
-        sitename = upload_to_zoo["siteName"].unique()[0]
-
-    else:
-        upload_to_zoo = df[["frame_path", "species_id"]]
-        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
-        sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
-        created_on = surveys_df["SurveyDate"].unique()[0]
-        folder_name = os.path.split(os.path.dirname(df["frame_path"].iloc[0]))[1]
-        sitename = folder_name
-        
-    # Add information about the type of subject
-    upload_to_zoo["subject_type"] = "frame"
-    upload_to_zoo = upload_to_zoo.rename(columns={"species_id": "frame_exp_sp_id"})
- 
-    return upload_to_zoo, sitename, created_on
 
 # Function to the provide drop-down options to select the frames to be uploaded
-def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3):
+def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3, subsample_up_to=100):
     
     ### Transform species names to species ids##
     if species_names[0] == "":
@@ -312,6 +401,11 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_di
             # Select only aggregated classifications of species of interest:
             sp_agg_clips_df = agg_clips_df[agg_clips_df["label"].isin(species_names_zoo)]
             
+            # Subsample up to desired sample
+            if sp_agg_clips_df.shape[0] >= subsample_up_to:
+                print ("Subsampling up to", subsample_up_to)
+                sp_agg_clips_df = sp_agg_clips_df.sample(subsample_up_to)
+            
             # Populate the db with the aggregated classifications
             populate_agg_annotations(sp_agg_clips_df, "clip", project_name)
             
@@ -335,6 +429,71 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_di
         
     return df
 
+
+# Function to specify the frame modification
+def select_modification():
+    # Widget to select the clip modification
+    
+    frame_modifications = {"Color_correction": {
+        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_no_compression": {                 
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_low_compression": {
+        "-crf": "30",                    
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_medium_compression": {
+        "-crf": "27",                   
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Zoo_high_compression": {
+        "-crf": "25",                     
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "Blur_sensitive_info": {
+        "-crf": "30",
+        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
+        [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
+        [0:v][b0]overlay=0:0[ovr0]; \
+        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
+        "-map": "[ovr1]",
+        "-pix_fmt": "yuv420p",
+        "-preset": "veryfast"
+        }, "None": {}}
+    
+    select_modification_widget = widgets.Dropdown(
+                    options=[(a,b) for a,b in frame_modifications.items()],
+                    description="Select frame modification:",
+                    ensure_option=True,
+                    disabled=False,
+                    style = {'description_width': 'initial'}
+                )
+    
+    display(select_modification_widget)
+    return select_modification_widget
+
+
+def check_frame_size(frame_paths):
+    
+    # Get list of files with size
+    files_with_size = [ (file_path, os.stat(file_path).st_size) 
+                        for file_path in frame_paths]
+
+    df = pd.DataFrame(files_with_size, columns=["File_path","Size"])
+
+    #Change bytes to MB
+    df['Size'] = df['Size']/1000000
+    
+    if df['Size'].ge(1).any():
+        print("Frames are too large (over 1 MB) to be uploaded to Zooniverse. Compress them!")
+        return df
+    else:
+        print("Frames are a good size (below 1 MB). Ready to be uploaded to Zooniverse")
+        return df
+    
 # Function to compare original to modified frames
 def compare_frames(df):
     
@@ -395,199 +554,6 @@ def view_frames(df, frame_path):
     return HTML(html_code)
 
     
-def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn, project_name, n_frames_subject):
-    """
-    # Function to identify up to n number of frames per classified clip
-    # that contains species of interest after the first time seen
-
-    # Find classified clips that contain the species of interest
-    """
-        
-    # Retrieve list of subjects
-    subjects_df = pd.read_sql_query(
-                    f"SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
-                    conn,)
-
-    # Combine the aggregated clips and subjects dataframes
-    frames_df = pd.merge(agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id").drop(columns=["id"])
-
-    # Identify the second of the original movie when the species first appears
-    frames_df["first_seen_movie"] = (
-        frames_df["clip_start_time"] + frames_df["first_seen"]
-    )
-            
-    # Get the filepath and fps info of the original movies
-    f_paths = pd.read_sql_query(f"SELECT id, fpath, fps FROM movies", conn)        
-            
-    server = t_utils.get_project_info(project_name, "server")
-    
-    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
-        
-        movie_folder = t_utils.get_project_info(project_name, "movie_folder")
-          
-        f_paths["fpath"] = movie_folder + f_paths["fpath"]
-
-        # Ensure swedish characters don't cause issues
-        f_paths["fpath"] = f_paths["fpath"].apply(k_utils.unswedify)
-        
-        # Include movies' filepath and fps to the df
-        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
-        
-        # Specify if original movies can be found
-        # frames_df["fpath"] = frames_df["fpath"].apply(lambda x: x.encode('utf-8'))
-        movie_paths = [k_utils.unswedify(str(Path(movie_folder, x))) for x in s_utils.get_snic_files(server_dict["client"], movie_folder).spath.values]
-        frames_df["exists"] = frames_df["fpath"].apply(lambda x: True if x in movie_paths else False)
-                                                      
-        if len(frames_df[~frames_df.exists]) > 0:
-            logging.error(
-                f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
-            )
-
-        # Select only frames from movies that can be found
-        frames_df = frames_df[frames_df.exists]
-
-        # Identify the ordinal number of the frames expected to be extracted
-        frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
-            lambda x: [
-                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
-            ], 1
-        )
-
-        # Reshape df to have each frame as rows
-        lst_col = "frame_number"
-
-        frames_df = pd.DataFrame(
-            {
-                col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
-                for col in frames_df.columns.difference([lst_col])
-            }
-        ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
-            frames_df.columns.tolist()
-        ]
-
-        # Drop unnecessary columns
-        frames_df.drop(["subject_id"], inplace=True, axis=1)
-
-    if server == "AWS":
-        
-        # Include movies' filepath and fps to the df
-        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
-       
-        # Identify the ordinal number of the frames expected to be extracted
-        frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
-            lambda x: [
-                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
-            ], 1
-        )
-
-        # Reshape df to have each frame as rows
-        lst_col = "frame_number"
-
-        frames_df = pd.DataFrame(
-            {
-                col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
-                for col in frames_df.columns.difference([lst_col])
-            }
-        ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
-            frames_df.columns.tolist()
-        ]
-
-        # Drop unnecessary columns
-        frames_df.drop(["subject_ids"], inplace=True, axis=1)
-        
-        
-        
-    return frames_df
-
-# Function to upload frames to Zooniverse
-def upload_frames_to_zooniverse(upload_to_zoo, sitename, species_list, created_on, project):
-    
-    # Estimate the number of clips
-    n_frames = upload_to_zoo.shape[0]
-    
-    # Create a new subject set to host the frames
-    subject_set = SubjectSet()
-
-    subject_set_name = str(int(n_frames)) + "_frames_" + "_".join(species_list) + "_" + sitename + "_" + created_on
-    subject_set.links.project = project
-    subject_set.display_name = subject_set_name
-
-    subject_set.save()
-
-    print(subject_set_name, "subject set created")
-
-    # Save the df as the subject metadata
-    subject_metadata = upload_to_zoo.set_index('frame_path').to_dict('index')
-
-    # Upload the clips to Zooniverse (with metadata)
-    new_subjects = []
-
-    print("uploading subjects to Zooniverse")
-    for frame_path, metadata in tqdm(subject_metadata.items(), total=len(subject_metadata)):
-        subject = Subject()
-        
-        
-        subject.links.project = project
-        subject.add_location(frame_path)
-        
-        print(frame_path)
-        subject.metadata.update(metadata)
-        
-        print(metadata)
-        subject.save()
-        print("subject saved")
-        new_subjects.append(subject)
-
-    # Upload videos
-    subject_set.add(new_subjects)
-    print("Subjects uploaded to Zooniverse")
-    
-# Function to specify the frame modification
-def select_modification():
-    # Widget to select the clip modification
-    
-    frame_modifications = {"Color_correction": {
-        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_no_compression": {                 
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_low_compression": {
-        "-crf": "30",                    
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_medium_compression": {
-        "-crf": "27",                   
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_high_compression": {
-        "-crf": "25",                     
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Blur_sensitive_info": {
-        "-crf": "30",
-        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
-        [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
-        [0:v][b0]overlay=0:0[ovr0]; \
-        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
-        "-map": "[ovr1]",
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "None": {}}
-    
-    select_modification_widget = widgets.Dropdown(
-                    options=[(a,b) for a,b in frame_modifications.items()],
-                    description="Select frame modification:",
-                    ensure_option=True,
-                    disabled=False,
-                    style = {'description_width': 'initial'}
-                )
-    
-    display(select_modification_widget)
-    return select_modification_widget
-
-
 # Function modify the frames
 def modify_frames(frames_to_upload_df, species_i, frame_modification, modification_details):
 
@@ -646,106 +612,109 @@ def modify_frames(frames_to_upload_df, species_i, frame_modification, modificati
 
 
         print("Frames modified successfully")
-        return frames_to_upload_df
-    
+        
     else:
         
         # Save the modification details to include as subject metadata
         frames_to_upload_df["modif_frame_path"] = frames_to_upload_df["frame_path"]
         
-        return frames_to_upload_df
-    
-def check_frame_size(frame_paths):
-    
-    # Get list of files with size
-    files_with_size = [ (file_path, os.stat(file_path).st_size) 
-                        for file_path in frame_paths]
+    return frames_to_upload_df
+ 
 
-    df = pd.DataFrame(files_with_size, columns=["File_path","Size"])
-
-    #Change bytes to MB
-    df['Size'] = df['Size']/1000000
+# Function to set the metadata of the frames to be uploaded to Zooniverse
+def set_zoo_metadata(df, species_list, project_name, db_info_dict):
     
-    if df['Size'].ge(1).any():
-        print("Frames are too large (over 1 MB) to be uploaded to Zooniverse. Compress them!")
-        return df
+    if not isinstance(df, pd.DataFrame):
+        df = df.df
+
+    if "modif_frame_path" in df.columns and "no_modification" not in df["modif_frame_path"].values:
+        df["frame_path"] = df["modif_frame_path"]
+
+    # Set project-specific metadata
+    if project_name == "Koster_Seafloor_Obs":
+        upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
+    
+        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    
+        upload_to_zoo = upload_to_zoo.merge(movies_df, left_on="movie_id",
+                                            right_on="movie_id")
+        
+    elif project_name == "SGU":
+        upload_to_zoo = df[["frame_path", "species_id", "filename"]]
+        
+    elif project_name == "Spyfish_Aotearoa":    
+        upload_to_zoo = spyfish_utils.spyfish_subject_metadata(df, db_info_dict)
+        
+    
+    # Add information about the type of subject
+    upload_to_zoo["subject_type"] = "frame"
+    upload_to_zoo = upload_to_zoo.rename(columns={"species_id": "frame_exp_sp_id"})
+        
+    return upload_to_zoo
+
+    
+
+# Function to upload frames to Zooniverse
+def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, project_name, project):
+    
+    # Estimate the number of frames
+    n_frames = upload_to_zoo.shape[0]
+    
+    if project_name == "Koster_Seafloor_Obs":
+        created_on = upload_to_zoo["created_on"].unique()[0]
+        sitename = upload_to_zoo["siteName"].unique()[0]
+        
+        # Name the subject set
+        subject_set_name = "frames_" + str(int(n_frames)) + "_"+ "_".join(species_list) + "_" + sitename + "_" + created_on
+        
+    elif project_name == "SGU":
+        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+        sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+        created_on = surveys_df["SurveyDate"].unique()[0]
+        folder_name = os.path.split(os.path.dirname(upload_to_zoo["frame_path"].iloc[0]))[1]
+        sitename = folder_name
+        
+        # Name the subject set
+        subject_set_name = "frames_" + str(int(n_frames)) + "_"+ "_".join(species_list) + "_" + sitename + "_" + created_on
+        
     else:
-        print("Frames are a good size (below 1 MB). Ready to be uploaded to Zooniverse")
-        return df
+        # Name the subject for frames from multiple sites/movies
+        subject_set_name = "frames_" + str(int(n_frames)) + "_" + "_".join(species_list) + date.today().strftime("_%d_%m_%Y")
+        
     
+    # Create a new subject set to host the frames
+    subject_set = SubjectSet()
 
-# def choose_clip_workflows(workflows_df):
+    subject_set.links.project = project
+    subject_set.display_name = subject_set_name
 
-#     layout = widgets.Layout(width="auto", height="40px")  # set width and height
+    subject_set.save()
 
-#     # Display the names of the workflows
-#     workflow_name = widgets.SelectMultiple(
-#         options=workflows_df.display_name.unique().tolist(),
-#         description="Workflow name:",
-#         disabled=False,
-#     )
+    print(subject_set_name, "subject set created")
 
-#     display(workflow_name)
-#     return workflow_name
+    # Save the df as the subject metadata
+    subject_metadata = upload_to_zoo.set_index('frame_path').to_dict('index')
 
-# def select_workflow(class_df, workflows_df, db_path):
-#     # Connect to koster_db
-#     conn = db_utils.create_connection(db_path)
+    # Upload the clips to Zooniverse (with metadata)
+    new_subjects = []
 
-#     # Query id and subject type from the subjects table
-#     subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
+    print("uploading subjects to Zooniverse")
+    for frame_path, metadata in tqdm(subject_metadata.items(), total=len(subject_metadata)):
+        subject = Subject()
+        
+        
+        subject.links.project = project
+        subject.add_location(frame_path)
+        
+        print(frame_path)
+        subject.metadata.update(metadata)
+        
+        print(metadata)
+        subject.save()
+        print("subject saved")
+        new_subjects.append(subject)
 
-#     # Add subject information based on subject_ids
-#     class_df = pd.merge(
-#         class_df,
-#         subjects_df,
-#         how="left",
-#         left_on="subject_ids",
-#         right_on="id",
-#     )
-
-#     # Select only classifications submitted to clip subjects
-#     clips_class_df = class_df[class_df.subject_type=='clip']
-
-#     # Save the ids of clip workflows
-#     clip_workflow_ids = class_df.workflow_id.unique()
-
-#     # Select clip workflows with classifications
-#     clip_workflows_df = workflows_df[workflows_df.workflow_id.isin(clip_workflow_ids)]
-
-#     # Select the workflows of the video classifications you want to aggregrate
-#     workflow_names = choose_clip_workflows(clip_workflows_df)
+    # Upload videos
+    subject_set.add(new_subjects)
+    print("Subjects uploaded to Zooniverse")
     
-#     return clips_class_df, workflow_names, workflows_df
-
-
-# def select_workflow_version(w_names, workflows_df):
-    
-#     # Select the workflow ids based on workflow names
-#     workflow_ids = workflows_df[workflows_df.display_name.isin(w_names)].workflow_id.unique()
-    
-#     # Create empty vector to save the versions selected
-#     w_versions_list = []
-
-#     for w_name in w_names:
-
-#         # Estimate the versions of the workflow of interest
-#         w_versions_available = workflows_df[workflows_df.display_name==w_name].version.unique()
-
-#         # Display the versions of the workflow available
-#         choose_clip_w_version = widgets.Dropdown(
-#             options=list(map(float, w_versions_available)),
-#             description= "Min version for " + w_name + ":",
-#             disabled=False
-#         )
-
-#         # Display a button to select the version
-#         btn = widgets.Button(description='Select')
-#         display(choose_clip_w_version, btn)
-
-#         def update_version_list(obj):
-#             print('You have selected',choose_clip_w_version.value)
-#             w_versions_list = w_versions_list.append(w_name+"_"+choose_clip_w_version.value)
-#         btn.on_click(update_version_list)
-
-#     return w_versions_list
