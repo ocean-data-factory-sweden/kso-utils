@@ -333,7 +333,6 @@ def extract_frames(df, server, server_dict, project_name, frames_folder):
     
     return df
 
-
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(species_names: list, db_path: str, zoo_info_dict: dict, server_dict: dict, project_name: str, n_frames_subject=3, subsample_up_to=100):
     

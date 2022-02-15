@@ -120,8 +120,9 @@ def choose_test_prop():
     display(box)
     return w, v, z, z1
 
-def choose_output_folder(start_path: str = "."):
+def choose_folder(start_path: str = ".", folder_type: str = "output"):
     # Specify the output folder
     fc = FileChooser(start_path)
+    fc.title = f'<b>Select {folder_type} folder location</b>'
     display(fc)
     return fc
