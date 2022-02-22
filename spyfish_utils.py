@@ -209,7 +209,7 @@ def process_spyfish_subjects(subjects, db_path):
     )
     
     # Reference the expected species on the uploaded subjects
-    subjects = pd.merge(subjects, species_df, how="left", on="ScientificName")
+    subjects = pd.merge(subjects.drop(columns=['frame_exp_sp_id']), species_df, how="left", on="ScientificName")
 
     ##### Match site code to name from movies sql and get movie_id to save it as "movie_id"
     # Query id and filenames from the movies table
