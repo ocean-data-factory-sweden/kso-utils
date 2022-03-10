@@ -31,7 +31,7 @@ def check_spyfish_movies(movies_df, client, bucket_i):
     movies_df = movies_df.drop("_merge", axis=1)
         
     return movies_df
-                       
+
 def add_fps_length_spyfish(df, miss_par_df, client):
     
     # Loop through each movie missing fps and duration
@@ -53,7 +53,7 @@ def add_fps_length_spyfish(df, miss_par_df, client):
                     
                     
     return df
-    
+
 def process_spyfish_sites(sites_df):
     
     # Rename relevant fields
@@ -89,7 +89,7 @@ def process_spyfish_movies(movies_df):
     
     
     return movies_df
-    
+
     
 
 # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
@@ -174,8 +174,8 @@ def concatenate_videos(df, session):
         os.remove(concat_video)
 
         print("Temporary files and videos removed")
-       
-    
+
+
 def process_spyfish_subjects(subjects, db_path):
     
     # Merge "#Subject_type" and "Subject_type" columns to "subject_type"
@@ -227,7 +227,7 @@ def process_spyfish_subjects(subjects, db_path):
     
     return subjects
 
-        
+
 def process_clips_spyfish(annotations, row_class_id, rows_list):
     
     for ann_i in annotations:
@@ -343,5 +343,5 @@ def spyfish_subject_metadata(df, db_info_dict):
                                                         
     
     return upload_to_zoo
-    
+
 

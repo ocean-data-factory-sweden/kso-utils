@@ -5,9 +5,9 @@ import requests
 import pandas as pd
 import numpy as np
 
-#import csv, json, sys, io
-#import operator
-#from datetime import datetime
+# import csv, json, sys, io
+# import operator
+# from datetime import datetime
 
 import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
@@ -36,7 +36,7 @@ def init_db(db_path: str):
         return "Database creation success"
     else:
         return "Database creation failure"
-    
+
 def create_connection(db_file):
     """create a database connection to the SQLite database
         specified by db_file
@@ -178,7 +178,7 @@ def find_duplicated_clips(conn):
 
     return times_uploaded_df["times"].value_counts()
 
-### Populate sites, movies and species
+# ## Populate sites, movies and species
 
 def add_sites(db_initial_info, project_name, db_path):
 
@@ -205,7 +205,7 @@ def add_sites(db_initial_info, project_name, db_path):
         db_path, "sites", [tuple(i) for i in sites_df.values], 6
     )
 
-    
+
 def add_movies(db_initial_info, project_name, db_path):
 
     # Load the csv with movies information
@@ -271,8 +271,8 @@ def add_photos(db_initial_info, project_name, db_path):
     add_to_table(
         db_path, "photos", [tuple(i) for i in photos_df.values], 5
     )
-    
-    
+
+
 def add_species(db_initial_info, project_name, db_path):
 
     # Load the csv with species information
@@ -292,5 +292,5 @@ def add_species(db_initial_info, project_name, db_path):
     add_to_table(
         db_path, "species", [tuple(i) for i in species_df.values], 5
     )
-    
+
 

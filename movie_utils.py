@@ -2,9 +2,11 @@ import os, cv2, sys, io
 import operator
 import pandas as pd
 from tqdm import tqdm
+import difflib
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.project_utils as project_utils
 
 
 # Calculate length and fps of a movie
@@ -22,7 +24,9 @@ def get_length(video_file):
     return fps, length
 
 
-def check_fps_duration(db_info_dict, project_name):
+def check_fps_duration(db_info_dict, project):
+    
+    movie_folder = project.movie_folder
     
     # Load the csv with movies information
     df = pd.read_csv(db_info_dict["local_movies_csv"])
@@ -35,7 +39,7 @@ def check_fps_duration(db_info_dict, project_name):
     else:
 
         # Get project server
-        server = t_utils.get_project_info(project_name, "server")
+        server = project.server
         
         # Select only those movies with the missing parameters
         miss_par_df = df[df["fps"].isna()|df["duration"].isna()]
@@ -82,16 +86,21 @@ def check_fps_duration(db_info_dict, project_name):
             print("The fps and duration columns have been updated in movies.csv")
 
         else:   
-            print("updating the fps/duration not using AWS is a work in progress")
             # Set the fps and duration of each movie
-#             df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(df["Fpath"].apply(get_length, 1).tolist(), columns=["fps", "duration"])
-        
+            movie_files = server_utils.get_snic_files(db_info_dict["client"], movie_folder)["spath"].tolist()
+            f_movies = pd.Series([difflib.get_close_matches(i, movie_files)[0] for i in df["filename"]])
+            full_paths = movie_folder + '/' + f_movies
+            df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(full_paths.apply(get_length, 1).tolist(), columns=["fps", "duration"])
+            df["SamplingStart"] = 0.0
+            df["SamplingEnd"] = df["duration"]
+            df.to_csv(db_info_dict["local_movies_csv"], index=False)
+            
         print("Fps and duration information updated")
         
     return df
-                    
+
      
-        
+
 def check_sampling_start_end(df, movies_csv):
     # Check if sampling start or end is missing from any movie
     if not df[["sampling_start", "sampling_end"]].isna().all().any():
@@ -122,8 +131,8 @@ def check_sampling_start_end(df, movies_csv):
         print(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
 
     return df
-                    
-    
+
+
 def get_movie_extensions():
     # Specify the formats of the movies to select
     movie_formats = tuple(['wmv', 'mpg', 'mov', 'avi', 'mp4', 'MOV', 'MP4'])
@@ -131,5 +140,5 @@ def get_movie_extensions():
     return movie_formats
 
 
-    
+
     

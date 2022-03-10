@@ -1,8 +1,10 @@
 import pandas as pd
 import ipywidgets as widgets
+from ipyfilechooser import FileChooser
 import kso_utils.server_utils as server_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
+import kso_utils.project_utils as project_utils
 import panoptes_client
 import logging
 
@@ -12,9 +14,15 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def get_project_info(project_name, info_interest):
-    # Specify location of the latest list of projects
-    projects_csv = "../db_starter/projects_list.csv" 
+def choose_folder(start_path: str = ".", folder_type: str = ""):
+    # Specify the output folder
+    fc = FileChooser(start_path)
+    fc.title = f"Choose location of {folder_type}"
+    display(fc)
+    return fc
+
+
+def get_project_info(projects_csv, project_name, info_interest):
     
     # Read the latest list of projects
     projects_df = pd.read_csv(projects_csv)
@@ -25,38 +33,44 @@ def get_project_info(project_name, info_interest):
     return project_info
 
 
-def choose_project():
-    
-    # Specify location of the latest list of projects
-    projects_csv = "../db_starter/projects_list.csv" 
+def choose_project(projects_csv: str = "../db_starter/projects_list.csv"):
     
     # Read the latest list of projects
-    projects_df = pd.read_csv(projects_csv)
+    if not projects_csv.endswith(".csv"):
+        logging.error("A csv file was not selected. Please try again.")
     
-    # Display the project options
-    choose_project = widgets.Dropdown(
-        options=projects_df.Project_name.unique().tolist(),
-        value=projects_df.Project_name.unique().tolist()[0],
-        description="Project:",
-        disabled=False,
-    )
+    else:
+        projects_df = pd.read_csv(projects_csv)
     
-    display(choose_project)
-    return choose_project
+        if "Project_name" not in projects_df.columns:
+            logging.error("We were unable to find any projects in that file, \
+                          please choose a projects csv file that matches our template.")
 
-def initiate_db(project_name):
+        # Display the project options
+        choose_project = widgets.Dropdown(
+            options=projects_df.Project_name.unique().tolist(),
+            value=projects_df.Project_name.unique().tolist()[0],
+            description="Project:",
+            disabled=False,
+        )
+
+        display(choose_project)
+        return choose_project
+
+def initiate_db(project):
     
     # Get the project-specific name of the database
-    db_path = get_project_info(project_name, "db_path")
+    db_path = project.db_path
+    project_name = project.Project_name
     
     # Initiate the sql db
     db_utils.init_db(db_path)
     
     # Connect to the server (or folder) hosting the csv files
-    server_i_dict = server_utils.connect_to_server(project_name)
+    server_i_dict = server_utils.connect_to_server(project)
     
     # Get the initial info
-    db_initial_info = server_utils.get_db_init_info(project_name, server_i_dict)
+    db_initial_info = server_utils.get_db_init_info(project, server_i_dict)
     
     # Populate the sites info
     if "local_sites_csv" in db_initial_info.keys():
@@ -83,30 +97,29 @@ def initiate_db(project_name):
     return db_info_dict
 
 
-def connect_zoo_project(project_name):
+def connect_zoo_project(project):
     # Save your Zooniverse user name and password.
     zoo_user, zoo_pass = zooniverse_utils.zoo_credentials()
     
     # Get the project-specific zooniverse number
-    project_n = get_project_info(project_name, "Zooniverse_number")
+    project_n = project.Zooniverse_number
     
     # Connect to the Zooniverse project
     project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
     
     return project
 
-def retrieve__populate_zoo_info(project_name, db_info_dict, zoo_project, zoo_info):
+def retrieve__populate_zoo_info(project, db_info_dict, zoo_project, zoo_info):
     
     if zoo_project is None:
         logging.error("This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial.")
     else:
-    
         # Retrieve and store the information of subjects uploaded to zooniverse
-        zoo_info_dict = zooniverse_utils.retrieve_zoo_info(project_name, zoo_project, zoo_info)
+        zoo_info_dict = zooniverse_utils.retrieve_zoo_info(project, zoo_project, zoo_info)
 
         # Populate the sql with subjects uploaded to Zooniverse
         zooniverse_utils.populate_subjects(zoo_info_dict["subjects"], 
-                                           project_name,
+                                           project,
                                            db_info_dict["db_path"])
         return zoo_info_dict
 

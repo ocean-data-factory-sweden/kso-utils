@@ -2,7 +2,7 @@
 from tracemalloc import start
 import pandas as pd
 import numpy as np
-import json, io
+import json, io, os
 #from db_setup.process_frames import filter_bboxes
 import kso_utils.db_utils as db_utils
 from collections import OrderedDict
@@ -20,14 +20,14 @@ from scp import SCPClient
 
 # -
 
-def transfer_model(model_name: str, project_name: str, user: str, password: str):
-    api = wandb.Api()
-    collection = [
-        coll for coll in api.artifact_type(type_name='model', project=project_name).collections()
-    ][-1]
-    artifact = api.artifact(f"{project_name}/" + collection.name + ":latest")
+def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: str, password: str):
+    #api = wandb.Api()
+    #collection = [
+    #    coll for coll in api.artifact_type(type_name='model', project=project_name).collections()
+    #][-1]
+    #artifact = api.artifact(f"{project_name}/" + collection.name + ":latest")
     # Download the artifact's contents
-    artifact_dir = artifact.download()
+    #artifact_dir = artifact.download()
     ssh = SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
     ssh.load_system_host_keys()
@@ -38,7 +38,9 @@ def transfer_model(model_name: str, project_name: str, user: str, password: str)
 
     # SCPCLient takes a paramiko transport as its only argument
     scp = SCPClient(ssh.get_transport())
-    scp.put(f"{artifact_dir}/best.pt", f"/home/koster/model_config/{model_name}.pt")
+    scp.put(f"{artifact_dir}/weights/best.pt", 
+            f"/home/koster/model_config/weights/ \
+            {os.path.basename(project_name)}_{os.path.basename(os.path.dirname(artifact_dir))}_{model_name}")
     scp.close()
 
 
@@ -75,14 +77,12 @@ def choose_test_prop():
     )
     
     v = widgets.FloatLogSlider(
-        value=8,
+        value=3,
         base=2,
         min=0, # max exponent of base
         max=10, # min exponent of base
         step=1, # exponent step
-        description='Batch size:',
-        readout=True,
-        readout_format='d'
+        description='Batch size:'
     )
     
     z = widgets.IntSlider(
@@ -120,9 +120,4 @@ def choose_test_prop():
     display(box)
     return w, v, z, z1
 
-def choose_folder(start_path: str = ".", folder_type: str = "output"):
-    # Specify the output folder
-    fc = FileChooser(start_path)
-    fc.title = f'<b>Select {folder_type} folder location</b>'
-    display(fc)
-    return fc
+

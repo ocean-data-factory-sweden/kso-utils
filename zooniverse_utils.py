@@ -13,17 +13,18 @@ from panoptes_client import (
 )
 
 from ast import literal_eval
-import kso_utils.tutorials_utils as tutorials_utils
+from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
+from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
-import kso_utils.koster_utils as koster_utils
-import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.tutorials_utils as tutorials_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-    
+
 
 def zoo_credentials():
     zoo_user = getpass.getpass('Enter your Zooniverse user')
@@ -53,7 +54,7 @@ def auth_session(username, password, project_n):
         logging.error(e)
 
 # Function to retrieve information from Zooniverse
-def retrieve_zoo_info(project_name, zoo_project, zoo_info: str):
+def retrieve_zoo_info(project, zoo_project, zoo_info: str):
 
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
@@ -69,15 +70,15 @@ def retrieve_zoo_info(project_name, zoo_project, zoo_info: str):
             export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
             
             # If KSO deal with duplicated subjects
-            if project_name == "Koster_Seafloor_Obs":
+            if project.Project_name == "Koster_Seafloor_Obs":
 
                 # Clear duplicated subjects
                 if info_n == "subjects":
-                    export_df = koster_utils.clean_duplicated_subjects(export_df)
+                    export_df = clean_duplicated_subjects(export_df, project)
 
                 # Combine classifications from duplicated subjects to unique subject id
                 if info_n == "classifications":
-                    export_df = koster_utils.combine_annot_from_duplicates(export_df)
+                    export_df = combine_annot_from_duplicates(export_df, project)
 
         except:
             raise ValueError("Request time out, please try again in 1 minute.")
@@ -114,19 +115,24 @@ def extract_metadata(subj_df):
     return subj_df, meta_df
 
 
-def populate_subjects(subjects, project_name, db_path):
+def populate_subjects(subjects, project, db_path):
     '''
     Populate the subjects table with the subject metadata
     
     :param subjects: the subjects dataframe
+    :param project_path: The path to the projects.csv file
     :param project_name: The name of the Zooniverse project
     :param db_path: the path to the database
     '''
 
+    project_name = project.Project_name
+    server = project.server
+    movie_folder = project.movie_folder
+    
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
 
-        subjects = koster_utils.process_koster_subjects(subjects, db_path)
+        subjects = process_koster_subjects(subjects, db_path)
 
     else:
 
@@ -139,7 +145,7 @@ def populate_subjects(subjects, project_name, db_path):
         # Check if the Zooniverse project is the Spyfish
         if project_name == "Spyfish_Aotearoa":
 
-            subjects = spyfish_utils.process_spyfish_subjects(subjects, db_path)
+            subjects = process_spyfish_subjects(subjects, db_path)
 
     # Set subject_id information as id
     subjects = subjects.rename(columns={"subject_id": "id"})
@@ -147,12 +153,9 @@ def populate_subjects(subjects, project_name, db_path):
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(lambda x: literal_eval(x)["0"])
     
-    ### To review by Jannes, if not needed delete it as it breaks the Spyfish code###
-#     movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
-    
-#     # Set movie_id column to None if no movies are linked to the subject
-#     if movie_folder == "None":
-#         subjects["movie_id"] = None
+    # Set movie_id column to None if no movies are linked to the subject
+    if movie_folder == "None" and server in ["local", "SNIC"]:
+        subjects["movie_id"] = None
     
     # Set the columns in the right order
     subjects = subjects[
@@ -193,13 +196,15 @@ def populate_subjects(subjects, project_name, db_path):
     frame_subjs = subjects_df[subjects_df["subject_type"]=="frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"]=="clip"].shape[0]
     
-    print("The database has a total of", frame_subjs, "frame subjects and", clip_subjs, "clip subjects have been updated")
+    print("The database has a total of", frame_subjs,
+          "frame subjects and", clip_subjs,
+          "clip subjects have been updated")
 
 # Relevant for ML and upload frames tutorials
-def populate_agg_annotations(annotations, subj_type, project_name):
+def populate_agg_annotations(annotations, subj_type, project):
 
     # Get the project-specific name of the database
-    db_path = tutorials_utils.get_project_info(project_name, "db_path")
+    db_path = project.db_path
 
     conn = db_utils.create_connection(db_path)
     
@@ -259,8 +264,8 @@ def populate_agg_annotations(annotations, subj_type, project_name):
             [(None,) + tuple(i) for i in annotations_df.values],
             7,
         )
-        
-    
-   
 
     
+
+
+

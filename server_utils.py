@@ -13,6 +13,7 @@ from scp import SCPClient
 
 import kso_utils.tutorials_utils as tutorials_utils
 import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.project_utils as project_utils
 from tqdm import tqdm
 from pathlib import Path
 
@@ -26,9 +27,9 @@ logger.setLevel(logging.DEBUG)
 # ###### Common server functions ######
 # #####################################
 
-def connect_to_server(project_name):
+def connect_to_server(project):
     # Get project-specific server info
-    server = tutorials_utils.get_project_info(project_name, "server")
+    server = project.server
     
     # Create an empty dictionary to host the server connections
     server_dict = {}
@@ -53,13 +54,14 @@ def connect_to_server(project_name):
     return server_dict
 
         
-def get_db_init_info(project_name, server_dict):
+def get_db_init_info(project, server_dict):
     
     # Define the path to the csv files with initial info to build the db
-    db_csv_info = "../db_starter/db_csv_info/"
+    db_csv_info = project.csv_folder
         
     # Get project-specific server info
-    server = tutorials_utils.get_project_info(project_name, "server")
+    server = project.server
+    project_name = project.Project_name
     
     # Create the folder to store the csv files if not exist
     if not os.path.exists(db_csv_info):
@@ -75,74 +77,10 @@ def get_db_init_info(project_name, server_dict):
             
         return db_initial_info
                 
-    if server == "SNIC" and project_name == "Koster_Seafloor_Obs":
-        # Check if the directory db_csv_info exists
-        if not os.path.exists(db_csv_info) or len(os.listdir(db_csv_info)) == 0:
-
-            print("There is no folder with initial information about the sites, movies and species.\n Please enter the ID of a Google Drive zipped folder with the inital database information. \n For example, the ID of the template information is: 1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn")
-
-            # Provide ID of the GDrive zipped folder with the init. database information
-            gdrive_id = getpass.getpass('ID of Google Drive zipped folder')
-
-            # Download the csv files
-            download_init_csv(gdrive_id, db_csv_info)
-
-
-        # Define the path to the csv files with inital info to build the db
-        for file in Path(db_csv_info).rglob("*.csv"):
-            if 'sites' in file.name:
-                sites_csv = file
-            if 'movies' in file.name:
-                movies_csv = file
-            if 'species' in file.name:
-                species_csv = file
-            
-        db_initial_info = {
-            "local_sites_csv": sites_csv, 
-            "local_movies_csv": movies_csv, 
-            "local_species_csv": species_csv
-        }
-        
-    elif server == "SNIC" and not project_name == "Koster_Seafloor_Obs":
-        
-        # Get project variables from project csv
-        csv_folder = tutorials_utils.get_project_info(project_name, "csv_folder")
-        csv_files = get_snic_files(server_dict["client"], csv_folder)
-        
-        # Look for csv files
-        for file in csv_files:
-            if 'sites' in file:
-                sites_csv = file
-            if 'movies' in file:
-                movies_csv = file
-            if 'species' in file:
-                species_csv = file
-        
-        # Create the folder to store the csv files if not exist
-        if not os.path.exists(db_csv_info):
-            os.mkdir(db_csv_info)
-            
-        download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=sites_csv,
-                                local_fpath=str(Path(db_csv_info,Path(sites_csv.name))))
-        download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=sites_csv,
-                                local_fpath=str(Path(db_csv_info,Path(movies_csv.name))))
-        download_object_from_snic(server_dict["sftp_client"],
-                                remote_fpath=species_csv,
-                                local_fpath=str(Path(db_csv_info,Path(species_csv.name))))
-        
-        
-        db_initial_info = {
-            "local_sites_csv": str(Path(db_csv_info,Path(sites_csv.name))), 
-            "local_movies_csv": str(Path(db_csv_info,Path(movies_csv.name))), 
-            "local_species_csv": str(Path(db_csv_info,Path(species_csv.name)))
-        }
-    
-    elif server == "local":
+    elif server in ["local", "SNIC"]:
         
         csv_folder = db_csv_info
-        movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+        movie_folder = project.movie_folder
         
         # Define the path to the csv files with initial info to build the db
         if not os.path.exists(csv_folder):
@@ -190,15 +128,15 @@ def get_db_init_info(project_name, server_dict):
     
 
 
-def update_db_init_info(project_name, csv_to_update):
+def update_db_init_info(project, csv_to_update):
     
     if server == "AWS":
             
         # Start AWS session
         aws_access_key_id, aws_secret_access_key = server_utils.aws_credentials()
         client = server_utils.connect_s3(aws_access_key_id, aws_secret_access_key)
-        bucket = tutorials_utils.get_project_info(project_name, "bucket")
-        key = tutorials_utils.get_project_info(project_name, "key")
+        bucket = project.bucket
+        key = project.key
 
         csv_filename=csv_to_update.name
 
@@ -296,10 +234,11 @@ def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
     
     return contents_s3_pd
 
-def download_csv_aws(project_name, server_dict, db_csv_info):
+def download_csv_aws(project_path, project_name, server_dict, db_csv_info):
     # Provide bucket and key
-    bucket = tutorials_utils.get_project_info(project_name, "bucket")
-    key = tutorials_utils.get_project_info(project_name, "key")
+    project = project_utils.find_project(project_path, project_name)
+    bucket = project.bucket
+    key = project.key
 
     # Create db_initial_info dict
     db_initial_info = {

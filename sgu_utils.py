@@ -28,4 +28,4 @@ def process_sgu_photos_csv(db_initial_info):
     )
           
     return photos_df
-    
+

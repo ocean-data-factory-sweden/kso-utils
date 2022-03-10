@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
-import json, io
+import json, io, os
 import logging
 from ast import literal_eval
 from kso_utils.zooniverse_utils import auth_session
 import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 from kso_utils.spyfish_utils import process_clips_spyfish
+import kso_utils.project_utils as project_utils
 import kso_utils.tutorials_utils as tutorials_utils
 from collections import OrderedDict, Counter
 
@@ -25,19 +26,19 @@ logger.setLevel(logging.DEBUG)
 out_df = pd.DataFrame()
 
 #### Set up ####
-def setup_initial_info(project_name: str):
+def setup_initial_info(project):
     
     ### Populate SQL database with sites, movies and species and connect to Zoo
     # Initiate db
-    db_info_dict = tutorials_utils.initiate_db(project_name)
+    db_info_dict = tutorials_utils.initiate_db(project)
     
     # Connect to Zooniverse project
-    zoo_project = tutorials_utils.connect_zoo_project(project_name)
+    zoo_project = tutorials_utils.connect_zoo_project(project)
     
     # Specify the Zooniverse information required throughout the tutorial
     zoo_info = ["subjects", "workflows", "classifications"]
 
-    zoo_info_dict = tutorials_utils.retrieve__populate_zoo_info(project_name = project_name, 
+    zoo_info_dict = tutorials_utils.retrieve__populate_zoo_info(project = project, 
                                                                db_info_dict = db_info_dict,
                                                                zoo_project = zoo_project,
                                                                zoo_info = zoo_info)
@@ -266,7 +267,7 @@ def get_workflow_ids(workflows_df, workflow_names):
 
 
 def get_classifications(
-    workflow_dict: dict, workflows_df: pd.DataFrame, subj_type, class_df, db_path
+    workflow_dict: dict, workflows_df: pd.DataFrame, subj_type, class_df, db_path, project
 ):
     
     names, workflow_versions = [], []
@@ -291,16 +292,19 @@ def get_classifications(
     
     if subj_type == "frame":
         # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, filename, frame_number, movie_id FROM subjects", conn)
+        subjects_df = pd.read_sql_query("SELECT id, subject_type, \
+                                        https_location, filename, frame_number, movie_id FROM subjects \
+                                        WHERE subject_type=='frame'", conn)
         
     else:
         # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query("SELECT id, subject_type, https_location, filename, clip_start_time, movie_id FROM subjects", conn)
-    
+        subjects_df = pd.read_sql_query("SELECT id, subject_type, \
+                                        https_location, filename, clip_start_time, movie_id FROM subjects \
+                                        WHERE subject_type=='clip'", conn)
+        
     # Ensure id format matches classification's subject_id
     classes_df["subject_ids"] = classes_df["subject_ids"].astype('Int64')
     subjects_df["id"] = subjects_df["id"].astype('Int64')
-    
     
     # Add subject information based on subject_ids
     classes_df = pd.merge(
@@ -311,10 +315,12 @@ def get_classifications(
         right_on="id",
     )
     
-    if classes_df[["subject_type", "https_location", "filename"]].isna().any().any():
+    print(classes_df[classes_df.https_location.isnull()][["subject_ids", "id", "https_location"]])
+    
+    if classes_df[["subject_type", "https_location"]].isna().any().any():
         # Exclude classifications from missing subjects
         filtered_class_df = classes_df.dropna(subset=["subject_type",
-                                                    "https_location", "filename"], 
+                                                    "https_location"], 
                                             how='any').reset_index(drop=True)
         
         # Report on the issue
@@ -355,7 +361,7 @@ def aggregrate_labels(raw_class_df, agg_users, min_users):
     return agg_class_df
 
 
-def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
+def aggregrate_classifications(df, subj_type, project, agg_params):
 
     print("Aggregrating the classifications")
     
@@ -369,7 +375,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
             agg_users, min_users, agg_obj, agg_iou, agg_iua = agg_params
         
         # Process the raw classifications
-        raw_class_df = process_frames(df, project_name)
+        raw_class_df = process_frames(df, project.Project_name)
         
         # Aggregrate frames based on their labels
         agg_labels_df = aggregrate_labels(raw_class_df, agg_users, min_users)
@@ -489,7 +495,7 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
             agg_users, min_users = agg_params
         
         # Process the raw classifications
-        raw_class_df = process_clips(df, project_name)
+        raw_class_df = process_clips(df, project)
         
         # Aggregrate clips based on their labels
         agg_class_df = aggregrate_labels(raw_class_df, agg_users, min_users)
@@ -506,12 +512,13 @@ def aggregrate_classifications(df, subj_type, project_name: str, agg_params):
         on="classification_id"
     )
     
-    print(agg_class_df.shape[0], "classifications aggregated out of", df.subject_ids.nunique(), "unique subjects available")
+    print(agg_class_df.shape[0], "classifications aggregated out of",
+          df.subject_ids.nunique(), "unique subjects available")
     
     return agg_class_df, raw_class_df
 
 
-def process_clips(df: pd.DataFrame, project_name):
+def process_clips(df: pd.DataFrame, project):
 
     # Create an empty list
     rows_list = []
@@ -522,11 +529,11 @@ def process_clips(df: pd.DataFrame, project_name):
         annotations = json.loads(row["annotations"])
 
         # Select the information from the species identification task
-        if project_name == "Koster_Seafloor_Obs":
+        if project.Project_name == "Koster_Seafloor_Obs":
             rows_list = process_clips_koster(annotations, row["classification_id"], rows_list)
             
         # Check if the Zooniverse project is the Spyfish
-        if project_name == "Spyfish_Aotearoa":
+        if project.Project_name == "Spyfish_Aotearoa":
             rows_list = process_clips_spyfish(annotations, row["classification_id"], rows_list)
 
     # Create a data frame with annotations as rows

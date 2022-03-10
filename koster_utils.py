@@ -1,4 +1,5 @@
-import io, os, json, csv
+# -*- coding: utf-8 -*-
+import io, os, json, csv, re
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -37,7 +38,7 @@ def extract_metadata(subj_df):
 
     # Flatten the metadata information
     meta_df = pd.json_normalize(subj_df.metadata.apply(json.loads))
-
+    
     # Drop metadata and index columns from original df
     subj_df = subj_df.drop(columns=["metadata", "index",])
 
@@ -152,10 +153,10 @@ def process_manual_clips(meta_df):
 
 
 # Function to get the list of duplicated subjects
-def get_duplicatesdf():
+def get_duplicatesdf(project):
     
     # Define the path to the csv files with initial info to build the db
-    db_csv_info = "../db_starter/db_csv_info/" 
+    db_csv_info = project.csv_folder 
 
     # Define the path to the csv file with ids of the duplicated subjects
     for file in Path(db_csv_info).rglob("*.csv"):
@@ -166,13 +167,13 @@ def get_duplicatesdf():
     duplicatesdf = pd.read_csv(duplicates_csv)
     
     return duplicatesdf
-    
+
 
 # Function to select the first subject of those that are duplicated
-def clean_duplicated_subjects(subjects):
+def clean_duplicated_subjects(subjects, project):
     
     # Get the duplicates df
-    duplicatesdf = get_duplicatesdf()
+    duplicatesdf = get_duplicatesdf(project)
     
     # Include a column with unique ids for duplicated subjects 
     subjects = pd.merge(subjects, duplicatesdf, how="left", left_on="subject_id", right_on="dupl_subject_id")
@@ -184,7 +185,7 @@ def clean_duplicated_subjects(subjects):
     subjects = subjects.drop_duplicates(subset='subject_id', keep='first')
     
     return subjects
-    
+
     
 
 def process_koster_subjects(subjects, db_path):
@@ -215,10 +216,10 @@ def process_koster_subjects(subjects, db_path):
     return subjects
 
 # Function to combine classifications received on duplicated subjects
-def combine_annot_from_duplicates(annot_df):
+def combine_annot_from_duplicates(annot_df, project):
 
     # Get the duplicates df
-    duplicatesdf = get_duplicatesdf()
+    duplicatesdf = get_duplicatesdf(project)
     
     # Include a column with unique ids for duplicated subjects
     annot_df = pd.merge(

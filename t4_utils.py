@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #t4 utils
 import os, shutil
 import pandas as pd
@@ -20,6 +21,7 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as tutorials_utils
 import kso_utils.koster_utils as koster_utils
+import kso_utils.project_utils as project_utils
 from panoptes_client import (
     SubjectSet,
     Subject,
@@ -32,12 +34,13 @@ from panoptes_client import (
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-   
-def retrieve_movie_info_from_server(project_name, db_info_dict):
+
+def retrieve_movie_info_from_server(project, db_info_dict):
     
-    server = tutorials_utils.get_project_info(project_name, "server")
-    bucket_i = tutorials_utils.get_project_info(project_name, "bucket")
-    movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+    server = project.server
+    bucket_i = project.bucket
+    movie_folder = project.movie_folder
+    project_name = project.Project_name
     
     if server == "AWS":
         # Retrieve info from the bucket
@@ -131,8 +134,8 @@ def check_movie_uploaded(movie_i, db_info_dict):
         print(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
     else:
         print(movie_i, "has not been uploaded to Zooniverse yet")
-        
-        
+
+
 def select_clip_n_len(movie_i, db_info_dict):
     
     # Create connection to db
@@ -176,7 +179,7 @@ def select_clip_n_len(movie_i, db_info_dict):
     display(clip_length_number)
     
     return clip_length_number        
-        
+
 def review_clip_selection(clip_selection, movie_i):
     start_trim = clip_selection.kwargs['clips_range'][0]
     end_trim = clip_selection.kwargs['clips_range'][1]
@@ -202,7 +205,7 @@ def expand_list(df, list_column, new_column):
 # Function to extract the videos 
 def extract_clips(df, clip_length): 
     # Read each movie and extract the clips (printing a progress bar) 
-    for index, row in tqdm(df.iterrows(), total=df.shape[0]): 
+    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
         if not os.path.exists(row['clip_path']):
             subprocess.call(["ffmpeg", 
                              "-ss", str(row['upl_seconds']), 
@@ -214,9 +217,9 @@ def extract_clips(df, clip_length):
                              str(row['clip_path'])])
 
     print("clips extracted successfully")
-    
-    
-def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, project_name):
+
+
+def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, project):
         
     # Calculate the max number of clips available
     clip_length = clip_selection.kwargs['clip_length']
@@ -244,7 +247,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     # Download the movie locally from the server
     
     # Get project-specific server info
-    server = tutorials_utils.get_project_info(project_name, "server")
+    server = project.server
     
     if server == "AWS":
 
@@ -259,7 +262,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
     elif server == "SNIC":
         
-        movie_folder = tutorials_utils.get_project_info(project_name, "movie_folder")
+        movie_folder = project.movie_folder
         
         if not os.path.exists(movie_i_df.filename_ext[0]):
             # Download the movie of interest
@@ -277,7 +280,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
 
     # Set the path of the clips
-    potential_start_df["clip_path"] = clips_folder+ os.sep + potential_start_df["clip_filename"]
+    potential_start_df["clip_path"] = clips_folder + os.sep + potential_start_df["clip_filename"]
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
@@ -288,7 +291,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
 
     return potential_start_df    
 
-    
+
 def check_clip_size(clip_paths):
     
     # Get list of files with size
@@ -306,7 +309,7 @@ def check_clip_size(clip_paths):
     else:
         print("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
         return df
-    
+
 
 def select_modification():
     # Widget to select the clip modification
@@ -430,8 +433,8 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
         clips_to_upload_df["modif_clip_path"] = "no_modification"
         
         return clips_to_upload_df
-    
-    
+
+
 def compare_clips(df):
 
     # Save the paths of the clips
@@ -464,8 +467,8 @@ def compare_clips(df):
                 
                 
     clip_path_widget.observe(on_change, names='value')
-    
-    
+
+
 # Display the clips using html
 def view_clips(df, movie_path):
     
@@ -492,7 +495,7 @@ def view_clips(df, movie_path):
     return HTML(html_code)
 
 
-def set_zoo_metadata(df, project_name, db_info_dict):
+def set_zoo_metadata(df, project, db_info_dict):
     
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
@@ -540,7 +543,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
     upload_to_zoo["Subject_type"] = "clip"
         
     # Add spyfish-specific info
-    if project_name == "Spyfish_Aotearoa":
+    if project.Project_name == "Spyfish_Aotearoa":
         
         # Read sites csv as pd
         sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
@@ -571,7 +574,7 @@ def set_zoo_metadata(df, project_name, db_info_dict):
                                             right_on="#SiteID")
         
     
-    if project_name == "Koster_Seafloor_Obs":
+    if project.Project_name == "Koster_Seafloor_Obs":
         
         # Read sites csv as pd
         sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
@@ -650,28 +653,28 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     subject_set.add(new_subjects)
 
     print("Subjects uploaded to Zooniverse")
-    
+
 # def choose_movies(db_path):
-    
+
 #     # Connect to db
 #     conn = db_utils.create_connection(db_path)
-    
+
 #     # Select all movies
 #     movies_df = pd.read_sql_query(
 #         f"SELECT filename, fpath FROM movies",
 #         conn,
 #     )
-    
+
 #     # Select only videos that can be mapped
 #     available_movies_df = movies_df[movies_df['fpath'].map(os.path.isfile)]
-    
+
 #     ###### Select movies ####
 #     # Display the movies available to upload
 #     movie_selection = widgets.Combobox(
 #         options = available_movies_df.filename.unique().tolist(),
 #         description = 'Movie:',
 #     )
-    
+
 #     ###### Select clip length ##########
 #     # Display the length available
 #     clip_length = widgets.RadioButtons(
@@ -679,24 +682,24 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #         value = 10,
 #         description = 'Clip length (seconds):',
 #     )
-    
+
 #     display(movie_selection, clip_length)
-    
+
 #     return movie_selection, clip_length
 
 # def choose_clips(movie_selection, clip_length, db_path):
-    
+
 #     # Connect to db
 #     conn = db_utils.create_connection(db_path)
-    
+
 #     # Select the movie to upload
 #     movie_df = pd.read_sql_query(
 #         f"SELECT id, filename, fps, survey_start, survey_end FROM movies WHERE movies.filename='{movie_selection}'",
 #         conn,
 #     )
-    
+
 #     print(movie_df.id.values)
-    
+
 #     # Get information of clips uploaded
 #     uploaded_clips_df = pd.read_sql_query(
 #         f"SELECT movie_id, clip_start_time, clip_end_time FROM subjects WHERE subjects.subject_type='clip' AND subjects.movie_id={movie_df.id.values}",
@@ -732,7 +735,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #         .query('_merge == "left_only"')
 #         .drop(columns=["_merge"])
 #     )
-    
+
 #     # Combine the flatten metadata with the subjects df
 #     subj_df = pd.concat([subj_df, meta_df], axis=1)
 
@@ -760,7 +763,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #     # Estimate the maximum number of clips available
 #     survey_end_movie = movie_df["survey_end"].values[0]
 #     max_n_clips = math.floor(survey_end_movie/clip_length)
-    
+
 #     ###### Select number of clips ##########
 #     # Display the number of potential clips available
 #     n_clips = widgets.IntSlider(
@@ -770,13 +773,13 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #         step=1,
 #         description = 'Number of clips to upload:',
 #     )
-    
+
 #     display(n_clips)
-    
+
 #     return n_clips
 
 # def choose_subjectset_method():
-    
+
 #     # Specify whether to upload to a new or existing workflow 
 #     subjectset_method = widgets.ToggleButtons(
 #         options=['Existing','New'],
@@ -784,12 +787,12 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #         disabled=False,
 #         button_style='success',
 #     )
-    
+
 #     display(subjectset_method)
 #     return subjectset_method
 
 # def choose_subjectset(df, method):
-    
+
 #     if method=="Existing":
 #         # Select subjectset availables
 #         subjectset = widgets.Combobox(
@@ -805,7 +808,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #             description='New subjectset name:',
 #             disabled=False
 #         )
-        
+
 #     display(subjectset)
 #     return subjectset
 
@@ -815,7 +818,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 
 
 # def choose_subject_set1(subjectset_df):
-    
+
 #     # Specify whether to upload to a new or existing workflow 
 #     subjectset_method = widgets.ToggleButtons(
 #         options=['Existing','New'],
@@ -824,7 +827,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #         button_style='success',
 #     )
 #     output = widgets.Output()
-    
+
 #     def on_button_clicked(method):
 #         with output:
 #             if method['new']=="Existing":
@@ -836,11 +839,11 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #                     ensure_option=True,
 #                     disabled=False,
 #                 )
-                
+
 #                 display(subjectset)
 
 #                 return subjectset
-                
+
 #             else:
 #                 output.clear_output()
 #                 # Specify the name of the new subjectset
@@ -849,13 +852,13 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 #                     description='New subjectset name:',
 #                     disabled=False
 #                 )
-            
-            
+
+
 #                 display(subjectset)
 
 #                 return subjectset
-            
-            
+
+
 #     subjectset_method.observe(on_button_clicked, names='value')
-    
+
 #     display(subjectset_method, output)
