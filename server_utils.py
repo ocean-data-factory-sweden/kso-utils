@@ -234,9 +234,9 @@ def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
     
     return contents_s3_pd
 
-def download_csv_aws(project_path, project_name, server_dict, db_csv_info):
+def download_csv_aws(project_name, server_dict, db_csv_info):
     # Provide bucket and key
-    project = project_utils.find_project(project_path, project_name)
+    project = project_utils.find_project(project_name=project_name)
     bucket = project.bucket
     key = project.key
 
