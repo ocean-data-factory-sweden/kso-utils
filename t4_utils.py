@@ -689,9 +689,11 @@ def set_zoo_metadata(df, species_list, project, db_info_dict):
     
 
 # Function to upload frames to Zooniverse
-def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, project, zoo_project):
+def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, project):
     
+    # Retireve zooniverse project name and number
     project_name = project.Project_name
+    project_number = project.Zooniverse_number
     
     # Estimate the number of frames
     n_frames = upload_to_zoo.shape[0]
@@ -723,7 +725,7 @@ def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, proje
     
     # Create a new subject set to host the frames
     subject_set = SubjectSet()
-    subject_set.links.project = zoo_project
+    subject_set.links.project = project_number
     subject_set.display_name = subject_set_name
     subject_set.save()
 
@@ -740,7 +742,7 @@ def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, proje
         subject = Subject()
         
         
-        subject.links.project = zoo_project
+        subject.links.project = project_number
         subject.add_location(frame_path)
         
         print(frame_path)
