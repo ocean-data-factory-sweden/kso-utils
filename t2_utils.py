@@ -11,13 +11,13 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 
 
-def check_sites_csv(db_initial_info, project_name):
+def check_sites_csv(db_initial_info, project):
 
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
     
     # Check if the project is the Spyfish Aotearoa
-    if project_name == "Spyfish_Aotearoa":
+    if project.Project_name == "Spyfish_Aotearoa":
         # Rename columns to match schema fields
         sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
@@ -36,18 +36,18 @@ def check_sites_csv(db_initial_info, project_name):
     return sites_df
 
     
-def check_movies_csv(db_initial_info, project_name):
+def check_movies_csv(db_initial_info, project):
 
     # Check for missing fps and duration info
-    movies_df = movie_utils.check_fps_duration(db_initial_info, project_name)
+    movies_df = movie_utils.check_fps_duration(db_initial_info, project.Project_name)
     
     # Check if the project is the Spyfish Aotearoa
-    if project_name == "Spyfish_Aotearoa":
+    if project.Project_name == "Spyfish_Aotearoa":
         movies_df = spyfish_utils.process_spyfish_movies(movies_df)
         
         
     # Check if the project is the KSO
-    if project_name == "Koster_Seafloor_Obs":
+    if project.Project_name == "Koster_Seafloor_Obs":
         movies_df = koster_utils.process_koster_movies_csv(movies_df)
     
     

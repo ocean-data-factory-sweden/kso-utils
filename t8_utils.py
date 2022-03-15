@@ -315,8 +315,6 @@ def get_classifications(
         right_on="id",
     )
     
-    print(classes_df[classes_df.https_location.isnull()][["subject_ids", "id", "https_location"]])
-    
     if classes_df[["subject_type", "https_location"]].isna().any().any():
         # Exclude classifications from missing subjects
         filtered_class_df = classes_df.dropna(subset=["subject_type",

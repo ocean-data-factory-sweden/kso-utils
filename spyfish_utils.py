@@ -247,6 +247,11 @@ def process_clips_spyfish(annotations, row_class_id, rows_list):
                             f_time = answers[k].replace("S", "")
                         if "HOWMANY" in k:
                             inds = answers[k]
+                            #Deal with +20 fish options
+                            if inds == '2030':
+                                inds = '25'
+                            if inds == '3040':
+                                inds = '35'
                         elif "EARLIESTPOINT" not in k and "HOWMANY" not in k:
                             f_time, inds = None, None
 
