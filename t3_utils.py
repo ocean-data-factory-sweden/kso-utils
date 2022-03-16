@@ -264,7 +264,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
         
         movie_folder = project.movie_folder
         
-        if not os.path.exists(movie_i_df.filename_ext[0]):
+        if not os.path.exists(movie_folder+movie_i_df.filename_ext[0]):
             # Download the movie of interest
             server_utils.download_object_from_snic(
                             db_info_dict["sftp_client"],
