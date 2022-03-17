@@ -503,7 +503,10 @@ def view_clips(df, movie_path):
 
     vid1=open(movie_path,'rb').read()
     wi1 = widgets.Video(value=vid1, format=extension, width=400, height=500)
-    vid2=open(modified_clip_path,'rb').read()
+    if "no_modification" in modified_clip_path:
+        vid2=open(movie_path,'rb').read()
+    else:
+        vid2=open(modified_clip_path,'rb').read()
     wi2 = widgets.Video(value=vid2, format=extension, width=400, height=500)
     a=[wi1,wi2]
     wid=widgets.HBox(a)
@@ -536,6 +539,10 @@ def set_zoo_metadata(df, project, db_info_dict):
             "clip_modification_details": "#clip_modification_details",
             "siteName": "#siteName"
             })
+
+    # Set clip path if no modification
+    if "modif_clip_path" in upload_to_zoo.columns and "no_modification" not in upload_to_zoo["modif_clip_path"].values:
+        upload_to_zoo["modif_clip_path"] = upload_to_zoo["clip_path"]
     
     # Convert datetime to string to avoid JSON seriazible issues
     upload_to_zoo['#created_on'] = upload_to_zoo['#created_on'].astype(str)
