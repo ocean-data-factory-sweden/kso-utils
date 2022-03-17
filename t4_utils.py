@@ -13,7 +13,7 @@ import difflib
 
 from tqdm import tqdm
 from PIL import Image
-from IPython.display import HTML, display, update_display, clear_output
+from IPython.display import HTML, display, update_display, clear_output, Image
 import ipywidgets as widgets
 from ipywidgets import interact, Layout
 from kso_utils.zooniverse_utils import auth_session, populate_agg_annotations
@@ -387,11 +387,6 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         def build_df(chooser):
             frame_files = os.listdir(chooser.selected)
             frame_paths = [chooser.selected+i for i in frame_files]
-            try:
-                os.symlink(chooser.selected[:-1], 'linked_frames')
-            except FileExistsError:
-                os.remove('linked_frames')
-                os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
             # TODO: Add multiple species option
             chooser.df["species_id"] = species_ids
@@ -410,7 +405,7 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         agg_params = t8.choose_agg_parameters("clip")
 
         # Select the temp location to store frames before uploading them to Zooniverse
-        df = FileChooser('.')
+        df = FileChooser('/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/')
         df.title = '<b>Choose location to store frames</b>'
             
         # Callback function
@@ -449,11 +444,6 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             # Extract the frames from the videos and store them in the temp location
             chooser.df = extract_frames(frame_df, server, 
                                         server_dict, project, chooser.selected)
-            try:
-                os.symlink(chooser.selected[:-1], 'linked_frames')
-            except FileExistsError:
-                os.remove('linked_frames')
-                os.symlink(chooser.selected[:-1], 'linked_frames')
                 
         # Register callback function
         df.register_callback(extract_files)
@@ -567,30 +557,29 @@ def view_frames(df, frame_path):
     
     # Get path of the modified clip selected
     modified_frame_path = df[df["frame_path"]==frame_path].modif_frame_path.values[0]
-    based_dir = "linked_frames"
-    frame_path = os.path.basename(frame_path)
-        
-    html_code = f"""
-        <html>
-        <div style="display: flex; justify-content: space-around">
-        <div>
-          <img src='{os.path.join(based_dir, frame_path)}'>
-        </img>
-        </div>
-        <div>
-          <img src='{modified_frame_path}'>
-        </img>
-        </div>
-        </html>"""
-   
-    return HTML(html_code)
+    extension = os.path.splitext(frame_path)[1]
+
+    img1=open(frame_path,'rb').read()
+    wi1 = widgets.Image(value=img1, format=extension, width=400, height=500)
+    img2=open(modified_frame_path,'rb').read()
+    wi2 = widgets.Image(value=img2, format=extension, width=400, height=500)
+    a=[wi1,wi2]
+    wid=widgets.HBox(a)
+
+    return wid
 
 
 # Function modify the frames
-def modify_frames(frames_to_upload_df, species_i, frame_modification, modification_details):
+def modify_frames(frames_to_upload_df, species_i, frame_modification, modification_details, project):
+
+    server = project.server
 
     # Specify the folder to host the modified clips
-    mod_frames_folder = "modified_" + "_".join(species_i) +"_frames"
+    if server == "SNIC":
+        folder_name = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/frames/"
+        mod_frames_folder = folder_name + "modified_" + "_".join(species_i) +"_frames"
+    else:
+        mod_frames_folder = "modified_" + "_".join(species_i) +"_frames"
     
     # Specify the path of the modified clips
     frames_to_upload_df["modif_frame_path"] = str(Path(mod_frames_folder, "modified")) + frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x))
@@ -665,8 +654,13 @@ def set_zoo_metadata(df, species_list, project, db_info_dict):
         df["frame_path"] = df["modif_frame_path"]
 
     # Set project-specific metadata
-    if project_name == "Koster_Seafloor_Obs": 
-        upload_to_zoo = df[["frame_path", "species_id", "movie_id"]]
+    if project_name == "Koster_Seafloor_Obs":
+        conn = db_utils.create_connection(project.db_path)
+        movies_df = pd.read_sql_query("SELECT id, created_on, site_id FROM movies", conn)
+        sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
+        movies_df = movies_df.merge(sites_df, left_on="site_id", right_on="id")
+        df = df.merge(movies_df, left_on="movie_id", right_on="id_x")
+        upload_to_zoo = df[["frame_path", "species_id", "movie_id", "created_on", "siteName"]]
         
     elif project_name == "SGU":
         upload_to_zoo = df[["frame_path", "species_id", "filename"]]

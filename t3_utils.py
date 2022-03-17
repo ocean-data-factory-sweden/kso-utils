@@ -7,6 +7,7 @@ import math
 import datetime
 import subprocess
 import logging
+import difflib
 from pathlib import Path
 
 from tqdm import tqdm
@@ -51,18 +52,17 @@ def retrieve_movie_info_from_server(project, db_info_dict):
         server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
         
     
-    elif server == "SNIC" and project_name == "Koster_Seafloor_Obs":
+    elif server == "SNIC":
         server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
-        server_df["spath"] = server_df["spath"].apply(koster_utils.unswedify)
     
     elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
-            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 5 instead.")
+            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
             return pd.DataFrame(columns = ["filename"])
         else:
             server_files = os.listdir(movie_folder)
             server_paths = [movie_folder + i for i in server_files]
-            server_df = pd.DataFrame(server_files, columns="spath") 
+            server_df = pd.DataFrame(server_paths, columns="spath") 
     else:
         raise ValueError("The server type you selected is not currently supported.")
     
@@ -74,6 +74,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     movies_df = pd.read_sql_query(f"SELECT * FROM movies", conn)
 
     # Missing info for files in the "buv-zooniverse-uploads"
+    movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
     movies_df = movies_df.merge(server_df["spath"], 
                                 left_on=['fpath'],
                                 right_on=['spath'], 
@@ -90,7 +91,11 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     available_movies_df = movies_df[movies_df['exists']].reset_index()
     
     # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["fpath"].str.split("/").str[-1]
+    available_movies_df["filename_ext"] = available_movies_df["spath"].str.split("/").str[-1]
+
+    # Add movie folder for SNIC
+    if server == "SNIC":
+        available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
 
     logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
     
@@ -210,7 +215,7 @@ def extract_clips(df, clip_length):
             subprocess.call(["ffmpeg", 
                              "-ss", str(row['upl_seconds']), 
                              "-t", str(clip_length), 
-                             "-i", str(row['filename_ext']), 
+                             "-i", str(row['full_path']), 
                              "-c", "copy", 
                              "-an",#removes the audio
                              "-force_key_frames", "1",
@@ -251,6 +256,8 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
     if server == "AWS":
 
+        potential_start_df["full_path"] = potential_start_df["filename_ext"]
+
         if not os.path.exists(movie_i_df.filename_ext[0]):
             # Download the movie of interest
             server_utils.download_object_from_s3(
@@ -263,8 +270,11 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     elif server == "SNIC":
         
         movie_folder = project.movie_folder
+        movie_i_df["full_path"] = movie_i_df["spath"]
+        potential_start_df["full_path"] = potential_start_df["spath"]
+        print(movie_i_df.full_path[0])
         
-        if not os.path.exists(movie_folder+movie_i_df.filename_ext[0]):
+        if not os.path.exists(movie_i_df.full_path[0]):
             # Download the movie of interest
             server_utils.download_object_from_snic(
                             db_info_dict["sftp_client"],
@@ -274,7 +284,10 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     
 
     # Specify the temp folder to host the clips
-    clips_folder = movie_i+"_clips"
+    if server == "SNIC":
+        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+movie_i+"_clips"
+    else:
+        clips_folder = movie_i+"_clips"
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
@@ -364,10 +377,15 @@ def select_modification():
 
 
 
-def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_details):
+def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_details, project):
+
+    server = project.server
 
     # Specify the folder to host the modified clips
-    mod_clips_folder = "modified_" + movie_i +"_clips"
+    if server == "SNIC":
+        mod_clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+"modified_"+movie_i+"_clips"
+    else:
+        mod_clips_folder = "modified_" + movie_i +"_clips"
     
     # Specify the path of the modified clips
     clips_to_upload_df["modif_clip_path"] = str(Path(mod_clips_folder, "modified")) + clips_to_upload_df["clip_filename"]
@@ -474,26 +492,16 @@ def view_clips(df, movie_path):
     
     # Get path of the modified clip selected
     modified_clip_path = df[df["clip_path"]==movie_path].modif_clip_path.values[0]
-    print(modified_clip_path)
-        
-    html_code = f"""
-        <html>
-        <div style="display: flex; justify-content: space-around">
-        <div>
-          <video width=400 controls>
-          <source src={movie_path} type="video/mp4">
-        </video>
-        </div>
-        <div>
-          <video width=400 controls>
-          <source src={modified_clip_path} type="video/mp4">
-        </video>
-        </div>
-        </html>"""
-    
-   
-    return HTML(html_code)
+    extension = os.path.splitext(modified_clip_path)[1]
 
+    vid1=open(movie_path,'rb').read()
+    wi1 = widgets.Video(value=vid1, format=extension, width=400, height=500)
+    vid2=open(modified_clip_path,'rb').read()
+    wi2 = widgets.Video(value=vid2, format=extension, width=400, height=500)
+    a=[wi1,wi2]
+    wid=widgets.HBox(a)
+
+    return wid
 
 def set_zoo_metadata(df, project, db_info_dict):
     
