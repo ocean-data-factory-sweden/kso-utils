@@ -309,6 +309,10 @@ def check_clip_size(clips_df):
     
     if "modif_clip_path" in clips_df.columns and "no_modification" in clips_df["modif_clip_path"].values:
         clip_paths = clips_df["clip_path"].unique()
+    elif "modif_clip_path" not in clips_df.columns:
+        clip_paths = clips_df["clip_path"].unique()
+    else:
+        clip_paths = clips_df["modif_clip_path"].unique()
 
     # Get list of files with size
     files_with_size = [ (file_path, os.stat(file_path).st_size) 
