@@ -305,8 +305,11 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     return potential_start_df    
 
 
-def check_clip_size(clip_paths):
+def check_clip_size(clips_df):
     
+    if "modif_clip_path" in clips_df.columns and "no_modification" in clips_df["modif_clip_path"].values:
+        clip_paths = clips_df["clip_path"].unique()
+
     # Get list of files with size
     files_with_size = [ (file_path, os.stat(file_path).st_size) 
                         for file_path in clip_paths]
