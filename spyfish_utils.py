@@ -179,6 +179,7 @@ def concatenate_videos(df, session):
 def process_spyfish_subjects(subjects, db_path):
     
     # Merge "#Subject_type" and "Subject_type" columns to "subject_type"
+    subjects['#Subject_type'] = subjects['#Subject_type'].fillna(subjects['subject_type'])
     subjects['subject_type'] = subjects['Subject_type'].fillna(subjects['#Subject_type'])
     
     # Rename columns to match the db format
