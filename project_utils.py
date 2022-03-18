@@ -1,3 +1,5 @@
+import os, requests
+import pandas as pd
 from dataclasses import dataclass
 from dataclass_csv import DataclassReader, DataclassWriter
 
@@ -14,9 +16,22 @@ class Project:
     photo_folder: str = None
 
 
-def find_project(project_path: str = "../db_starter/projects_list.csv", project_name: str = ''):
+def find_project(project_name: str = ''):
     '''Find project information using
        project csv path and project name'''
+    # Specify the path to the list of projects
+    project_path = "../db_starter/projects_list.csv"
+        
+    # Check path to the list of projects is a csv
+    if os.path.exists(project_path) and not project_path.endswith(".csv"):
+        logging.error("A csv file was not selected. Please try again.")
+        
+    # If list of projects doesn't exist retrieve it from github
+    if not os.path.exists(project_path):
+        github_path = "https://github.com/ocean-data-factory-sweden/koster_data_management/blob/main/db_starter/projects_list.csv?raw=true"
+        read_file = pd.read_csv(github_path)
+        read_file.to_csv(project_path, index=None)
+        
     with open(project_path) as csv:
         reader = DataclassReader(csv, Project)
         for row in reader:

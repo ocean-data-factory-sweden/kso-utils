@@ -1,3 +1,4 @@
+import os 
 import pandas as pd
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
@@ -35,27 +36,30 @@ def get_project_info(projects_csv, project_name, info_interest):
 
 def choose_project(projects_csv: str = "../db_starter/projects_list.csv"):
     
-    # Read the latest list of projects
-    if not projects_csv.endswith(".csv"):
+    # Check path to the list of projects is a csv
+    if os.path.exists(projects_csv) and not projects_csv.endswith(".csv"):
         logging.error("A csv file was not selected. Please try again.")
+        
+    # If list of projects doesn't exist retrieve it from github
+    if not os.path.exists(projects_csv):
+        projects_csv = "https://github.com/ocean-data-factory-sweden/koster_data_management/blob/main/db_starter/projects_list.csv?raw=true"
     
-    else:
-        projects_df = pd.read_csv(projects_csv)
-    
-        if "Project_name" not in projects_df.columns:
-            logging.error("We were unable to find any projects in that file, \
-                          please choose a projects csv file that matches our template.")
+    projects_df = pd.read_csv(projects_csv)
 
-        # Display the project options
-        choose_project = widgets.Dropdown(
-            options=projects_df.Project_name.unique().tolist(),
-            value=projects_df.Project_name.unique().tolist()[0],
-            description="Project:",
-            disabled=False,
-        )
+    if "Project_name" not in projects_df.columns:
+        logging.error("We were unable to find any projects in that file, \
+                      please choose a projects csv file that matches our template.")
 
-        display(choose_project)
-        return choose_project
+    # Display the project options
+    choose_project = widgets.Dropdown(
+        options=projects_df.Project_name.unique().tolist(),
+        value=projects_df.Project_name.unique().tolist()[0],
+        description="Project:",
+        disabled=False,
+    )
+
+    display(choose_project)
+    return choose_project
 
 def initiate_db(project):
     
