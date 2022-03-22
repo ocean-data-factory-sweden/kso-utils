@@ -1,4 +1,4 @@
-#t5 utils
+#t4 utils
 import argparse, os
 import kso_utils.db_utils as db_utils
 import pandas as pd
@@ -19,6 +19,7 @@ from ipywidgets import interact, Layout
 from kso_utils.zooniverse_utils import auth_session, populate_agg_annotations
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.server_utils as s_utils
+import kso_utils.t3_utils as t3
 import kso_utils.t8_utils as t8
 import kso_utils.koster_utils as k_utils
 import kso_utils.spyfish_utils as spyfish_utils
@@ -255,106 +256,84 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project, species_ids, conn):
     return frames_df
 
 
+def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
+    """
+    Function to get a frame from a movie
+    """
+    # Read the movie on cv2 and prepare to extract frames
+    cap = cv2.VideoCapture(url)
+
+    if cap.isOpened():
+        # Get the frame numbers for each movie the fps and duration
+        for index, row in tqdm(key_movie_df.iterrows(), total=key_movie_df.shape[0]):
+            # Create the folder to store the frames if not exist
+            if not os.path.exists(row["frame_path"]):
+                cap.set(1, row["frame_number"])
+                ret, frame = cap.read()
+                try:
+                    cv2.imwrite(row["frame_path"], frame)
+                except:
+                    cv2.imwrite(row["frame_path"], np.zeros((100,100,3), np.uint8))
+                    print(f"No frame was extracted for {url} at frame {row['frame_number']}")
+    else:
+        print("Missing movie", url)
+
+
+def get_movie_url(project, server_dict, f_path):
+    '''
+    Function to get the url of the movie
+    '''
+    server = project.server
+    if server == "AWS":
+        movie_key = f_path.split('/',3)[3]
+        movie_url = server_dict['client'].generate_presigned_url('get_object', 
+                                                            Params = {'Bucket': server_dict['bucket'], 
+                                                                      'Key': movie_key}, 
+                                                            ExpiresIn = 200)
+        return movie_url
+    elif server == "SNIC":
+        return f_path
 
 # Function to extract selected frames from videos
-def extract_frames(df, server, server_dict, project, frames_folder):
+def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: str):
     """
     Extract frames and save them in chosen folder.
     """
-    
-    #WIP
-    if server == "AWS":
-        
-        # Extract the key of each movie
-        df['key_movie'] = df['fpath'].apply(lambda x: x.split('/',3)[3])
-        
-        # Set the filename of the frames
-        df["frame_path"] = (
-            frames_folder
-            + df["filename"].astype(str)
-            + "_frame_"
-            + df["frame_number"].astype(str)
-            + "_"
-            + df["label"].astype(str)
-            + ".jpg"
-        )
-        
-        for key_movie in df["key_movie"].unique():
-            # generate a temp url for the movie 
-            url = server_dict['client'].generate_presigned_url('get_object', 
-                                                            Params = {'Bucket': server_dict['bucket'], 
-                                                                      'Key': key_movie}, 
-                                                            ExpiresIn = 200)
-            if url is None:
-                logging.error(f"Movie {key_movie} couldn't be found in the server.")
-            else:
-                
-                # Select the frames to download from the movie
-                key_movie_df =  df[df['key_movie'] == key_movie].reset_index()
+    # Extract server info
+    server = project.server
+    project_name = project.Project_name
 
-                # Read the movie on cv2 and prepare to extract frames
-                cap = cv2.VideoCapture(url)
+    # Set the filename of the frames
+    df["frame_path"] = (
+        frames_folder
+        + df["filename"].astype(str)
+        + "_frame_"
+        + df["frame_number"].astype(str)
+        + "_"
+        + df["label"].astype(str)
+        + ".jpg"
+    )
 
-                # Get the frame numbers for each movie the fps and duration
-                for index, row in tqdm(key_movie_df.iterrows(), total=key_movie_df.shape[0]):
-                    # Create the folder to store the frames if not exist
-                    if not os.path.exists(row["frame_path"]):
-                        cap.set(1, row["frame_number"])
-                        ret, frame = cap.read()
-                        cv2.imwrite(row["frame_path"], frame)
-       
-    
-    if server == "SNIC":
-        movie_folder = project.movie_folder
-        movie_files = s_utils.get_snic_files(server_dict["client"], movie_folder)["spath"].tolist()
+    # Koster-specific movie name extraction (i.e. make sure that weird naming does not happen))   
+    if project_name == "Koster_Seafloor_Obs":
+        movie_df = t3.retrieve_movie_info_from_server(project, server_dict)
+        df["fpath"] = df.merge(movie_df, left_on="movie_id", right_on="id", how='left')["spath"]
 
-        # Create the folder to store the frames if not exist
-        if not os.path.exists(frames_folder):
-            os.mkdir(frames_folder)
+    # Create the folder to store the frames if not exist
+    if not os.path.exists(frames_folder):
+        os.mkdir(frames_folder)
 
-        # Get movies filenames from their path
-        df["movie_filename"] = df["fpath"].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
+    for movie in df["fpath"].unique():
+        url = get_movie_url(project, server_dict, movie)
 
-        # Set the filename of the frames
-        df["frame_path"] = (
-            frames_folder
-            + df["movie_filename"].astype(str)
-            + "_frame_"
-            + df["frame_number"].astype(str)
-            + "_"
-            + df["label"].astype(str)
-            + ".jpg"
-        )
-        
-        movies_df_names = df["fpath"].apply(lambda x: os.path.basename(x)).unique()
-        
-        for movie in df["fpath"].unique():
-            key_movie_df =  df[df['fpath'] == movie].reset_index()
-            
-            try:
-                f_movie = difflib.get_close_matches(os.path.basename(movie), movie_files)[0]
-                
-                # Read the movie on cv2 and prepare to extract frames
-                cap = cv2.VideoCapture(movie_folder + f_movie)
+        if url is None:
+            logging.error(f"Movie {movie} couldn't be found in the server.")
+        else:
+            # Select the frames to download from the movie
+            key_movie_df = df[df['fpath'] == movie].reset_index()
 
-                if cap.isOpened():
-
-                    # Get the frame numbers for each movie the fps and duration
-                    for index, row in tqdm(key_movie_df.iterrows(), total=key_movie_df.shape[0]):
-                        # Create the folder to store the frames if not exist
-                        if not os.path.exists(row["frame_path"]):
-                            cap.set(1, row["frame_number"])
-                            ret, frame = cap.read()
-                            try:
-                                cv2.imwrite(row["frame_path"], frame)
-                            except:
-                                cv2.imwrite(row["frame_path"], np.zeros((100,100,3), np.uint8))
-                                print(f"No frame was extracted for {movie} at frame {row['frame_number']}")
-            
-                else:
-                    print("Missing movie", movie)
-            except:
-                print("No movie matched", movie)
+            # Read the movie on cv2 and prepare to extract frames
+            write_movie_frames(key_movie_df, url)
 
         print("Frames extracted successfully")
     
@@ -365,7 +344,8 @@ def extract_frames(df, server, server_dict, project, frames_folder):
 def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
                server_dict: dict, project, n_frames_subject=3, subsample_up_to=100):
     
-    ### Transform species names to species ids##
+    ### Transform species names to species ids ##
+
     if species_names[0] == "":
         logging.error("No species were selected. Please select at least one species before continuing.")
         
@@ -374,11 +354,11 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         
     
     ### Retrieve project-specific information and connect to db
-    movie_folder = project.movie_folder
-    server = project.server
+    movie_df = t3.retrieve_movie_info_from_server(project=project, db_info_dict=server_dict)
     conn = db_utils.create_connection(db_path)
     
-    if movie_folder == "None" and server not in ["AWS"]:
+    if len(movie_df) == 0:
+
         # Extract frames of interest from a folder with frames
         df = FileChooser('.')
         df.title = '<b>Select frame folder location</b>'
@@ -387,6 +367,11 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         def build_df(chooser):
             frame_files = os.listdir(chooser.selected)
             frame_paths = [chooser.selected+i for i in frame_files]
+            try:
+                os.symlink(chooser.selected[:-1], 'linked_frames')
+            except FileExistsError:
+                os.remove('linked_frames')
+                os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
             # TODO: Add multiple species option
             chooser.df["species_id"] = species_ids
@@ -405,7 +390,7 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         agg_params = t8.choose_agg_parameters("clip")
 
         # Select the temp location to store frames before uploading them to Zooniverse
-        df = FileChooser('/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/')
+        df = FileChooser('.')
         df.title = '<b>Choose location to store frames</b>'
             
         # Callback function
@@ -442,8 +427,12 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             frame_df = check_frames_uploaded(frame_df, project, species_ids, conn)
             
             # Extract the frames from the videos and store them in the temp location
-            chooser.df = extract_frames(frame_df, server, 
-                                        server_dict, project, chooser.selected)
+            chooser.df = extract_frames(project, frame_df, server_dict, chooser.selected)
+            try:
+                os.symlink(chooser.selected[:-1], 'linked_frames')
+            except FileExistsError:
+                os.remove('linked_frames')
+                os.symlink(chooser.selected[:-1], 'linked_frames')
                 
         # Register callback function
         df.register_callback(extract_files)

@@ -252,10 +252,24 @@ def populate_agg_annotations(annotations, subj_type, project):
     if subj_type == "frame":
         
         # Select relevant columns
-        annotations_df = annotations_df[["frame_exp_sp_id", "x", "y", "w", "h", "subject_ids"]]
+        annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
+        
+        # Set the columns in the right order
+        species_df = pd.read_sql_query("SELECT id as species_id, label FROM species", conn)
+        
+        # Combine annotation and subject information
+        annotations_df = pd.merge(
+            annotations_df,
+            species_df,
+            how="left",
+            on = "label"
+        )
+        
+        annotations_df = annotations_df[["species_id", "x", "y", "w", "h", "subject_ids"]].dropna()
         
         # Test table validity
-        db_utils.test_table(annotations_df, "agg_annotations_frame", keys=["frame_exp_sp_id"])
+        
+        db_utils.test_table(annotations_df, "agg_annotations_frame", keys=["species_id"])
 
         # Add values to agg_annotations_frame
         db_utils.add_to_table(
