@@ -285,7 +285,7 @@ def get_movie_url(project, server_dict, f_path):
     '''
     server = project.server
     if server == "AWS":
-        movie_key = f_path.split('/',3)[3]
+        movie_key = f_path.replace("%20"," ").split('/',3)[3]
         movie_url = server_dict['client'].generate_presigned_url('get_object', 
                                                             Params = {'Bucket': server_dict['bucket'], 
                                                                       'Key': movie_key}, 
