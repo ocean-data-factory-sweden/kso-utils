@@ -29,7 +29,6 @@ def find_project(project_name: str = ''):
 
     elif os.path.exists(project_path) and os.path.exists(snic_path):
         project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/project_list.csv"
-        read_file.to_csv(project_path)
         
     # If list of projects doesn't exist retrieve it from github
     elif not os.path.exists(project_path):
