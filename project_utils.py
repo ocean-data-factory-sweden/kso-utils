@@ -28,7 +28,7 @@ def find_project(project_name: str = ''):
         logging.error("A csv file was not selected. Please try again.")
 
     elif os.path.exists(project_path) and os.path.exists(snic_path):
-        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/project_list.csv"
+        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/projects_list.csv"
         
     # If list of projects doesn't exist retrieve it from github
     elif not os.path.exists(project_path):
@@ -50,7 +50,7 @@ def add_project(project_info: dict = {}):
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     if not os.path.exists(project_path) and os.path.exists(snic_path):
-        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/project_list.csv"
+        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/projects_list.csv"
     with open(project_path, "a") as f:
         project = [Project(*list(project_info.values()))]
         w = DataclassWriter(f, project, Project)
