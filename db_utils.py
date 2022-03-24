@@ -233,6 +233,9 @@ def add_movies(db_initial_info, project_name, db_path):
     )
     
     # Select only those fields of interest
+    if "Fpath" not in movies_df.columns:
+        movies_df["Fpath"] = movies_df["filename"]
+        
     movies_db = movies_df[
         ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
     ]

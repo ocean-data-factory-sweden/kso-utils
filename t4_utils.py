@@ -374,7 +374,10 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
                 os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
             # TODO: Add multiple species option
-            chooser.df["species_id"] = species_ids
+            if isinstance(species_ids, list):
+                chooser.df["species_id"] = str(species_ids)
+            else:
+                chooser.df["species_id"] = species_ids
                 
         # Register callback function
         df.register_callback(build_df)
@@ -402,7 +405,6 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         
             agg_clips_df, raw_clips_df = t8.aggregrate_classifications(clips_df, "clip",
                                                                         project, agg_params=agg_params)
-#             agg_clips_df = agg_clips_df.rename(columns={"frame_exp_sp_id": "species_id"})
             
             # Match format of species name to Zooniverse labels
             species_names_zoo = [species_name.upper() for species_name in species_names]
@@ -428,11 +430,6 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             
             # Extract the frames from the videos and store them in the temp location
             chooser.df = extract_frames(project, frame_df, server_dict, chooser.selected)
-            try:
-                os.symlink(chooser.selected[:-1], 'linked_frames')
-            except FileExistsError:
-                os.remove('linked_frames')
-                os.symlink(chooser.selected[:-1], 'linked_frames')
                 
         # Register callback function
         df.register_callback(extract_files)
