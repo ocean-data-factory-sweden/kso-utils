@@ -10,15 +10,17 @@ import kso_utils.project_utils as project_utils
 
 
 # Calculate length and fps of a movie
-def get_length(video_file):
+def get_length(video_file, movie_folder):
     
-    if os.path.isfile(video_file):
+    files = os.listdir(movie_folder)
+    
+    if os.path.basename(video_file) in files:
         cap = cv2.VideoCapture(video_file)
         fps = cap.get(cv2.CAP_PROP_FPS)     
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         length = frame_count/fps
     else:
-        print("Length and fps for", video_file, "were not calculated")
+        print("Length and fps for", video_file, "were not calculated - probably missing")
         length, fps = None, None
         
     return fps, length
@@ -90,7 +92,7 @@ def check_fps_duration(db_info_dict, project):
             movie_files = server_utils.get_snic_files(db_info_dict["client"], movie_folder)["spath"].tolist()
             f_movies = pd.Series([difflib.get_close_matches(i, movie_files)[0] for i in df["filename"]])
             full_paths = movie_folder + '/' + f_movies
-            df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(full_paths.apply(get_length, 1).tolist(), columns=["fps", "duration"])
+            df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(full_paths.apply(lambda x: get_length(x, movie_folder), 1).tolist(), columns=["fps", "duration"])
             df["SamplingStart"] = 0.0
             df["SamplingEnd"] = df["duration"]
             df.to_csv(db_info_dict["local_movies_csv"], index=False)
