@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #t3 utils
-import os, shutil
+import os, shutil, ffmpeg
 import pandas as pd
 import numpy as np
 import math
@@ -221,6 +221,7 @@ def extract_clips(df, clip_length):
                              "-force_key_frames", "1",
                              str(row['clip_path'])])
 
+            os.chmod(row['clip_path'], 0o755)
     print("clips extracted successfully")
 
 
@@ -330,61 +331,79 @@ def check_clip_size(clips_df):
         print("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
         return df
 
+class WidgetMaker(widgets.VBox):
+
+    def __init__(self):
+        '''
+        The function creates a widget that allows the user to select which modifications to run
+        '''
+        self.widget_count = widgets.IntText(description='Number of modifications:',
+                                            display="flex",
+                                            flex_flow="column",
+                                            align_items="stretch",
+                                            style={"description_width": "initial"})
+        self.bool_widget_holder = widgets.HBox(layout=widgets.Layout(width='100%',
+                                                                     display='inline-flex',
+                                                                     flex_flow='row wrap'))
+        children = [
+            self.widget_count,
+            self.bool_widget_holder,
+        ]
+        self.widget_count.observe(self._add_bool_widgets, names=['value'])
+        super().__init__(children=children)
+
+    def _add_bool_widgets(self, widg):
+        num_bools = widg['new']
+        new_widgets = []
+        for _ in range(num_bools):
+            new_widget = select_modification()
+            for wdgt in [new_widget]:
+                wdgt.description = wdgt.description + f" #{_}"
+            new_widgets.extend([new_widget])
+        self.bool_widget_holder.children = tuple(new_widgets)
+
+    @property
+    def checks(self):
+        return {
+            w.description: w.value
+            for w in self.bool_widget_holder.children
+        }
+
 
 def select_modification():
     # Widget to select the clip modification
-    
-    clip_modifications = {"Color_correction": {
-        "-c:v": "libx264",
-        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_no_compression": {
-        "-c:v": "libx264",                      
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_low_compression": {
-        "-crf": "30",
-        "-c:v": "libx264",                      
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_medium_compression": {
-        "-crf": "27",
-        "-c:v": "libx264",                      
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_high_compression": {
-        "-crf": "25",
-        "-c:v": "libx264",                      
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Blur_sensitive_info": {
-        "-crf": "30",
-        "-c:v": "libx264",
-        "-c:a": "copy",
-        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
-        [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
-        [0:v][b0]overlay=0:0[ovr0]; \
-        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
-        "-map": "[ovr1]",
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "None": {}}
+
+    clip_modifications = {"Color_correction": {"filter":
+                            ".filter('curves', '0/0 0.396/0.67 1/1', \
+                                        '0/0 0.525/0.451 1/1', \
+                                        '0/0 0.459/0.517 1/1')"} 
+                            #borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+                            , "Zoo_low_compression": {
+                            "crf": "25",
+                            }, "Zoo_medium_compression": {
+                            "crf": "27",
+                            }, "Zoo_high_compression": {
+                            "crf": "30",
+                            }, "Blur_sensitive_info": { "filter":
+                            ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
+                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
+                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
+                            "None": {}}}
     
     select_modification_widget = widgets.Dropdown(
                     options=[(a,b) for a,b in clip_modifications.items()],
-                    description="Select clip modification:",
+                    description="Select modification:",
                     ensure_option=True,
                     disabled=False,
                     style = {'description_width': 'initial'}
                 )
     
-    display(select_modification_widget)
+    #display(select_modification_widget)
     return select_modification_widget
 
 
 
-def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_details, project):
+def modify_clips(clips_to_upload_df, movie_i, modification_details, project):
 
     server = project.server
 
@@ -401,7 +420,7 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
     if os.path.exists(mod_clips_folder):
         shutil.rmtree(mod_clips_folder)
 
-    if not clip_modification=="None":
+    if len(modification_details.values()) > 0:
         
         # Save the modification details to include as subject metadata
         clips_to_upload_df["clip_modification_details"] = str(modification_details)
@@ -414,40 +433,31 @@ def modify_clips(clips_to_upload_df, movie_i, clip_modification, modification_de
         # Read each clip and modify them (printing a progress bar) 
         for index, row in tqdm(clips_to_upload_df.iterrows(), total=clips_to_upload_df.shape[0]): 
             if not os.path.exists(row['modif_clip_path']):
-                if "-vf" in modification_details:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['clip_path']),
-                                     "-c:v", modification_details["-c:v"],
-                                     "-vf", modification_details["-vf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_clip_path'])])
-                elif "-crf" in modification_details:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['clip_path']),
-                                     "-c:v", modification_details["-c:v"],
-                                     "-crf", modification_details["-crf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_clip_path'])])
-                elif "-filter_complex" in modification_details:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['clip_path']),
-                                     "-c:v", modification_details["-c:v"],
-                                     "-filter_complex", modification_details["-filter_complex"],
-                                     "-crf", modification_details["-crf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     "-map", modification_details["-map"],
-                                     str(row['modif_clip_path'])])       
+                # Set up input prompt
+                init_prompt = f"ffmpeg.input('{row['clip_path']}')"
+                full_prompt = init_prompt
+                # Set up modification
+                for transform in modification_details.values():
+                    if "filter" in transform:
+                        mod_prompt = transform['filter']
+                        full_prompt += mod_prompt
+                # Setup output prompt
+                crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+                crf_value = [i for i in crf_value if i is not None]
+                
+                if len(crf_value) > 0:
+                    crf_prompt = str(max([int(i) for i in crf_value]))
+                    full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, pix_fmt='yuv420p', vcodec='libx264')"
                 else:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['clip_path']),
-                                     "-c:v", modification_details["-c:v"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_clip_path'])])
-
+                    full_prompt += f".output('{row['modif_clip_path']}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+                # Run the modification
+                try:
+                    eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                    os.chmod(row['modif_clip_path'], 0o755)
+                except ffmpeg.Error as e:
+                    print('stdout:', e.stdout.decode('utf8'))
+                    print('stderr:', e.stderr.decode('utf8'))
+                    raise e
 
         print("Clips modified successfully")
         return clips_to_upload_df

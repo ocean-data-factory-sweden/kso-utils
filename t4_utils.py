@@ -1,5 +1,5 @@
 #t4 utils
-import argparse, os
+import argparse, os, ffmpeg
 import kso_utils.db_utils as db_utils
 import pandas as pd
 import numpy as np
@@ -272,8 +272,10 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
                 ret, frame = cap.read()
                 try:
                     cv2.imwrite(row["frame_path"], frame)
+                    os.chmod(row["frame_path"], 0o755)
                 except:
                     cv2.imwrite(row["frame_path"], np.zeros((100,100,3), np.uint8))
+                    os.chmod(row["frame_path"], 0o755)
                     print(f"No frame was extracted for {url} at frame {row['frame_number']}")
     else:
         print("Missing movie", url)
@@ -440,41 +442,28 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
 
 # Function to specify the frame modification
 def select_modification():
-    # Widget to select the clip modification
+    # Widget to select the frame modification
     
-    frame_modifications = {"Color_correction": {
-        "-vf": "curves=red=0/0 0.396/0.67 1/1:green=0/0 0.525/0.451 1/1:blue=0/0 0.459/0.517 1/1,scale=1280:-1",#borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea                         
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_no_compression": {                 
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_low_compression": {
-        "-crf": "30",                    
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_medium_compression": {
-        "-crf": "27",                   
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Zoo_high_compression": {
-        "-crf": "25",                     
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "Blur_sensitive_info": {
-        "-crf": "30",
-        "-filter_complex": "[0:v]crop=iw:ih*(15/100):0:0,boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b0]; \
-        [0:v]crop=iw:ih*(15/100):0:ih*(95/100),boxblur=luma_radius=min(w\,h)/5:chroma_radius=min(cw\,ch)/5:luma_power=1[b1]; \
-        [0:v][b0]overlay=0:0[ovr0]; \
-        [ovr0][b1]overlay=0:H*(95/100)[ovr1]",   
-        "-map": "[ovr1]",
-        "-pix_fmt": "yuv420p",
-        "-preset": "veryfast"
-        }, "None": {}}
+    frame_modifications = {"Color_correction": {"filter":
+                            ".filter('curves', '0/0 0.396/0.67 1/1', \
+                                        '0/0 0.525/0.451 1/1', \
+                                        '0/0 0.459/0.517 1/1')"} 
+                            #borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+                            , "Zoo_low_compression": {
+                            "crf": "25",
+                            }, "Zoo_medium_compression": {
+                            "crf": "27",
+                            }, "Zoo_high_compression": {
+                            "crf": "30",
+                            }, "Blur_sensitive_info": { "filter":
+                            ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
+                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
+                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
+                            "None": {}}}
     
     select_modification_widget = widgets.Dropdown(
                     options=[(a,b) for a,b in frame_modifications.items()],
-                    description="Select frame modification:",
+                    description="Select modification:",
                     ensure_option=True,
                     disabled=False,
                     style = {'description_width': 'initial'}
@@ -556,7 +545,7 @@ def view_frames(df, frame_path):
 
 
 # Function modify the frames
-def modify_frames(frames_to_upload_df, species_i, frame_modification, modification_details, project):
+def modify_frames(frames_to_upload_df, species_i, modification_details, project):
 
     server = project.server
 
@@ -574,7 +563,7 @@ def modify_frames(frames_to_upload_df, species_i, frame_modification, modificati
     if os.path.exists(mod_frames_folder):
         shutil.rmtree(mod_frames_folder)
 
-    if not frame_modification=="None":
+    if len(modification_details.values()) > 0:
         
         # Save the modification details to include as subject metadata
         frames_to_upload_df["frame_modification_details"] = str(modification_details)
@@ -587,36 +576,31 @@ def modify_frames(frames_to_upload_df, species_i, frame_modification, modificati
         # Read each clip and modify them (printing a progress bar) 
         for index, row in tqdm(frames_to_upload_df.iterrows(), total=frames_to_upload_df.shape[0]): 
             if not os.path.exists(row['modif_frame_path']):
-                if "-vf" in modification_details:
-                    subprocess.check_output(["ffmpeg",
-                                     "-i", str(row['frame_path']),
-                                     "-vf", modification_details["-vf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_frame_path'])])
-                elif "-crf" in modification_details:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['frame_path']),
-                                     "-crf", modification_details["-crf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_frame_path'])])
-                elif "-filter_complex" in modification_details:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['frame_path']),
-                                     "-filter_complex", modification_details["-filter_complex"],
-                                     "-crf", modification_details["-crf"],
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     "-map", modification_details["-map"],
-                                     str(row['modif_frame_path'])])       
+                # Set up input prompt
+                init_prompt = f"ffmpeg.input('{row['frame_path']}')"
+                full_prompt = init_prompt
+                # Set up modification
+                for transform in modification_details.values():
+                    if "filter" in transform:
+                        mod_prompt = transform['filter']
+                        full_prompt += mod_prompt
+                # Setup output prompt
+                crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+                crf_value = [i for i in crf_value if i is not None]
+                
+                if len(crf_value) > 0:
+                    crf_prompt = str(max([int(i) for i in crf_value]))
+                    full_prompt += f".output('{row['modif_frame_path']}', crf={crf_prompt}, pix_fmt='yuv420p')"
                 else:
-                    subprocess.call(["ffmpeg",
-                                     "-i", str(row['frame_path']),
-                                     "-pix_fmt", modification_details["-pix_fmt"],
-                                     "-preset", modification_details["-preset"],
-                                     str(row['modif_frame_path'])])
-
+                    full_prompt += f".output('{row['modif_frame_path']}', crf=20, pix_fmt='yuv420p')"
+                # Run the modification
+                try:
+                    eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                    os.chmod(row['modif_frame_path'], 0o755)
+                except ffmpeg.Error as e:
+                    print('stdout:', e.stdout.decode('utf8'))
+                    print('stderr:', e.stderr.decode('utf8'))
+                    raise e
 
         print("Frames modified successfully")
         
