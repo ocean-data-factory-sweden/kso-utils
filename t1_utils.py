@@ -706,7 +706,7 @@ def select_go_pro_files(go_pro_folder, db_info_dict):
         go_pro_files_i = go_pro_files_i.Key.unique()        
         
     else:
-        go_pro_files_i = [go_pro_folder.result.value + movie for movie in os.listdir(go_pro_folder.result.value)]
+        go_pro_files_i = [os.path.join(go_pro_folder.result.selected, movie) for movie in os.listdir(go_pro_folder.result.selected)]
 
     # Specify the formats of the movies to select
     movie_formats = movie_utils.get_movie_extensions()
@@ -926,7 +926,7 @@ def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go
     
    
     if go_pro_folder.kwargs['server_or_locally']=="Cloud":
-        concat_folder = "concat_video/"
+        concat_folder = "concat_video"
         local_go_pro_files = [i.split('/', 2)[-1] for i in go_pro_files]
         
         print("Downloading the go_pro files")
@@ -942,12 +942,12 @@ def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go
         
     else:
         # Specify temp folder to host the concat video
-        concat_folder = go_pro_folder+"concat_video/"
+        concat_folder = go_pro_folder.result.selected+"concat_video"
 
 
     # Specify the filename and path for the concatenated movie
     filename = deployment_name+".MP4"
-    concat_video = concat_folder+filename
+    concat_video = os.path.join(concat_folder,filename)
 
     # Save list as text file
     textfile = open("a_file.txt", "w")
@@ -964,7 +964,7 @@ def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go
         
         # Concatenate the videos
         subprocess.call(["ffmpeg",
-                         "-f", "concat", 
+                         "-f", "concat",
                          "-safe", "0",
                          "-i", "a_file.txt", 
                          "-c", "copy",
