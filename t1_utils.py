@@ -553,6 +553,8 @@ def confirm_survey(survey_i, db_info_dict):
         print("The details of the new survey are:")
         for ind in new_survey_row.T.index:
             print(ind,"-->", new_survey_row.T[0][ind])
+            
+        return new_survey_row
 
         # Save changes in survey csv- locally and in the server
         async def f():
@@ -560,6 +562,9 @@ def confirm_survey(survey_i, db_info_dict):
             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
                 # Load the csv with sites information
                 surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+                
+                # Drop unnecessary columns
+                new_survey_row = new_survey_row.drop(columns=['ShortFolder'])
                 
                 # Check the columns are the same
                 diff_columns = list(set(surveys_df.columns.sort_values().values) - set(new_survey_row.columns.sort_values().values))
@@ -618,6 +623,101 @@ def confirm_survey(survey_i, db_info_dict):
 ####################################################    
 ############### MOVIES FUNCTIONS ###################
 ####################################################
+
+def select_date_site(db_info_dict):
+    # Retrieve info from the survey folders in the cloud
+    survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+                                                            Prefix=survey_folder, 
+                                                            Delimiter='/')
+
+    # Convert info to dataframe
+    survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
+                
+                
+    # Define function to select folder with go-pro files
+    def deployment_exist(deployment_date_site, cloud_list):
+        # If deployment_date_site selected exists...
+        if deployment_date_site in cloud_list:
+            
+            # Widget to verify the video is correct
+            w1 = interactive(sel_subfolder,
+                             survey_folder = widgets.Dropdown(
+                                 options = survey_folders.Prefix.unique(),
+                                 description = 'Select the folder of the survey to process:',
+                                 disabled = False,
+                                 layout=Layout(width='90%'),
+                                 style = {'description_width': 'initial'}
+                             )
+                            )
+            display(w1)
+
+            return w1
+            
+            
+        else:
+            
+        
+    
+        # If local slected...
+        if server_or_locally == 'Local':
+            # Widget to select the local folder of interest
+            fc = FileChooser('/')
+            fc.title = '<b>Select the local folder with the Go-pro videos</b>'
+            # Switch to folder-only mode
+            fc.show_only_dirs = True
+            display(fc)
+
+            return fc
+    
+    
+    # Display the options
+    w = interactive(f,
+                    server_or_locally = widgets.Dropdown(
+                        options = ['Local','Cloud'],
+                        description = 'Select files stored on the cloud or locally:',
+                        disabled = False,
+                        layout=Layout(width='90%'),
+                        style = {'description_width': 'initial'}
+                    )
+                   )
+
+    display(w)
+
+    return w
+
+
+# Select site and date of the video
+def select_SiteID(db_initial_info):
+    
+    # Read csv as pd
+    sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
+
+    # Existing sites
+    exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
+    
+    site_widget = widgets.Dropdown(
+                options = exisiting_sites,
+                description = 'Site ID:',
+                disabled = False,
+                layout=Layout(width='50%'),
+                style = {'description_width': 'initial'}
+            )
+    display(site_widget)
+
+    return site_widget
+
+
+def select_eventdate():
+    # Select the date 
+    date_widget = widgets.DatePicker(
+        description='Deployment or event date:',
+        disabled=False,
+        layout=Layout(width='50%'),
+        style = {'description_width': 'initial'}
+    )
+    display(date_widget)
+    
+    return date_widget  
 
 def select_go_pro_folder(db_info_dict):
     # Define function to select folder with go-pro files
@@ -717,202 +817,8 @@ def select_go_pro_files(go_pro_folder, db_info_dict):
     print("The movies selected are:")
     print(*go_pro_movies_i, sep='\n')
 
-    return go_pro_movies_i
-    
-# def select_go_pro_folder1(db_info_dict): 
-    
-    
-#     # Define function to select folder with go-pro files
-#     def f(server_or_locally):
-#         # If cloud slected...
-#         if server_or_locally == 'Cloud':
-#             # Retrieve info from the survey folders in the cloud
-#             survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
-#                                                                 Prefix="", 
-#                                                                 Delimiter='/')
-            
-#             # Convert info to dataframe
-#             survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
-            
-#             # Widget to select the survey folder of interest
-#             w1 = interactive(sel_subfolder,
-#                              survey_folder = widgets.Dropdown(
-#                                  options = survey_folders.Prefix.unique(),
-#                                  description = 'Select the folder of the survey to process:',
-#                                  disabled = False,
-#                                  layout=Layout(width='90%'),
-#                                  style = {'description_width': 'initial'}
-#                              )
-#                             )
-#             display(w1)
-            
-#             return w1
-
-
-#         # If local slected...
-#         if server_or_locally == 'Local':
-#             # Widget to select the local folder of interest
-#             fc = FileChooser('/')
-#             fc.title = '<b>Select the local folder with the Go-pro videos</b>'
-
-#             display(fc)
-            
-#             return fc
+    return go_pro_movies_i 
         
-#     # Widget to select and confirm the local folder of interest
-#     def file_choose_confirm():
-#         # Widget to select the local folder of interest
-#         fc = FileChooser('/')
-#         fc.title = '<b>Select the local folder with the Go-pro videos</b>'
-
-#         # Widget to find the movies
-#         buttons = widgets.Button(
-#             description="Check the filenames of the videos",
-#             button_style="primary",
-#             layout=Layout(width='280px'),
-#         )
-
-
-#         # Combine both widgets
-#         filechooser_widget = widgets.VBox([fc, buttons])
-
-#         # Set empty go_pro_files
-#         go_pro_files_i = ""
-
-#         # define what happens after the user press the button
-#         def button_click(change):
-#             print("made it")
-#             go_pro_files_i = [fc.selected + movie for movie in os.listdir(fc.selected)]
-#             return go_pro_files_i
-
-#         buttons.on_click(button_click)
-
-#         display(filechooser_widget)
-
-#         return go_pro_files_i
-            
-        
-#     # Define function to list files inside the local folder selected
-#     def local_files_to_list(fc):
-        
-#         go_pro_files = list_go_files(go_pro_files_i)
-#         # Save the names of the go_pro files
-#         print(fc.selected)
-#         go_pro_files_i = [fc + movie for movie in os.listdir(fc.selected)]
-#         print(go_pro_files_i)
-#         go_pro_files = list_go_files(go_pro_files_i)
-
-#         return go_pro_files
-        
-    
-#     # Define function for cloud option to select subfolder within the survey folder
-#     def sel_subfolder(survey_folder):
-#         # Retrieve info from the survey folders in the cloud
-#         survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
-#                                                                 Prefix=survey_folder, 
-#                                                                 Delimiter='/')
-        
-#         # Convert info to dataframe
-#         survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
-        
-#         # Widget to select the local folder of interest
-#         w3 = interactive(files_subfolder,
-#                          survey_subfolder = widgets.Dropdown(
-#                                 options = survey_subfolders.Prefix.unique(),
-#                                 description = 'Select the folder of the deployment to process:',
-#                                 disabled = False,
-#                                 layout=Layout(width='80%'),
-#                                 style = {'description_width': 'initial'}
-#                             ))
-#         display(w3)
-
-#         return w3
-    
-#     def files_subfolder(survey_subfolder):
-#          # Retrieve info from the survey folders in the cloud
-#         files_subfolder = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
-#                                                bucket = db_info_dict["bucket"], 
-#                                                prefix = survey_subfolder)
-        
-        
-        
-#         # Get a list of the go_pro_folders
-#         go_pro_files = list_go_files(files_subfolder.Key.unique())
-
-#         return go_pro_files
-        
-
-#     # Define function to return the filenames of the go-pro movies inside a folder
-#     def list_go_files(list_of_files):
-        
-#         if list_of_files != "":
-#             # Specify the formats of the movies to select
-#             movie_formats = movie_utils.get_movie_extensions()
-
-#             # Select only movie files
-#             go_pro_movies_i = [s for s in list_of_files if any(xs in s for xs in movie_formats)]
-
-#             print("The movies selected are:")
-#             print(*go_pro_movies_i, sep='\n')
-
-#             return go_pro_movies_i
-        
-#         else: 
-#             return None 
-
-
-    
-#     # Display the options
-#     w = interactive(f,
-#                     server_or_locally = widgets.Dropdown(
-#                         options = ['Local','Cloud'],
-#                         description = 'Select files stored on the cloud or locally:',
-#                         disabled = False,
-#                         layout=Layout(width='90%'),
-#                         style = {'description_width': 'initial'}
-#                     )
-#                    )
-
-#     display(w)
-
-#     return w
-    
-    
-    
-
-# Select site and date of the video
-def select_SiteID(db_initial_info):
-    
-    # Read csv as pd
-    sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
-
-    # Existing sites
-    exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
-    
-    site_widget = widgets.Dropdown(
-                options = exisiting_sites,
-                description = 'Site ID:',
-                disabled = False,
-                layout=Layout(width='50%'),
-                style = {'description_width': 'initial'}
-            )
-    display(site_widget)
-
-    return site_widget
-
-
-def select_eventdate():
-    # Select the date 
-    date_widget = widgets.DatePicker(
-        description='Deployment or event date:',
-        disabled=False,
-        layout=Layout(width='50%'),
-        style = {'description_width': 'initial'}
-    )
-    display(date_widget)
-    
-    return date_widget  
-    
 
 # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
 def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go_pro_files):
