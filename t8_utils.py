@@ -470,6 +470,7 @@ def aggregrate_classifications(df, subj_type, project, agg_params):
         )
 
         agg_class_df["subject_type"] = "frame"
+        agg_class_df["label"] = agg_class_df["label"].apply(lambda x: x.split("(")[0].strip())
         
         # Add the empty frames
         agg_class_df = pd.concat([agg_class_df,agg_labels_df_empty])

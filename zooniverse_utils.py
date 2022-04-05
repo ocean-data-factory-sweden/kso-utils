@@ -256,6 +256,7 @@ def populate_agg_annotations(annotations, subj_type, project):
         
         # Set the columns in the right order
         species_df = pd.read_sql_query("SELECT id as species_id, label FROM species", conn)
+        species_df["label"] = species_df["label"].apply(lambda x: x[:-1] if x=="Blue mussels" else x)
         
         # Combine annotation and subject information
         annotations_df = pd.merge(

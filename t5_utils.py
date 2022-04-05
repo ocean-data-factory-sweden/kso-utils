@@ -57,25 +57,7 @@ def choose_classes(db_path: str = "koster_lab.db"):
     display(w)
     return w
 
-def choose_test_prop():
-        
-    w = widgets.FloatSlider(
-        value=0.2,
-        min=0.0,
-        max=1.0,
-        step=0.1,
-        description='Test proportion:',
-        disabled=False,
-        continuous_update=False,
-        orientation='horizontal',
-        readout=True,
-        readout_format='.1f',
-        display='flex',
-        flex_flow='column',
-        align_items='stretch',
-        style= {'description_width': 'initial'}
-    )
-    
+def choose_train_params():
     v = widgets.FloatLogSlider(
         value=3,
         base=2,
@@ -115,9 +97,31 @@ def choose_test_prop():
         style= {'description_width': 'initial'}
     )
     
-    box = widgets.HBox([w, v, z, z1])
-   
+    box = widgets.HBox([v, z, z1])
     display(box)
-    return w, v, z, z1
+    return v, z, z1
+
+
+def choose_test_prop():
+        
+    w = widgets.FloatSlider(
+        value=0.2,
+        min=0.0,
+        max=1.0,
+        step=0.1,
+        description='Test proportion:',
+        disabled=False,
+        continuous_update=False,
+        orientation='horizontal',
+        readout=True,
+        readout_format='.1f',
+        display='flex',
+        flex_flow='column',
+        align_items='stretch',
+        style= {'description_width': 'initial'}
+    )
+   
+    display(w)
+    return w
 
 
