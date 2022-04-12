@@ -447,7 +447,7 @@ def modify_clips(clips_to_upload_df, movie_i, modification_details, project):
                 
                 if len(crf_value) > 0:
                     crf_prompt = str(max([int(i) for i in crf_value]))
-                    full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, pix_fmt='yuv420p', vcodec='libx264')"
+                    full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
                 else:
                     full_prompt += f".output('{row['modif_clip_path']}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
                 # Run the modification
