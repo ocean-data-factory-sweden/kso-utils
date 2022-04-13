@@ -8,13 +8,17 @@ import datetime
 import subprocess
 import logging
 import difflib
+import random
 from pathlib import Path
 
 from tqdm import tqdm
 from IPython.display import HTML, display, update_display, clear_output
 from ipywidgets import interact, interactive, Layout
 from kso_utils.zooniverse_utils import auth_session
+from kso_utils.t4_utils import get_movie_url
 import ipywidgets as widgets
+from IPython.display import HTML
+
 
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
@@ -140,6 +144,79 @@ def check_movie_uploaded(movie_i, db_info_dict):
     else:
         print(movie_i, "has not been uploaded to Zooniverse yet")
 
+def select_clip_length():
+    # Widget to record the length of the clips
+    ClipLength_widget = widgets.Dropdown(
+        options=[10,5],
+        value=10,
+        description="Length of clips:",
+        style = {'description_width': 'initial'},
+        ensure_option=True,
+        disabled=False
+    )  
+
+    return ClipLength_widget
+
+def select_clip_length():
+    # Widget to record the length of the clips
+    ClipLength_widget = widgets.Dropdown(
+        options=[10,5],
+        value=10,
+        description="Length of clips:",
+        style = {'description_width': 'initial'},
+        ensure_option=True,
+        disabled=False
+    )  
+
+    return ClipLength_widget
+
+def select_random_clips(movie_i, db_info_dict):
+  # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
+
+    # Query info about the movie of interest
+    movie_df = pd.read_sql_query(
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'", conn)
+    
+    # Select n number of clips at random
+    def n_random_clips(clip_length, n_clips):
+
+        # Create a list of starting points for n number of clips
+        duration_movie = math.floor(movie_df["duration"].values[0])
+        starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
+        
+        # Seave the outputs in a dictionary
+        random_clips_info = {
+                # The starting points of the clips
+                "clip_start_time": starting_clips,
+                # The length of the clips
+                "random_clip_length": clip_length
+        }
+
+        print(random_clips_info)
+
+        return random_clips_info
+
+
+    # Select the number of clips to upload 
+    clip_length_number = interactive(n_random_clips, 
+                                     clip_length = select_clip_length(),
+                                     n_clips = widgets.IntSlider(
+                                          value=3,
+                                          min=1,
+                                          max=5,
+                                          step=1,
+                                          description='Number of random clips:',
+                                          disabled=False,
+                                          layout=Layout(width='50%'),
+                                          style = {'description_width': 'initial'})
+                                     )
+
+                                   
+    display(clip_length_number)
+    
+    return clip_length_number  
+
 
 def select_clip_n_len(movie_i, db_info_dict):
     
@@ -163,13 +240,7 @@ def select_clip_n_len(movie_i, db_info_dict):
 
     # Select the number of clips to upload 
     clip_length_number = interactive(to_clips, 
-                              clip_length = widgets.Dropdown(
-                                 options=[10,5],
-                                 value=10,
-                                 description="Length of clips:",
-                                 style = {'description_width': 'initial'},
-                                 ensure_option=True,
-                                 disabled=False,),
+                              clip_length = select_clip_length(),
                              clips_range = widgets.IntRangeSlider(value=[movie_df.sampling_start.values,
                                                                          movie_df.sampling_end.values],
                                                                   min=0,
@@ -195,6 +266,23 @@ def review_clip_selection(clip_selection, movie_i):
     print("starting at", datetime.timedelta(seconds=start_trim), 
           "and ending at", datetime.timedelta(seconds=end_trim))
 
+
+# Function to previews the movie
+def preview_movie(project, db_info_dict, available_movies_df, movie_i):
+
+  # Add the key of the movie of interest
+  movie_selected = available_movies_df[available_movies_df["filename"]==movie_i.value].reset_index(drop=True)
+
+  # Make sure only one movie is selected
+  if len(movie_selected.index)>1:
+    print("There are several movies with the same filename. This should be fixed!")
+  
+  else:
+    
+    # Generate ctemporary path to the movie select
+    movie_selected["movie_path"] = get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
+
+    return HTML(f"""<video src={movie_selected["movie_path"].values[0]} width=800 controls/>""")
 
 # Func to expand seconds
 def expand_list(df, list_column, new_column):
@@ -225,21 +313,27 @@ def extract_clips(df, clip_length):
     print("clips extracted successfully")
 
 
-def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, project):
+def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, project, example_clips = False):
         
-    # Calculate the max number of clips available
-    clip_length = clip_selection.kwargs['clip_length']
-    clip_numbers = clip_selection.result
-    start_trim = clip_selection.kwargs['clips_range'][0]
-    end_trim = clip_selection.kwargs['clips_range'][1]
-
     # Filter the df for the movie of interest
     movie_i_df = available_movies_df[available_movies_df['filename']==movie_i].reset_index(drop=True)
 
-    # Calculate all the seconds for the new clips to start
-    movie_i_df["seconds"] = [
-        list(range(start_trim, int(math.floor(end_trim / clip_length) * clip_length), clip_length))
-    ]
+    if example_clips:
+        # Specify the starting seconds
+        movie_i_df["seconds"] = [random_clips_info.result["clip_start_time"]]
+        clip_length = clip_selection.result["random_clip_length"]
+        clip_numbers = len(clip_selection.result["clip_start_time"])
+    else:
+        # Calculate the max number of clips available
+        clip_length = clip_selection.kwargs['clip_length']
+        clip_numbers = clip_selection.result
+        start_trim = clip_selection.kwargs['clips_range'][0]
+        end_trim = clip_selection.kwargs['clips_range'][1]
+        
+        # Calculate all the seconds for the new clips to start
+        movie_i_df["seconds"] = [
+            list(range(start_trim, int(math.floor(end_trim / clip_length) * clip_length), clip_length))
+        ]
 
     # Reshape the dataframe with the seconds for the new clips to start on the rows
     potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
@@ -303,7 +397,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
     # Extract the videos and store them in the folder
     extract_clips(potential_start_df, clip_length)
 
-    return potential_start_df    
+    return potential_start_df      
 
 
 def check_clip_size(clips_df):
@@ -331,7 +425,7 @@ def check_clip_size(clips_df):
         print("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
         return df
 
-class WidgetMaker(widgets.VBox):
+class clip_modification_widget(widgets.VBox):
 
     def __init__(self):
         '''
@@ -433,31 +527,41 @@ def modify_clips(clips_to_upload_df, movie_i, modification_details, project):
         # Read each clip and modify them (printing a progress bar) 
         for index, row in tqdm(clips_to_upload_df.iterrows(), total=clips_to_upload_df.shape[0]): 
             if not os.path.exists(row['modif_clip_path']):
-                # Set up input prompt
-                init_prompt = f"ffmpeg.input('{row['clip_path']}')"
-                full_prompt = init_prompt
-                # Set up modification
-                for transform in modification_details.values():
-                    if "filter" in transform:
-                        mod_prompt = transform['filter']
-                        full_prompt += mod_prompt
-                # Setup output prompt
-                crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
-                crf_value = [i for i in crf_value if i is not None]
+                # TO TIDY UP
+                if gpu_available:
+                    subprocess.call(["ffmpeg",
+                                   "-hwaccel", "cuda",
+                                   "-hwaccel_output_format", "cuda",
+                                   "-i", row["clip_path"], 
+                                   "-c:v", "h264_nvenc",
+                                   row['modif_clip_path']])
                 
-                if len(crf_value) > 0:
-                    crf_prompt = str(max([int(i) for i in crf_value]))
-                    full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
                 else:
-                    full_prompt += f".output('{row['modif_clip_path']}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-                # Run the modification
-                try:
-                    eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                    os.chmod(row['modif_clip_path'], 0o755)
-                except ffmpeg.Error as e:
-                    print('stdout:', e.stdout.decode('utf8'))
-                    print('stderr:', e.stderr.decode('utf8'))
-                    raise e
+                    # Set up input prompt
+                    init_prompt = f"ffmpeg.input('{row['clip_path']}')"
+                    full_prompt = init_prompt
+                    # Set up modification
+                    for transform in modification_details.values():
+                        if "filter" in transform:
+                            mod_prompt = transform['filter']
+                            full_prompt += mod_prompt
+                    # Setup output prompt
+                    crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+                    crf_value = [i for i in crf_value if i is not None]
+
+                    if len(crf_value) > 0:
+                        crf_prompt = str(max([int(i) for i in crf_value]))
+                        full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                    else:
+                        full_prompt += f".output('{row['modif_clip_path']}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+                    # Run the modification
+                    try:
+                        eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                        os.chmod(row['modif_clip_path'], 0o755)
+                    except ffmpeg.Error as e:
+                        print('stdout:', e.stdout.decode('utf8'))
+                        print('stderr:', e.stderr.decode('utf8'))
+                        raise e
 
         print("Clips modified successfully")
         return clips_to_upload_df
