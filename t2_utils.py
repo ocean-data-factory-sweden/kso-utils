@@ -625,6 +625,125 @@ def confirm_survey(survey_i, db_info_dict):
 ############### MOVIES FUNCTIONS ###################
 ####################################################
 
+# Select sites of interest
+def select_deployments(db_info_dict, survey_i):
+    # Read surveys csv
+    surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
+
+    # Return the name of the survey
+    survey_name = survey_i.result.value
+
+    # Save the SurveyID that match the survey name
+    surveys_df_deployment = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
+    
+    # Save the marine reserve associated with the survey
+    mar_res_deployment = surveys_df_deployment["LinkToMarineReserve"].unique()[0]
+
+    # Read csv as pd
+    sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
+
+    # Select sites from the deployment
+    sitesdf_deployment = sitesdf[sitesdf["LinkToMarineReserve"]==mar_res_deployment].reset_index(drop=True)
+    
+    # Convert the sites to list
+    exisiting_sites = sitesdf_deployment.sort_values("SiteID").SiteID.unique()
+    
+    site_widget = widgets.SelectMultiple(
+                options = exisiting_sites,
+                description = 'Select the sites of interest:',
+                disabled = False,
+                layout=Layout(width='80%'),
+                style = {'description_width': 'initial'}
+            )
+    display(site_widget)
+
+    return site_widget
+    
+def check_deployments_interest(db_info_dict, survey_i, deployments_interest):
+    
+    ###### Save the name of the survey
+    # Load the csv with with sites and survey choices
+    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+    
+    if isinstance(survey_i.result, dict):
+        # Save the responses as a new row for the survey csv file
+        new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
+        new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
+
+        # Save the year of the survey
+#         survey_year = new_survey_row["SurveyStartDate"].values[0].strftime("%Y")
+        survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
+        
+                
+    else:
+        # Read surveys csv
+        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
+        
+        # Return the name of the survey
+        survey_name = survey_i.result.value
+        
+        # Save the SurveyID that match the survey name
+        new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
+                
+        # Save the year of the survey
+        survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
+                       
+        
+    # Get prepopulated fields for the survey
+    new_survey_row[["ShortFolder"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["ShortFolder"]].values[0]
+
+    # Save the "server filename" of the survey 
+    short_marine_reserve = new_survey_row["ShortFolder"].values[0]
+
+    # Save the "server filename" of the survey 
+    survey_server_name = short_marine_reserve + "-buv-" + str(survey_year) + "/"
+            
+    # Save the beginning of the survey
+    survey_start = pd.Timestamp(new_survey_row["SurveyStartDate"].values[0]).to_pydatetime()
+        
+    # Retrieve deployments info from the survey of interest
+    deployments_server_name = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
+                                                            Prefix=survey_server_name,
+                                                            Delimiter='/')
+
+    # Convert info to dataframe
+    deployments_server_name = pd.DataFrame.from_dict(deployments_server_name['CommonPrefixes'])
+    
+    # Check each deployment selected:
+    for deployment_i in deployments_interest.value:
+        # Specify the name of the folder of the deployment
+        deployment_site_folder = survey_server_name + deployment_i + "/"
+        
+        if deployment_site_folder in deployments_server_name['Prefix'].to_list():
+        
+        # Retrieve files within the folder of interest
+            files_in_deployment_dict = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
+                                                                    Prefix=deployment_site_folder)
+            
+            # Convert info to dataframe
+            files_in_deployment = pd.DataFrame.from_dict(files_in_deployment_dict['Contents'])
+            print("The deployment has the following files:","\n", files_in_deployment.Key.to_list())
+            
+            if len(files_in_deployment["Key"].unique())>1:
+                # Launch a dropdown to display the video of interest
+                movie_display = interactive(preview_aws_movie,
+                                            db_info_dict = db_info_dict,
+                                            movie_key = movies_to_preview(files_in_deployment["Key"])
+                                            )
+
+            else:
+                movie_key = files_in_deployment["Key"].unique()[0]
+                movie_display = preview_aws_movie(
+                    db_info_dict = db_info_dict,
+                    movie_key = movie_key
+                )
+                      
+           
+            display(movie_display)
+            
+        
+
+
 # Select site and date of the video
 def select_SiteID(db_initial_info):
     
