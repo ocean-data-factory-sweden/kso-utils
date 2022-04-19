@@ -501,7 +501,7 @@ def select_modification():
 
 
 
-def modify_clips(clips_to_upload_df, movie_i, modification_details, project):
+def modify_clips(clips_to_upload_df, movie_i, modification_details, project, gpu_available= False):
 
     server = project.server
 
