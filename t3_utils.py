@@ -299,6 +299,10 @@ def expand_list(df, list_column, new_column):
 def extract_clips(df, clip_length): 
     # Read each movie and extract the clips (printing a progress bar) 
     for index, row in tqdm(df.iterrows(), total=df.shape[0]):
+        print(str(row['clip_path']))
+        print("upl_seconds", str(row['upl_seconds']))
+        print("clip_length", str(clip_length))
+        print("full_path", str(row['full_path']))
         if not os.path.exists(row['clip_path']):
             subprocess.call(["ffmpeg", 
                              "-ss", str(row['upl_seconds']), 
@@ -320,7 +324,7 @@ def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, pro
 
     if example_clips:
         # Specify the starting seconds
-        movie_i_df["seconds"] = [random_clips_info.result["clip_start_time"]]
+        movie_i_df["seconds"] = [clip_selection.result["clip_start_time"]]
         clip_length = clip_selection.result["random_clip_length"]
         clip_numbers = len(clip_selection.result["clip_start_time"])
     else:
