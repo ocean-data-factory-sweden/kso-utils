@@ -1,22 +1,16 @@
-# +
-from tracemalloc import start
+# base imports
 import pandas as pd
-import numpy as np
-import json, io, os
-#from db_setup.process_frames import filter_bboxes
-import kso_utils.db_utils as db_utils
-from collections import OrderedDict
-from IPython.display import HTML, display, update_display, clear_output
-import ipywidgets as widgets
-from ipywidgets import interact
-from ipyfilechooser import FileChooser
-import asyncio
-
-import wandb
+import os
 import paramiko
 from paramiko import SSHClient
 from scp import SCPClient
 
+# widget imports
+from IPython.display import display
+import ipywidgets as widgets
+
+# util imports
+import kso_utils.db_utils as db_utils
 
 # -
 

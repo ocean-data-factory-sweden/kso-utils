@@ -1,7 +1,13 @@
-import os, requests
+# base imports
+import os, logging
 import pandas as pd
 from dataclasses import dataclass
 from dataclass_csv import DataclassReader, DataclassWriter
+
+# Logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 @dataclass
 class Project:

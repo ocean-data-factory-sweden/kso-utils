@@ -1,33 +1,21 @@
 #t4 utils
-import argparse, os, ffmpeg
-import kso_utils.db_utils as db_utils
+# base imports
+import os, ffmpeg
 import pandas as pd
 import numpy as np
-import math
-import subprocess
 import shutil
 import logging
-import pims
 import cv2
-import difflib
 
+# widget imports
 from tqdm import tqdm
 from PIL import Image
-from IPython.display import HTML, display, update_display, clear_output, Image
+from IPython.display import display, clear_output
 import ipywidgets as widgets
 from ipywidgets import interact, Layout
-from kso_utils.zooniverse_utils import auth_session, populate_agg_annotations
-import kso_utils.tutorials_utils as t_utils
-import kso_utils.server_utils as s_utils
-import kso_utils.t3_utils as t3
-import kso_utils.t8_utils as t8
-import kso_utils.koster_utils as k_utils
-import kso_utils.spyfish_utils as spyfish_utils
-import kso_utils.project_utils as project_utils
 from ipyfilechooser import FileChooser
 from pathlib import Path
 from datetime import date
-
 from panoptes_client import (
     SubjectSet,
     Subject,
@@ -35,8 +23,16 @@ from panoptes_client import (
     Panoptes,
 )
 
-# Logging
+# util imports
+from kso_utils.zooniverse_utils import auth_session, populate_agg_annotations
+import kso_utils.tutorials_utils as t_utils
+import kso_utils.db_utils as db_utils
+import kso_utils.server_utils as s_utils
+import kso_utils.koster_utils as k_utils
+import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.t8_utils as t8
 
+# Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -281,21 +277,6 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
         print("Missing movie", url)
 
 
-def get_movie_url(project, server_dict, f_path):
-    '''
-    Function to get the url of the movie
-    '''
-    server = project.server
-    if server == "AWS":
-        movie_key = f_path.replace("%20"," ").split('/',3)[3]
-        movie_url = server_dict['client'].generate_presigned_url('get_object', 
-                                                            Params = {'Bucket': server_dict['bucket'], 
-                                                                      'Key': movie_key}, 
-                                                            ExpiresIn = 5400)
-        return movie_url
-    elif server == "SNIC":
-        return f_path
-
 # Function to extract selected frames from videos
 def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: str):
     """
@@ -318,7 +299,7 @@ def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: 
 
     # Koster-specific movie name extraction (i.e. make sure that weird naming does not happen))   
     if project_name == "Koster_Seafloor_Obs":
-        movie_df = t3.retrieve_movie_info_from_server(project, server_dict)
+        movie_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         df["fpath"] = df.merge(movie_df, left_on="movie_id", right_on="id", how='left')["spath"]
 
     # Create the folder to store the frames if not exist
@@ -326,7 +307,7 @@ def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: 
         os.mkdir(frames_folder)
 
     for movie in df["fpath"].unique():
-        url = get_movie_url(project, server_dict, movie)
+        url = s_utils.get_movie_url(project, server_dict, movie)
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -356,7 +337,7 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         
     
     ### Retrieve project-specific information and connect to db
-    movie_df = t3.retrieve_movie_info_from_server(project=project, db_info_dict=server_dict)
+    movie_df = s_utils.retrieve_movie_info_from_server(project=project, db_info_dict=server_dict)
     conn = db_utils.create_connection(db_path)
     
     if len(movie_df) == 0:
@@ -369,11 +350,6 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         def build_df(chooser):
             frame_files = os.listdir(chooser.selected)
             frame_paths = [chooser.selected+i for i in frame_files]
-            try:
-                os.symlink(chooser.selected[:-1], 'linked_frames')
-            except FileExistsError:
-                os.remove('linked_frames')
-                os.symlink(chooser.selected[:-1], 'linked_frames')
             chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
             # TODO: Add multiple species option
             if isinstance(species_ids, list):

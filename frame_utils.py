@@ -1,8 +1,8 @@
-import os, sys, re
+# base imports
+import os
 import argparse
 import pims
 import db_utils
-import numpy as np
 import cv2 as cv
 import pandas as pd
 from tqdm import tqdm
@@ -66,7 +66,7 @@ def main():
     args = parser.parse_args()
     conn = db_utils.create_connection(args.db_path)
     df = pd.read_sql_query(
-        "SELECT b.filename, b.frame_number, a.species_id, a.x_position, a.y_position, a.width, a.height FROM agg_annotations_frame AS a LEFT JOIN subjects AS b ON a.subject_id=b.id",
+        "SELECT b.filename, b.frame_number, a.species_id, a.x_position, a.y_position, a.width, a.height FROM (agg_annotations_frame AS a LEFT JOIN subjects AS b ON a.subject_id=b.id",
         conn,
     )
     drawBoxes(df, args.movie_dir, args.output_dir)

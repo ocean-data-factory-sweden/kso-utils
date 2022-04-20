@@ -1,14 +1,17 @@
+# base imports
 import os
+
+# widget imports
 from ipyfilechooser import FileChooser
-from ipywidgets import interactive, Layout, Button, HBox
+from ipywidgets import interactive, Layout, HBox
 from IPython.display import HTML
 
+# util imports
 import asyncio
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import pandas as pd
 import ipywidgets as widgets
-import numpy as np
 import subprocess
 import datetime
 import logging

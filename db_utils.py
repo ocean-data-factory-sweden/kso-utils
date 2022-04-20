@@ -1,18 +1,13 @@
-import os, sys
+# base imports
+import os
 import sqlite3
 import db_starter.schema as schema
-import requests
 import pandas as pd
-import numpy as np
 
-# import csv, json, sys, io
-# import operator
-# from datetime import datetime
-
+# util imports
 import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.sgu_utils as sgu_utils
-import kso_utils.movie_utils as movie_utils
 
 
 # Utility functions for common database operations

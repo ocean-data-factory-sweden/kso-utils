@@ -1,4 +1,5 @@
-import os, io, sys
+# base imports
+import os, io
 import requests
 import pandas as pd
 import numpy as np
@@ -8,17 +9,18 @@ import zipfile
 import boto3
 import paramiko
 import logging
-from paramiko import SSHClient
-from scp import SCPClient
-
-import kso_utils.tutorials_utils as tutorials_utils
-import kso_utils.spyfish_utils as spyfish_utils
-import kso_utils.project_utils as project_utils
+import difflib
 from tqdm import tqdm
 from pathlib import Path
+from paramiko import SSHClient
+
+# util imports
+import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.project_utils as project_utils
+import kso_utils.movie_utils as movie_utils
+import kso_utils.db_utils as db_utils
 
 # Logging
-
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -130,11 +132,11 @@ def get_db_init_info(project, server_dict):
 
 def update_db_init_info(project, csv_to_update):
     
-    if server == "AWS":
+    if project.server == "AWS":
             
         # Start AWS session
-        aws_access_key_id, aws_secret_access_key = server_utils.aws_credentials()
-        client = server_utils.connect_s3(aws_access_key_id, aws_secret_access_key)
+        aws_access_key_id, aws_secret_access_key = aws_credentials()
+        client = connect_s3(aws_access_key_id, aws_secret_access_key)
         bucket = project.bucket
         key = project.key
 
@@ -144,6 +146,71 @@ def update_db_init_info(project, csv_to_update):
                               bucket=bucket,
                               key=str(Path(key, csv_filename)),
                               filename=str(csv_to_update))
+        
+def retrieve_movie_info_from_server(project, db_info_dict):
+    
+    server = project.server
+    bucket_i = project.bucket
+    movie_folder = project.movie_folder
+    project_name = project.Project_name
+    
+    if server == "AWS":
+        # Retrieve info from the bucket
+        server_df = get_matching_s3_keys(client = db_info_dict["client"], 
+                                                         bucket = bucket_i, 
+                                                         suffix = movie_utils.get_movie_extensions())
+        # Get the fpath(html) from the key
+        server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
+        
+    
+    elif server == "SNIC":
+        server_df = get_snic_files(client = db_info_dict["client"], folder = movie_folder)
+    
+    elif server == "local":
+        if [movie_folder, bucket_i] == ["None", "None"]:
+            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
+            return pd.DataFrame(columns = ["filename"])
+        else:
+            server_files = os.listdir(movie_folder)
+            server_paths = [movie_folder + i for i in server_files]
+            server_df = pd.DataFrame(server_paths, columns="spath") 
+    else:
+        raise ValueError("The server type you selected is not currently supported.")
+    
+    
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
+
+    # Query info about the movie of interest
+    movies_df = pd.read_sql_query(f"SELECT * FROM movies", conn)
+
+    # Missing info for files in the "buv-zooniverse-uploads"
+    movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
+    movies_df = movies_df.merge(server_df["spath"], 
+                                left_on=['fpath'],
+                                right_on=['spath'], 
+                                how='left', 
+                                indicator=True)
+
+    # Check that movies can be mapped
+    movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
+
+    # Drop _merge columns to match sql schema
+    movies_df = movies_df.drop("_merge", axis=1)
+    
+    # Select only those that can be mapped
+    available_movies_df = movies_df[movies_df['exists']].reset_index()
+    
+    # Create a filename with ext column
+    available_movies_df["filename_ext"] = available_movies_df["spath"].str.split("/").str[-1]
+
+    # Add movie folder for SNIC
+    if server == "SNIC":
+        available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
+
+    logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
+    
+    return available_movies_df
             
             
 
@@ -323,6 +390,23 @@ def upload_file_to_s3(client, *, bucket, key, filename):
                 Bucket=bucket,
                 Key=key,
             )
+        
+
+def get_movie_url(project, server_dict, f_path):
+    '''
+    Function to get the url of the movie
+    '''
+    server = project.server
+    if server == "AWS":
+        movie_key = f_path.replace("%20"," ").split('/',3)[3]
+        movie_url = server_dict['client'].generate_presigned_url('get_object', 
+                                                            Params = {'Bucket': server_dict['bucket'], 
+                                                                      'Key': movie_key}, 
+                                                            ExpiresIn = 5400)
+        return movie_url
+    elif server == "SNIC":
+        return f_path
+
 # def retrieve_s3_buckets_info(client, bucket, suffix):
     
 #     # Select the relevant bucket
@@ -426,7 +510,7 @@ def check_movies_from_server(movies_df, sites_df, server_i):
         client = connect_s3(aws_access_key_id, aws_secret_access_key)
         
         # 
-        check_spyfish_movies(movies_df, client)
+        spyfish_utils.check_spyfish_movies(movies_df, client)
         
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="right_only"]

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-import io, os, json, csv, re
-import sqlite3
+# base imports
+import json
 import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from pathlib import Path
-from collections import OrderedDict, Counter
-from datetime import datetime
+from collections import Counter
+
+# util imports
 import kso_utils.db_utils as db_utils
 
 

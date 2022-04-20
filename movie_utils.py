@@ -1,12 +1,12 @@
-import os, cv2, sys, io
-import operator
+# base imports
+import os, cv2
 import pandas as pd
 from tqdm import tqdm
 import difflib
-import kso_utils.tutorials_utils as t_utils
+
+# util imports
 import kso_utils.server_utils as server_utils
-import kso_utils.spyfish_utils as spyfish_utils
-import kso_utils.project_utils as project_utils
+import kso_utils.db_utils as db_utils
 
 
 # Calculate length and fps of a movie
@@ -92,7 +92,8 @@ def check_fps_duration(db_info_dict, project):
             movie_files = server_utils.get_snic_files(db_info_dict["client"], movie_folder)["spath"].tolist()
             f_movies = pd.Series([difflib.get_close_matches(i, movie_files)[0] for i in df["filename"]])
             full_paths = movie_folder + '/' + f_movies
-            df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(full_paths.apply(lambda x: get_length(x, movie_folder), 1).tolist(), columns=["fps", "duration"])
+            df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = pd.DataFrame(full_paths.apply(
+                                                                                                        lambda x: get_length(x, movie_folder), 1).tolist(), columns=["fps", "duration"])
             df["SamplingStart"] = 0.0
             df["SamplingEnd"] = df["duration"]
             df.to_csv(db_info_dict["local_movies_csv"], index=False)
@@ -133,6 +134,28 @@ def check_sampling_start_end(df, movies_csv):
         print(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
 
     return df
+
+
+def check_movie_uploaded(movie_i, db_info_dict):
+
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
+
+    # Query info about the clip subjects uploaded to Zooniverse
+    subjects_df = pd.read_sql_query("SELECT id, subject_type, filename, clip_start_time, clip_end_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
+
+    # Save the video filenames of the clips uploaded to Zooniverse 
+    videos_uploaded = subjects_df.filename.unique()
+
+    # Check if selected movie has already been uploaded
+    already_uploaded = any(mv in movie_i for mv in videos_uploaded)
+
+    if already_uploaded:
+        clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
+        print(movie_i, "has clips already uploaded. The clips start and finish at:")
+        print(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
+    else:
+        print(movie_i, "has not been uploaded to Zooniverse yet")
 
 
 def get_movie_extensions():

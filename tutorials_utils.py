@@ -1,13 +1,18 @@
+# base imports
 import os 
 import pandas as pd
+import logging
+
+# widget imports
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
+
+# util imports
 import kso_utils.server_utils as server_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
 import kso_utils.project_utils as project_utils
-import panoptes_client
-import logging
+
 
 # Logging
 

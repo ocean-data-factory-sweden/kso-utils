@@ -1,4 +1,4 @@
-##ZOOniverse utils
+# base imports
 import io
 import getpass
 import pandas as pd
@@ -11,16 +11,14 @@ from panoptes_client import (
     Project,
     Panoptes,
 )
-
 from ast import literal_eval
+
+# util imports
 from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
-import kso_utils.tutorials_utils as tutorials_utils
-import kso_utils.project_utils as project_utils
 
 # Logging
-
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -29,7 +27,6 @@ logger.setLevel(logging.DEBUG)
 def zoo_credentials():
     zoo_user = getpass.getpass('Enter your Zooniverse user')
     zoo_pass = getpass.getpass('Enter your Zooniverse password')
-    
     return zoo_user, zoo_pass
 
 

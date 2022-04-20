@@ -1,25 +1,20 @@
+# base imports
 import pandas as pd
 import numpy as np
-import json, io, os
+import json
 import logging
-from ast import literal_eval
-from kso_utils.zooniverse_utils import auth_session
 import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 from kso_utils.spyfish_utils import process_clips_spyfish
-import kso_utils.project_utils as project_utils
 import kso_utils.tutorials_utils as tutorials_utils
-from collections import OrderedDict, Counter
 
-from IPython.display import HTML, display, update_display, clear_output
+# widget imports
+from IPython.display import HTML, display, clear_output
 import ipywidgets as widgets
-from ipywidgets import interact
-import asyncio
 from itables import show
 
 
 # Logging
-
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -45,9 +40,6 @@ def setup_initial_info(project):
     
     return db_info_dict, zoo_project, zoo_info_dict
 
-
-
-# ###
 
 
 def choose_agg_parameters(subject_type: str):

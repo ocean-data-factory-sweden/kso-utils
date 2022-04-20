@@ -1,12 +1,12 @@
+# base imports
 import pandas as pd
-import numpy as np
-import json, io
-from ast import literal_eval
-import kso_utils.db_utils as db_utils
-from collections import OrderedDict
-from IPython.display import HTML, display, update_display, clear_output
-from datetime import date
+
+# widget imports
+from IPython.display import display
 import ipywidgets as widgets
+
+# util imports
+import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 

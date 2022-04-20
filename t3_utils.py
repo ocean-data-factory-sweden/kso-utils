@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#t3 utils
+# base imports
 import os, shutil, ffmpeg
 import pandas as pd
 import numpy as np
@@ -7,26 +7,15 @@ import math
 import datetime
 import subprocess
 import logging
-import difflib
 import random
 from pathlib import Path
 
+# widget imports
 from tqdm import tqdm
-from IPython.display import HTML, display, update_display, clear_output
-from ipywidgets import interact, interactive, Layout
-from kso_utils.zooniverse_utils import auth_session
-from kso_utils.t4_utils import get_movie_url
+from IPython.display import HTML, display, clear_output
+from ipywidgets import interactive, Layout
 import ipywidgets as widgets
 from IPython.display import HTML
-
-
-import kso_utils.db_utils as db_utils
-import kso_utils.zooniverse_utils as zooniverse_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.server_utils as server_utils
-import kso_utils.tutorials_utils as tutorials_utils
-import kso_utils.koster_utils as koster_utils
-import kso_utils.project_utils as project_utils
 from panoptes_client import (
     SubjectSet,
     Subject,
@@ -34,76 +23,15 @@ from panoptes_client import (
     Panoptes,
 )
 
-# Logging
+# util imports
+import kso_utils.db_utils as db_utils
+import kso_utils.server_utils as server_utils
 
+# Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def retrieve_movie_info_from_server(project, db_info_dict):
-    
-    server = project.server
-    bucket_i = project.bucket
-    movie_folder = project.movie_folder
-    project_name = project.Project_name
-    
-    if server == "AWS":
-        # Retrieve info from the bucket
-        server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
-                                                         bucket = bucket_i, 
-                                                         suffix = movie_utils.get_movie_extensions())
-        # Get the fpath(html) from the key
-        server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
-        
-    
-    elif server == "SNIC":
-        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
-    
-    elif server == "local":
-        if [movie_folder, bucket_i] == ["None", "None"]:
-            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
-            return pd.DataFrame(columns = ["filename"])
-        else:
-            server_files = os.listdir(movie_folder)
-            server_paths = [movie_folder + i for i in server_files]
-            server_df = pd.DataFrame(server_paths, columns="spath") 
-    else:
-        raise ValueError("The server type you selected is not currently supported.")
-    
-    
-    # Create connection to db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
-
-    # Query info about the movie of interest
-    movies_df = pd.read_sql_query(f"SELECT * FROM movies", conn)
-
-    # Missing info for files in the "buv-zooniverse-uploads"
-    movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
-    movies_df = movies_df.merge(server_df["spath"], 
-                                left_on=['fpath'],
-                                right_on=['spath'], 
-                                how='left', 
-                                indicator=True)
-
-    # Check that movies can be mapped
-    movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
-
-    # Drop _merge columns to match sql schema
-    movies_df = movies_df.drop("_merge", axis=1)
-    
-    # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df['exists']].reset_index()
-    
-    # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["spath"].str.split("/").str[-1]
-
-    # Add movie folder for SNIC
-    if server == "SNIC":
-        available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
-
-    logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
-    
-    return available_movies_df
 
 # Select the movie you want to upload to Zooniverse
 def movie_to_upload(available_movies_df):
@@ -122,27 +50,6 @@ def movie_to_upload(available_movies_df):
     display(movie_to_upload_widget)
     return movie_to_upload_widget
 
-
-def check_movie_uploaded(movie_i, db_info_dict):
-
-    # Create connection to db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
-
-    # Query info about the clip subjects uploaded to Zooniverse
-    subjects_df = pd.read_sql_query("SELECT id, subject_type, filename, clip_start_time, clip_end_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
-
-    # Save the video filenames of the clips uploaded to Zooniverse 
-    videos_uploaded = subjects_df.filename.unique()
-
-    # Check if selected movie has already been uploaded
-    already_uploaded = any(mv in movie_i for mv in videos_uploaded)
-
-    if already_uploaded:
-        clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
-        print(movie_i, "has clips already uploaded. The clips start and finish at:")
-        print(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
-    else:
-        print(movie_i, "has not been uploaded to Zooniverse yet")
 
 def select_clip_length():
     # Widget to record the length of the clips
@@ -280,7 +187,7 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
   else:
     
     # Generate ctemporary path to the movie select
-    movie_selected["movie_path"] = get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
+    movie_selected["movie_path"] = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
 
     return HTML(f"""<video src={movie_selected["movie_path"].values[0]} width=800 controls/>""")
 

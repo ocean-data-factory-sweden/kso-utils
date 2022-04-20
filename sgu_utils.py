@@ -1,8 +1,5 @@
-import os, csv
+# base imports
 import pandas as pd
-import numpy as np
-from pathlib import Path
-
 
 
 def process_sgu_photos_csv(db_initial_info):

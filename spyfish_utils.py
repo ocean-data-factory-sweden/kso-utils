@@ -1,15 +1,17 @@
-#spyfish utils
+# base imports
 import os
 import sqlite3
 import pandas as pd
 import numpy as np
-
-import kso_utils.server_utils as server_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.db_utils as db_utils
 from tqdm import tqdm
 import subprocess
 from pathlib import Path
+
+# util imports
+import kso_utils.server_utils as server_utils
+import kso_utils.movie_utils as movie_utils
+import kso_utils.db_utils as db_utils
+
 
 def check_spyfish_movies(movies_df, client, bucket_i):
     
@@ -158,7 +160,7 @@ def concatenate_videos(df, session):
             filename=concat_video,
         )
                     
-        print(concat_video, "succesfully uploaded to", s3_destination)
+        print(concat_video, "successfully uploaded to", s3_destination)
         
         # Delete the raw videos downloaded from the S3 bucket
         for f in video_list:
