@@ -10,6 +10,7 @@ import logging
 import random
 import difflib
 from pathlib import Path
+from multiprocessing.pool import ThreadPool as Pool
 
 # widget imports
 from tqdm import tqdm
@@ -144,41 +145,23 @@ def select_random_clips(movie_i, db_info_dict):
 
 
 # Function to extract the videos 
-def extract_random_clips(clips_start_time, clip_length, movie_i, movie_path, clips_folder): 
-    random_clips = []
+def extract_example_clips(output_clip_path, start_time_i, clip_length, movie_path):
     
-    # Create the information for each clip and extract it (printing a progress bar) 
-    for start_time_i in tqdm(clips_start_time):
-        # Create the filename and path of the clip
-        output_clip_name = movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
-        output_clip_path = clips_folder + os.sep + output_clip_name
-        
-        # Print statements to check all good
-        print("start_time_i", str(start_time_i))
-        print("clip_length", str(clip_length))
-        print("output_clip_path", str(output_clip_path))
-        print("movie_path", str(movie_path))
-        
-        # Add the path of the clip to the list
-        random_clips = random_clips + [output_clip_path]
-        
-        # Extract the clip
-        if not os.path.exists(output_clip_path):
-            subprocess.call(["ffmpeg", 
-                             "-ss", str(start_time_i), 
-                             "-t", str(clip_length), 
-                             "-i", str(movie_path), 
-                             "-c", "copy", 
-                             "-an",#removes the audio
-                             "-force_key_frames", "1",
-                             str(output_clip_path)])
+    # Extract the clip
+    if not os.path.exists(output_clip_path):
+        subprocess.call(["ffmpeg", 
+                          "-ss", str(start_time_i), 
+                          "-t", str(clip_length), 
+                          "-i", str(movie_path), 
+                          "-c", "copy", 
+                          "-an",#removes the audio
+                          "-force_key_frames", "1",
+                          str(output_clip_path)])
 
-            os.chmod(output_clip_path, 0o755)
-    print("Clips extracted successfully")
+        os.chmod(output_clip_path, 0o755)
+    print("Clip", output_clip_path, "extracted successfully")
     
-    return random_clips
-    
-def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection):
+def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection, pool_size = 4):
     
     # Specify the starting seconds and length of the example clips
     clips_start_time = clip_selection.result["clip_start_time"]
@@ -197,14 +180,29 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
 
-    # Extract the clips and store them in the folder
-    random_clips = extract_random_clips(clips_start_time = clips_start_time, 
-                   clip_length = clip_length,
-                   movie_i = movie_i,
-                   movie_path = movie_path, 
-                   clips_folder = clips_folder)
+    # Specify the number of parallel items
+    pool = Pool(pool_size)
 
-    return random_clips    
+    # Create empty list to keep track of new clips
+    example_clips = []
+
+    # Create the information for each clip and extract it (printing a progress bar) 
+    for start_time_i in clips_start_time:
+        # Create the filename and path of the clip
+        output_clip_name = movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
+        output_clip_path = clips_folder + os.sep + output_clip_name
+      
+        # Add the path of the clip to the list
+        example_clips = example_clips + [output_clip_path]
+
+        # Extract the clips and store them in the folder
+        pool.apply_async(extract_example_clips, (output_clip_path, start_time_i, clip_length, movie_path,))
+
+    pool.close()
+    pool.join()
+    
+    
+    return example_clips    
 
 
 def check_clip_size(clips_list):
@@ -340,65 +338,51 @@ def gpu_select():
     return gpu_output_interact
 
 
-def modify_clips(clips_list, modification_details, mod_clips_folder, gpu_available):
+def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
     
-    modified_clips = []
-    
-    # Create the information for each clip and modify it (printing a progress bar) 
-    for clip_i in tqdm(clips_list):
-        # Create the filename and path of the modified clip
-        output_clip_name = "modified_" + os.path.basename(clip_i)
-        output_clip_path = mod_clips_folder + os.sep + output_clip_name
-        
-        print(output_clip_path)
-        
-        if not os.path.exists("output_clip_path"):
-            if gpu_available:
-                subprocess.call(["ffmpeg",
-                                 "-hwaccel", "cuda",
-                                 "-hwaccel_output_format", "cuda",
-                                 "-i", clip_i, 
-                                 "-c:v", "h264_nvenc",
-                                 output_clip_path])
-                
-            else:
-                # Set up input prompt
-                init_prompt = f"ffmpeg.input('{clip_i}')"
-                full_prompt = init_prompt
-                    
-                # Set up modification
-                for transform in modification_details.values():
-                    if "filter" in transform:
-                        mod_prompt = transform['filter']
-                        full_prompt += mod_prompt
-                    
-                    # Setup output prompt
-                    crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
-                    crf_value = [i for i in crf_value if i is not None]
-
-                    if len(crf_value) > 0:
-                        crf_prompt = str(max([int(i) for i in crf_value]))
-                        full_prompt += f".output('{output_clip_path}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-                    else:
-                        full_prompt += f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-                    
-                    # Run the modification
-                    try:
-                        eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                        os.chmod(output_clip_path, 0o755)
-                    except ffmpeg.Error as e:
-                        print('stdout:', e.stdout.decode('utf8'))
-                        print('stderr:', e.stderr.decode('utf8'))
-                        raise e
+    if gpu_available:
+        print("clip_i", clip_i, "and output_clip_path", output_clip_path)
+        subprocess.call(["ffmpeg",
+                          "-hwaccel", "cuda",
+                          "-hwaccel_output_format", "cuda",
+                          "-i", clip_i, 
+                          "-c:v", "h264_nvenc",
+                          output_clip_path])
             
-            # Add the path of the clip to the list
-            modified_clips = modified_clips + [output_clip_path]
-    print("Clips modified successfully")
-    
-    return modified_clips
+    else:
+        # Set up input prompt
+        init_prompt = f"ffmpeg.input('{clip_i}')"
+        full_prompt = init_prompt
+
+        # Set up modification
+        for transform in modification_details.values():
+            if "filter" in transform:
+                mod_prompt = transform['filter']
+                full_prompt += mod_prompt
+
+            # Setup output prompt
+            crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+            crf_value = [i for i in crf_value if i is not None]
+
+            if len(crf_value) > 0:
+                crf_prompt = str(max([int(i) for i in crf_value]))
+                full_prompt += f".output('{output_clip_path}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+            else:
+                full_prompt += f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+
+            # Run the modification
+            try:
+                eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                os.chmod(output_clip_path, 0o755)
+            except ffmpeg.Error as e:
+                print('stdout:', e.stdout.decode('utf8'))
+                print('stderr:', e.stderr.decode('utf8'))
+                raise e
+
+    print("Clip", clip_i, "modified successfully")
         
     
-def create_modified_clips(clips_list, movie_i, modification_details, project, gpu_available):
+def create_modified_clips(clips_list, movie_i, modification_details, project, gpu_available, pool_size = 4):
 
     # Get project-specific server info
     server = project.server
@@ -419,11 +403,26 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
         if not os.path.exists(mod_clips_folder):
             os.mkdir(mod_clips_folder)
             
-        # Extract the clips and store them in the folder
-        modified_clips = modify_clips(clips_list = clips_list, 
-                                    modification_details = str(modification_details),
-                                    mod_clips_folder = mod_clips_folder,
-                                     gpu_available = gpu_available)
+        # Specify the number of parallel items
+        pool = Pool(pool_size)
+
+        # Create empty list to keep track of new clips
+        modified_clips = []
+
+        # Create the information for each clip and extract it (printing a progress bar) 
+        for clip_i in clips_list:
+            # Create the filename and path of the modified clip
+            output_clip_name = "modified_" + os.path.basename(clip_i)
+            output_clip_path = mod_clips_folder + os.sep + output_clip_name
+
+            # Add the path of the clip to the list
+            modified_clips = modified_clips + [output_clip_path]
+
+            # Modify the clips and store them in the folder
+            pool.apply_async(modify_clips, (clip_i, modification_details, output_clip_path, gpu_available,))
+
+        pool.close()
+        pool.join()
 
         return modified_clips 
     else:
@@ -554,57 +553,54 @@ def expand_list(df, list_column, new_column):
     return expanded_df
 
 # Function to extract the videos 
-def extract_clips(df, movie_path, clip_length, clip_modification, gpu_available): 
-    # Read each movie and extract the clips (printing a progress bar) 
-    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
-        if not os.path.exists(row['clip_path']):
-            if gpu_available:
-                subprocess.call(["ffmpeg",
-                                 "-hwaccel", "cuda",
-                                 "-hwaccel_output_format", "cuda",                                 
-                                 "-ss", str(row['upl_seconds']), 
-                                 "-t", str(clip_length), 
-                                 "-i", movie_path,
-                                 "-an",#removes the audio
-                                 "-c:v", "h264_nvenc",
-                                 str(row['clip_path'])])
-                os.chmod(row['clip_path'], 0o755)
-            else:
-                # Set up input prompt
-                init_prompt = f"ffmpeg.input('{movie_path}')"
-                full_prompt = init_prompt
-                    
-                # Set up modification
-                for transform in modification_details.values():
-                    if "filter" in transform:
-                        mod_prompt = transform['filter']
-                        full_prompt += mod_prompt
-                    
-                    # Setup output prompt
-                    crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
-                    crf_value = [i for i in crf_value if i is not None]
+def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modification_details, gpu_available): 
+    if gpu_available:
+        subprocess.call(["ffmpeg",
+                         "-hwaccel", "cuda",
+                         "-hwaccel_output_format", "cuda",                                 
+                         "-ss", str(upl_second_i), 
+                         "-t", str(clip_length), 
+                         "-i", movie_path,
+                         "-an",#removes the audio
+                         "-c:v", "h264_nvenc",
+                         str(output_clip_path)])
+        os.chmod(str(output_clip_path), 0o755)
+    else:
+        # Set up input prompt
+        init_prompt = f"ffmpeg.input('{movie_path}')"
+        full_prompt = init_prompt
 
-                    if len(crf_value) > 0:
-                        crf_prompt = str(max([int(i) for i in crf_value]))
-                        full_prompt += f".output('{str(row['clip_path'])}', crf={crf_prompt}, ss={str(row['upl_seconds'])}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-                    else:
-                        full_prompt += f".output('{str(row['clip_path'])}', ss={str(row['upl_seconds'])}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-                    
-                    # Run the modification
-                    try:
-                        eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                        os.chmod(str(row['clip_path']), 0o755)
-                    except ffmpeg.Error as e:
-                        print('stdout:', e.stdout.decode('utf8'))
-                        print('stderr:', e.stderr.decode('utf8'))
-                        raise e
+        # Set up modification
+        for transform in modification_details.values():
+            if "filter" in transform:
+                mod_prompt = transform['filter']
+                full_prompt += mod_prompt
+
+            # Setup output prompt
+            crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+            crf_value = [i for i in crf_value if i is not None]
+
+            if len(crf_value) > 0:
+                crf_prompt = str(max([int(i) for i in crf_value]))
+                full_prompt += f".output('{str(output_clip_path)}', crf={crf_prompt}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+            else:
+                full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+
+            # Run the modification
+            try:
+                eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                os.chmod(str(output_clip_path), 0o755)
+            except ffmpeg.Error as e:
+                print('stdout:', e.stdout.decode('utf8'))
+                print('stderr:', e.stderr.decode('utf8'))
+                raise e
     
                 
                 
-        print("clips extracted successfully")
+        print("Clips extracted successfully")
                 
     
-def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_selection, project, clip_modification, gpu_available):
+def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_selection, project, modification_details, gpu_available, pool_size = 4):
         
     # Filter the df for the movie of interest
     movie_i_df = available_movies_df[available_movies_df['filename']==movie_i].reset_index(drop=True)
@@ -648,8 +644,18 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
 
-    # Extract the videos and store them in the folder
-    extract_clips(potential_start_df, movie_path, clip_length, clip_modification, gpu_available)
+    # Specify the number of parallel items
+    pool = Pool(pool_size)
+
+    # Read each movie and extract the clips 
+    for index, row in potential_start_df.iterrows():
+        if not os.path.exists(row['clip_path']):
+            # Extract the videos and store them in the folder
+            pool.apply_async(extract_clips, (movie_path, clip_length, row['upl_seconds'], row['clip_path'], modification_details, gpu_available,))
+
+        pool.close()
+        pool.join()
+
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(clip_modification)
