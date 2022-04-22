@@ -431,14 +431,17 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
     
     
 # Display the clips side-by-side
-def view_clips(modified_clips, random_clip_path):
+def view_clips(example_clips, modified_clip_path):
     
     # Get the path of the modified clip selected
-    modified_clip_name = os.path.basename(random_clip_path).replace("modified_", "")
-    modified_clip_path = (x for x in modified_clips if os.path.basename(x) == modified_clip_name)
+    example_clip_name = os.path.basename(modified_clip_path).replace("modified_", "")
+    example_clip_path = next(filter(lambda x: os.path.basename(x) == example_clip_name, example_clips), None)
 
+    # Get the extension of the video
+    extension = os.path.splitext(example_clip_path)[1]
+    
     # Open original video
-    vid1 = open(random_clip_path,'rb').read()
+    vid1 = open(example_clip_path,'rb').read()
     wi1 = widgets.Video(value = vid1, format = extension, 
                         width = 400, height = 500)
     
@@ -453,13 +456,13 @@ def view_clips(modified_clips, random_clip_path):
 
     return wid
 
-def compare_clips(random_clips, modified_clips):
+def compare_clips(example_clips, modified_clips):
 
     # Add "no movie" option to prevent conflicts
-    random_clips = np.append(random_clips,"0 No movie")
+    modified_clips = np.append(modified_clips,"0 No movie")
     
     clip_path_widget = widgets.Dropdown(
-                    options=tuple(random_clips),
+                    options=tuple(modified_clips),
                     description="Select original clip:",
                     ensure_option=True,
                     disabled=False,
@@ -477,11 +480,11 @@ def compare_clips(random_clips, modified_clips):
             if change["new"]=="0 No movie":
                 print("It is OK to modify the clips again")
             else:
-                a = view_clips(modified_clips, change["new"])
+                a = view_clips(example_clips, change["new"])
                 display(a)
                 
                 
-    clip_path_widget.observe(on_change, names='value')        
+    clip_path_widget.observe(on_change, names='value')         
         
         
         
