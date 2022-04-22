@@ -8,14 +8,14 @@ import datetime
 import subprocess
 import logging
 import random
+import difflib
 from pathlib import Path
 
 # widget imports
 from tqdm import tqdm
 from IPython.display import HTML, display, clear_output
-from ipywidgets import interactive, Layout
+from ipywidgets import interact, interactive, Layout
 import ipywidgets as widgets
-from IPython.display import HTML
 from panoptes_client import (
     SubjectSet,
     Subject,
@@ -33,24 +33,54 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-# Select the movie you want to upload to Zooniverse
-def movie_to_upload(available_movies_df):
+   
+############################################################
+######## Create some clip examples #########################
+############################################################
 
+
+# Select the movie you want
+def select_movie(available_movies_df):
+
+    # Get the list of available movies
+    available_movies_tuple = tuple(sorted(available_movies_df.filename.unique()))
+    
     # Widget to select the movie
-    movie_to_upload_widget = widgets.Dropdown(
-                    options=tuple(available_movies_df.filename.unique()),
-                    description="Movie to upload:",
-                    ensure_option=True,
-                    disabled=False,
-                    layout=Layout(width='50%'),
+    select_movie_widget = widgets.Dropdown(
+                    options = available_movies_tuple,
+                    description = "Movie of interest:",
+                    ensure_option = True,
+                    disabled = False,
+                    layout = widgets.Layout(width='50%'),
                     style = {'description_width': 'initial'},
                 )
     
+    display(select_movie_widget)
     
-    display(movie_to_upload_widget)
-    return movie_to_upload_widget
+    return select_movie_widget
 
 
+def check_movie_uploaded(movie_i, db_info_dict):
+
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
+
+    # Query info about the clip subjects uploaded to Zooniverse
+    subjects_df = pd.read_sql_query("SELECT id, subject_type, filename, clip_start_time, clip_end_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
+
+    # Save the video filenames of the clips uploaded to Zooniverse 
+    videos_uploaded = subjects_df.filename.unique()
+
+    # Check if selected movie has already been uploaded
+    already_uploaded = any(mv in movie_i for mv in videos_uploaded)
+
+    if already_uploaded:
+        clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
+        print(movie_i, "has clips already uploaded. The clips start and finish at:")
+        print(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
+    else:
+        print(movie_i, "has not been uploaded to Zooniverse yet")
+        
 def select_clip_length():
     # Widget to record the length of the clips
     ClipLength_widget = widgets.Dropdown(
@@ -64,18 +94,6 @@ def select_clip_length():
 
     return ClipLength_widget
 
-def select_clip_length():
-    # Widget to record the length of the clips
-    ClipLength_widget = widgets.Dropdown(
-        options=[10,5],
-        value=10,
-        description="Length of clips:",
-        style = {'description_width': 'initial'},
-        ensure_option=True,
-        disabled=False
-    )  
-
-    return ClipLength_widget
 
 def select_random_clips(movie_i, db_info_dict):
   # Create connection to db
@@ -100,7 +118,7 @@ def select_random_clips(movie_i, db_info_dict):
                 "random_clip_length": clip_length
         }
 
-        print(random_clips_info)
+        print("The initial seconds of the examples will be:", *random_clips_info["clip_start_time"], sep = "\n")
 
         return random_clips_info
 
@@ -115,7 +133,7 @@ def select_random_clips(movie_i, db_info_dict):
                                           step=1,
                                           description='Number of random clips:',
                                           disabled=False,
-                                          layout=Layout(width='50%'),
+                                          layout=Layout(width='40%'),
                                           style = {'description_width': 'initial'})
                                      )
 
@@ -125,204 +143,75 @@ def select_random_clips(movie_i, db_info_dict):
     return clip_length_number  
 
 
-def select_clip_n_len(movie_i, db_info_dict):
-    
-    # Create connection to db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
-
-    # Query info about the movie of interest
-    movie_df = pd.read_sql_query(
-        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'", conn)
-    
-    # Display in hours, minutes and seconds
-    def to_clips(clip_length, clips_range):
-
-        # Calculate the number of clips
-        clips = int((clips_range[1]-clips_range[0])/clip_length)
-
-        print("Number of clips to upload:", clips)
-
-        return clips
-
-
-    # Select the number of clips to upload 
-    clip_length_number = interactive(to_clips, 
-                              clip_length = select_clip_length(),
-                             clips_range = widgets.IntRangeSlider(value=[movie_df.sampling_start.values,
-                                                                         movie_df.sampling_end.values],
-                                                                  min=0,
-                                                                  max=int(movie_df.duration.values),
-                                                                  step=1,
-                                                                  description='Range in seconds:',
-                                                                  style = {'description_width': 'initial'},
-                                                                  layout=widgets.Layout(width='90%')
-                                                                 ))
-
-                                   
-    display(clip_length_number)
-    
-    return clip_length_number        
-
-def review_clip_selection(clip_selection, movie_i):
-    start_trim = clip_selection.kwargs['clips_range'][0]
-    end_trim = clip_selection.kwargs['clips_range'][1]
-
-    # Review the clips that will be created
-    print("You are about to create", round(clip_selection.result), 
-          "clips from", movie_i)
-    print("starting at", datetime.timedelta(seconds=start_trim), 
-          "and ending at", datetime.timedelta(seconds=end_trim))
-
-
-# Function to previews the movie
-def preview_movie(project, db_info_dict, available_movies_df, movie_i):
-
-  # Add the key of the movie of interest
-  movie_selected = available_movies_df[available_movies_df["filename"]==movie_i.value].reset_index(drop=True)
-
-  # Make sure only one movie is selected
-  if len(movie_selected.index)>1:
-    print("There are several movies with the same filename. This should be fixed!")
-  
-  else:
-    
-    # Generate ctemporary path to the movie select
-    movie_selected["movie_path"] = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
-
-    return HTML(f"""<video src={movie_selected["movie_path"].values[0]} width=800 controls/>""")
-
-# Func to expand seconds
-def expand_list(df, list_column, new_column):
-    lens_of_lists = df[list_column].apply(len)
-    origin_rows = range(df.shape[0])
-    destination_rows = np.repeat(origin_rows, lens_of_lists)
-    non_list_cols = [idx for idx, col in enumerate(df.columns) if col != list_column]
-    expanded_df = df.iloc[destination_rows, non_list_cols].copy()
-    expanded_df[new_column] = [item for items in df[list_column] for item in items]
-    expanded_df.reset_index(inplace=True, drop=True)
-    return expanded_df
-
 # Function to extract the videos 
-def extract_clips(df, clip_length): 
-    # Read each movie and extract the clips (printing a progress bar) 
-    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
-        print(str(row['clip_path']))
-        print("upl_seconds", str(row['upl_seconds']))
+def extract_random_clips(clips_start_time, clip_length, movie_i, movie_path, clips_folder): 
+    random_clips = []
+    
+    # Create the information for each clip and extract it (printing a progress bar) 
+    for start_time_i in tqdm(clips_start_time):
+        # Create the filename and path of the clip
+        output_clip_name = movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
+        output_clip_path = clips_folder + os.sep + output_clip_name
+        
+        # Print statements to check all good
+        print("start_time_i", str(start_time_i))
         print("clip_length", str(clip_length))
-        print("full_path", str(row['full_path']))
-        if not os.path.exists(row['clip_path']):
+        print("output_clip_path", str(output_clip_path))
+        print("movie_path", str(movie_path))
+        
+        # Add the path of the clip to the list
+        random_clips = random_clips + [output_clip_path]
+        
+        # Extract the clip
+        if not os.path.exists(output_clip_path):
             subprocess.call(["ffmpeg", 
-                             "-ss", str(row['upl_seconds']), 
+                             "-ss", str(start_time_i), 
                              "-t", str(clip_length), 
-                             "-i", str(row['full_path']), 
+                             "-i", str(movie_path), 
                              "-c", "copy", 
                              "-an",#removes the audio
                              "-force_key_frames", "1",
-                             str(row['clip_path'])])
+                             str(output_clip_path)])
 
-            os.chmod(row['clip_path'], 0o755)
-    print("clips extracted successfully")
-
-
-def create_clips(available_movies_df, movie_i, db_info_dict, clip_selection, project, example_clips = False):
-        
-    # Filter the df for the movie of interest
-    movie_i_df = available_movies_df[available_movies_df['filename']==movie_i].reset_index(drop=True)
-
-    if example_clips:
-        # Specify the starting seconds
-        movie_i_df["seconds"] = [clip_selection.result["clip_start_time"]]
-        clip_length = clip_selection.result["random_clip_length"]
-        clip_numbers = len(clip_selection.result["clip_start_time"])
-    else:
-        # Calculate the max number of clips available
-        clip_length = clip_selection.kwargs['clip_length']
-        clip_numbers = clip_selection.result
-        start_trim = clip_selection.kwargs['clips_range'][0]
-        end_trim = clip_selection.kwargs['clips_range'][1]
-        
-        # Calculate all the seconds for the new clips to start
-        movie_i_df["seconds"] = [
-            list(range(start_trim, int(math.floor(end_trim / clip_length) * clip_length), clip_length))
-        ]
-
-    # Reshape the dataframe with the seconds for the new clips to start on the rows
-    potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
-
-    # Specify the length of the clips
-    potential_start_df["clip_length"] = clip_length
-
-    if not clip_numbers==potential_start_df.shape[0]:
-        print("There was an issue estimating the starting seconds for the", clip_numbers, "clips")
-
-    # Download the movie locally from the server
+            os.chmod(output_clip_path, 0o755)
+    print("Clips extracted successfully")
     
+    return random_clips
+    
+def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection):
+    
+    # Specify the starting seconds and length of the example clips
+    clips_start_time = clip_selection.result["clip_start_time"]
+    clip_length = clip_selection.result["random_clip_length"]
+
     # Get project-specific server info
     server = project.server
     
-    if server == "AWS":
-
-        potential_start_df["full_path"] = potential_start_df["filename_ext"]
-
-        if not os.path.exists(movie_i_df.filename_ext[0]):
-            # Download the movie of interest
-            server_utils.download_object_from_s3(
-                            db_info_dict["client"],
-                            bucket=db_info_dict["bucket"],
-                            key=movie_i_df.spath.unique()[0].replace("http://marine-buv.s3.ap-southeast-2.amazonaws.com/",""),
-                            filename=movie_i_df.filename_ext[0],
-            )
-    
-    elif server == "SNIC":
-        
-        movie_folder = project.movie_folder
-        movie_i_df["full_path"] = movie_i_df["spath"]
-        potential_start_df["full_path"] = potential_start_df["spath"]
-        print(movie_i_df.full_path[0])
-        
-        if not os.path.basename(movie_i_df.full_path[0]) in os.listdir(movie_folder):
-            # Download the movie of interest
-            server_utils.download_object_from_snic(
-                            db_info_dict["sftp_client"],
-                            remote_fpath=str(Path(movie_folder, movie_i_df.filename_ext[0])),
-                            local_fpath=str(Path(".", movie_i_df.filename_ext[0]))
-            )
-    
-
     # Specify the temp folder to host the clips
     if server == "SNIC":
-        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+movie_i+"_clips"
+        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie_i + "_clips"
     else:
-        clips_folder = movie_i+"_clips"
-
-    # Set the filename of the clips
-    potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
-
-    # Set the path of the clips
-    potential_start_df["clip_path"] = clips_folder + os.sep + potential_start_df["clip_filename"]
+        clips_folder = movie_i + "_clips"
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
 
-    # Extract the videos and store them in the folder
-    extract_clips(potential_start_df, clip_length)
+    # Extract the clips and store them in the folder
+    random_clips = extract_random_clips(clips_start_time = clips_start_time, 
+                   clip_length = clip_length,
+                   movie_i = movie_i,
+                   movie_path = movie_path, 
+                   clips_folder = clips_folder)
 
-    return potential_start_df      
+    return random_clips    
 
 
-def check_clip_size(clips_df):
+def check_clip_size(clips_list):
     
-    if "modif_clip_path" in clips_df.columns and "no_modification" in clips_df["modif_clip_path"].values:
-        clip_paths = clips_df["clip_path"].unique()
-    elif "modif_clip_path" not in clips_df.columns:
-        clip_paths = clips_df["clip_path"].unique()
-    else:
-        clip_paths = clips_df["modif_clip_path"].unique()
-
     # Get list of files with size
     files_with_size = [ (file_path, os.stat(file_path).st_size) 
-                        for file_path in clip_paths]
+                        for file_path in clips_list]
 
     df = pd.DataFrame(files_with_size, columns=["File_path","Size"])
 
@@ -335,6 +224,8 @@ def check_clip_size(clips_df):
     else:
         print("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
         return df
+
+
 
 class clip_modification_widget(widgets.VBox):
 
@@ -407,94 +298,168 @@ def select_modification():
     return select_modification_widget
 
 
-
-def modify_clips(clips_to_upload_df, movie_i, modification_details, project, gpu_available= False):
-
-    server = project.server
-
-    # Specify the folder to host the modified clips
-    if server == "SNIC":
-        mod_clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+"modified_"+movie_i+"_clips"
-    else:
-        mod_clips_folder = "modified_" + movie_i +"_clips"
+def gpu_select():
     
-    # Specify the path of the modified clips
-    clips_to_upload_df["modif_clip_path"] = str(Path(mod_clips_folder, "modified")) + clips_to_upload_df["clip_filename"]
+    def gpu_output(gpu_option):
+        if gpu_option == "No GPU":
+            print("You are set to start the modifications")
+            # Set GPU argument
+            gpu_available = False
+            return gpu_available
+        
+        if gpu_option == "Colab GPU":
+            print("Installing the requirements for GPU video modification")
+            # Install ffmpeg with GPU version
+#             !git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git
+#             !cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/
+            
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+        
+        if gpu_option == "Other GPU":
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+            
+        
+
+    # Select the gpu availability
+    gpu_output_interact = interactive(gpu_output, 
+                                      gpu_option = widgets.RadioButtons(
+                                        options = ['No GPU', 'Colab GPU', 'Other GPU'],
+                                        value = 'No GPU', 
+                                        description = 'Select GPU availability:',
+                                        disabled = False
+                                        )
+                                    )
     
-    # Remove existing modified clips
-    if os.path.exists(mod_clips_folder):
-        shutil.rmtree(mod_clips_folder)
+                                   
+    display(gpu_output_interact)
+    
+    return gpu_output_interact
 
-    if len(modification_details.values()) > 0:
-        
-        # Save the modification details to include as subject metadata
-        clips_to_upload_df["clip_modification_details"] = str(modification_details)
-        
-        # Create the folder to store the videos if not exist
-        if not os.path.exists(mod_clips_folder):
-            os.mkdir(mod_clips_folder)
 
-        #### Modify the clips###
-        # Read each clip and modify them (printing a progress bar) 
-        for index, row in tqdm(clips_to_upload_df.iterrows(), total=clips_to_upload_df.shape[0]): 
-            if not os.path.exists(row['modif_clip_path']):
-                # TO TIDY UP
-                if gpu_available:
-                    subprocess.call(["ffmpeg",
-                                   "-hwaccel", "cuda",
-                                   "-hwaccel_output_format", "cuda",
-                                   "-i", row["clip_path"], 
-                                   "-c:v", "h264_nvenc",
-                                   row['modif_clip_path']])
+def modify_clips(clips_list, modification_details, mod_clips_folder, gpu_available):
+    
+    modified_clips = []
+    
+    # Create the information for each clip and modify it (printing a progress bar) 
+    for clip_i in tqdm(clips_list):
+        # Create the filename and path of the modified clip
+        output_clip_name = "modified_" + clip_i
+        output_clip_path = mod_clips_folder + os.sep + output_clip_name
+        
+        
+        if not os.path.exists("output_clip_path"):
+            if gpu_available:
+                subprocess.call(["ffmpeg",
+                                 "-hwaccel", "cuda",
+                                 "-hwaccel_output_format", "cuda",
+                                 "-i", clip_i, 
+                                 "-c:v", "h264_nvenc",
+                                 output_clip_path])
+                os.chmod(output_clip_path, 0o755)
                 
-                else:
-                    # Set up input prompt
-                    init_prompt = f"ffmpeg.input('{row['clip_path']}')"
-                    full_prompt = init_prompt
-                    # Set up modification
-                    for transform in modification_details.values():
-                        if "filter" in transform:
-                            mod_prompt = transform['filter']
-                            full_prompt += mod_prompt
+            else:
+                # Set up input prompt
+                init_prompt = f"ffmpeg.input('{clip_i}')"
+                full_prompt = init_prompt
+                    
+                # Set up modification
+                for transform in modification_details.values():
+                    if "filter" in transform:
+                        mod_prompt = transform['filter']
+                        full_prompt += mod_prompt
+                    
                     # Setup output prompt
                     crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
                     crf_value = [i for i in crf_value if i is not None]
 
                     if len(crf_value) > 0:
                         crf_prompt = str(max([int(i) for i in crf_value]))
-                        full_prompt += f".output('{row['modif_clip_path']}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                        full_prompt += f".output('{output_clip_path}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
                     else:
-                        full_prompt += f".output('{row['modif_clip_path']}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+                        full_prompt += f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+                    
                     # Run the modification
                     try:
                         eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                        os.chmod(row['modif_clip_path'], 0o755)
+                        os.chmod(output_clip_path, 0o755)
                     except ffmpeg.Error as e:
                         print('stdout:', e.stdout.decode('utf8'))
                         print('stderr:', e.stderr.decode('utf8'))
                         raise e
-
-        print("Clips modified successfully")
-        return clips_to_upload_df
+            
+            # Add the path of the clip to the list
+            modified_clips = modified_clips + [output_clip_path]
+    print("Clips modified successfully")
     
+    return modified_clips
+        
+    
+def create_modified_clips(clips_list, movie_i, modification_details, project, gpu_available):
+
+    # Get project-specific server info
+    server = project.server
+
+    # Specify the folder to host the modified clips
+    if server == "SNIC":
+        mod_clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+"modified_" + movie_i + "_clips"
     else:
-        
-        # Save the modification details to include as subject metadata
-        clips_to_upload_df["modif_clip_path"] = "no_modification"
-        
-        return clips_to_upload_df
-
-
-def compare_clips(df):
-
-    # Save the paths of the clips
-    original_clip_paths = df["clip_path"].unique()
+        mod_clips_folder = "modified_" + movie_i +"_clips"
     
+    # Remove existing modified clips
+    if os.path.exists(mod_clips_folder):
+        shutil.rmtree(mod_clips_folder)
+    
+    if len(modification_details.values()) > 0:
+        
+        # Create the folder to store the videos if not exist
+        if not os.path.exists(mod_clips_folder):
+            os.mkdir(mod_clips_folder)
+            
+        # Extract the clips and store them in the folder
+        modified_clips = modify_clips(clips_list = clips_list, 
+                                    modification_details = str(modification_details),
+                                    mod_clips_folder = mod_clips_folder,
+                                     gpu_available = gpu_available)
+
+        return modified_clips 
+    else:
+        print("No modification selected")
+    
+    
+# Display the clips side-by-side
+def view_clips(modified_clips, random_clip_path):
+    
+    # Get the path of the modified clip selected
+    modified_clip_name = os.path.basename(random_clip_path).replace("modified_", "")
+    modified_clip_path = (x for x in modified_clips if os.path.basename(x) == modified_clip_name)
+
+    # Open original video
+    vid1 = open(random_clip_path,'rb').read()
+    wi1 = widgets.Video(value = vid1, format = extension, 
+                        width = 400, height = 500)
+    
+    # Open modified video
+    vid2 = open(modified_clip_path,'rb').read()
+    wi2 = widgets.Video(value = vid2, format = extension, 
+                        width = 400, height = 500)
+    
+    # Display videos side-by-side
+    a = [wi1, wi2]
+    wid = widgets.HBox(a)
+
+    return wid
+
+def compare_clips(random_clips, modified_clips):
+
     # Add "no movie" option to prevent conflicts
-    original_clip_paths = np.append(original_clip_paths,"0 No movie")
+    random_clips = np.append(random_clips,"0 No movie")
     
     clip_path_widget = widgets.Dropdown(
-                    options=tuple(np.sort(original_clip_paths)),
+                    options=tuple(random_clips),
                     description="Select original clip:",
                     ensure_option=True,
                     disabled=False,
@@ -512,31 +477,179 @@ def compare_clips(df):
             if change["new"]=="0 No movie":
                 print("It is OK to modify the clips again")
             else:
-                a = view_clips(df, change["new"])
+                a = view_clips(modified_clips, change["new"])
                 display(a)
                 
                 
-    clip_path_widget.observe(on_change, names='value')
+    clip_path_widget.observe(on_change, names='value')        
+        
+        
+        
+############################################################
+######## Create the clips to upload to Zooniverse ##########
+############################################################
 
-
-# Display the clips using html
-def view_clips(df, movie_path):
+def select_clip_n_len(movie_i, db_info_dict):
     
-    # Get path of the modified clip selected
-    modified_clip_path = df[df["clip_path"]==movie_path].modif_clip_path.values[0]
-    extension = os.path.splitext(modified_clip_path)[1]
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
 
-    vid1=open(movie_path,'rb').read()
-    wi1 = widgets.Video(value=vid1, format=extension, width=400, height=500)
-    if "no_modification" in modified_clip_path:
-        vid2=open(movie_path,'rb').read()
+    # Query info about the movie of interest
+    movie_df = pd.read_sql_query(
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'", conn)
+    
+    # Display in hours, minutes and seconds
+    def to_clips(clip_length, clips_range):
+
+        # Calculate the number of clips
+        clips = int((clips_range[1]-clips_range[0])/clip_length)
+
+        print("Number of clips to upload:", clips)
+
+        return clips
+
+
+    # Select the number of clips to upload 
+    clip_length_number = interactive(to_clips, 
+                              clip_length = select_clip_length(),
+                             clips_range = widgets.IntRangeSlider(value=[movie_df.sampling_start.values,
+                                                                         movie_df.sampling_end.values],
+                                                                  min=0,
+                                                                  max=int(movie_df.duration.values),
+                                                                  step=1,
+                                                                  description='Range in seconds:',
+                                                                  style = {'description_width': 'initial'},
+                                                                  layout=widgets.Layout(width='90%')
+                                                                 ))
+
+                                   
+    display(clip_length_number)
+    
+    return clip_length_number        
+
+def review_clip_selection(clip_selection, movie_i, clip_modification):
+    start_trim = clip_selection.kwargs['clips_range'][0]
+    end_trim = clip_selection.kwargs['clips_range'][1]
+
+    # Review the clips that will be created
+    print("You are about to create", round(clip_selection.result), 
+          "clips from", movie_i)
+    print("starting at", datetime.timedelta(seconds=start_trim), 
+          "and ending at", datetime.timedelta(seconds=end_trim))
+    print("The modification selected is", clip_modification)
+
+
+# Func to expand seconds
+def expand_list(df, list_column, new_column):
+    lens_of_lists = df[list_column].apply(len)
+    origin_rows = range(df.shape[0])
+    destination_rows = np.repeat(origin_rows, lens_of_lists)
+    non_list_cols = [idx for idx, col in enumerate(df.columns) if col != list_column]
+    expanded_df = df.iloc[destination_rows, non_list_cols].copy()
+    expanded_df[new_column] = [item for items in df[list_column] for item in items]
+    expanded_df.reset_index(inplace=True, drop=True)
+    return expanded_df
+
+# Function to extract the videos 
+def extract_clips(df, movie_path, clip_length, clip_modification, gpu_available): 
+    # Read each movie and extract the clips (printing a progress bar) 
+    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
+        if not os.path.exists(row['clip_path']):
+            if gpu_available:
+                subprocess.call(["ffmpeg",
+                                 "-hwaccel", "cuda",
+                                 "-hwaccel_output_format", "cuda",                                 
+                                 "-ss", str(row['upl_seconds']), 
+                                 "-t", str(clip_length), 
+                                 "-i", movie_path,
+                                 "-an",#removes the audio
+                                 "-c:v", "h264_nvenc",
+                                 str(row['clip_path'])])
+                os.chmod(row['clip_path'], 0o755)
+            else:
+                # Set up input prompt
+                init_prompt = f"ffmpeg.input('{movie_path}')"
+                full_prompt = init_prompt
+                    
+                # Set up modification
+                for transform in modification_details.values():
+                    if "filter" in transform:
+                        mod_prompt = transform['filter']
+                        full_prompt += mod_prompt
+                    
+                    # Setup output prompt
+                    crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
+                    crf_value = [i for i in crf_value if i is not None]
+
+                    if len(crf_value) > 0:
+                        crf_prompt = str(max([int(i) for i in crf_value]))
+                        full_prompt += f".output('{str(row['clip_path'])}', crf={crf_prompt}, ss={str(row['upl_seconds'])}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                    else:
+                        full_prompt += f".output('{str(row['clip_path'])}', ss={str(row['upl_seconds'])}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+                    
+                    # Run the modification
+                    try:
+                        eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                        os.chmod(str(row['clip_path']), 0o755)
+                    except ffmpeg.Error as e:
+                        print('stdout:', e.stdout.decode('utf8'))
+                        print('stderr:', e.stderr.decode('utf8'))
+                        raise e
+    
+                
+                
+        print("clips extracted successfully")
+                
+    
+def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_selection, project, clip_modification, gpu_available):
+        
+    # Filter the df for the movie of interest
+    movie_i_df = available_movies_df[available_movies_df['filename']==movie_i].reset_index(drop=True)
+
+    # Calculate the max number of clips available
+    clip_length = clip_selection.kwargs['clip_length']
+    clip_numbers = clip_selection.result
+    start_trim = clip_selection.kwargs['clips_range'][0]
+    end_trim = clip_selection.kwargs['clips_range'][1]
+
+    # Calculate all the seconds for the new clips to start
+    movie_i_df["seconds"] = [
+        list(range(start_trim, int(math.floor(end_trim / clip_length) * clip_length), clip_length))
+    ]
+
+    # Reshape the dataframe with the seconds for the new clips to start on the rows
+    potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
+
+    # Specify the length of the clips
+    potential_start_df["clip_length"] = clip_length
+
+    if not clip_numbers==potential_start_df.shape[0]:
+        print("There was an issue estimating the starting seconds for the", clip_numbers, "clips")
+
+    # Get project-specific server info
+    server = project.server
+    
+    # Specify the temp folder to host the clips
+    if server == "SNIC":
+        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie_i + "_zooniverseclips"
     else:
-        vid2=open(modified_clip_path,'rb').read()
-    wi2 = widgets.Video(value=vid2, format=extension, width=400, height=500)
-    a=[wi1,wi2]
-    wid=widgets.HBox(a)
+        clips_folder = movie_i+"_zooniverseclips"
 
-    return wid
+    # Set the filename of the clips
+    potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
+
+    # Set the path of the clips
+    potential_start_df["clip_path"] = clips_folder + os.sep + potential_start_df["clip_filename"]
+
+    # Create the folder to store the videos if not exist
+    if not os.path.exists(clips_folder):
+        os.mkdir(clips_folder)
+
+    # Extract the videos and store them in the folder
+    extract_clips(potential_start_df, movie_path, clip_length, clip_modification, gpu_available)
+
+    return potential_start_df      
+
 
 def set_zoo_metadata(df, project, db_info_dict):
     
@@ -699,213 +812,6 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     # Upload all subjects
     subject_set.add(new_subjects)
 
-    print("Subjects uploaded to Zooniverse")
-
-# def choose_movies(db_path):
-
-#     # Connect to db
-#     conn = db_utils.create_connection(db_path)
-
-#     # Select all movies
-#     movies_df = pd.read_sql_query(
-#         f"SELECT filename, fpath FROM movies",
-#         conn,
-#     )
-
-#     # Select only videos that can be mapped
-#     available_movies_df = movies_df[movies_df['fpath'].map(os.path.isfile)]
-
-#     ###### Select movies ####
-#     # Display the movies available to upload
-#     movie_selection = widgets.Combobox(
-#         options = available_movies_df.filename.unique().tolist(),
-#         description = 'Movie:',
-#     )
-
-#     ###### Select clip length ##########
-#     # Display the length available
-#     clip_length = widgets.RadioButtons(
-#         options = [5,10],
-#         value = 10,
-#         description = 'Clip length (seconds):',
-#     )
-
-#     display(movie_selection, clip_length)
-
-#     return movie_selection, clip_length
-
-# def choose_clips(movie_selection, clip_length, db_path):
-
-#     # Connect to db
-#     conn = db_utils.create_connection(db_path)
-
-#     # Select the movie to upload
-#     movie_df = pd.read_sql_query(
-#         f"SELECT id, filename, fps, survey_start, survey_end FROM movies WHERE movies.filename='{movie_selection}'",
-#         conn,
-#     )
-
-#     print(movie_df.id.values)
-
-#     # Get information of clips uploaded
-#     uploaded_clips_df = pd.read_sql_query(
-#         f"SELECT movie_id, clip_start_time, clip_end_time FROM subjects WHERE subjects.subject_type='clip' AND subjects.movie_id={movie_df.id.values}",
-#         conn,
-#     )
-
-#     # Calculate the time when the new clips shouldn't start to avoid duplication (min=0)
-#     uploaded_clips_df["clip_start_time"] = (
-#         uploaded_clips_df["clip_start_time"] - clip_length
-#     ).clip(lower=0)
-
-#     # Calculate all the seconds when the new clips shouldn't start
-#     uploaded_clips_df["seconds"] = [
-#         list(range(i, j + 1))
-#         for i, j in uploaded_clips_df[["clip_start_time", "clip_end_time"]].values
-#     ]
-
-#     # Reshape the dataframe of the seconds when the new clips shouldn't start
-#     uploaded_start = expand_list(uploaded_clips_df, "seconds", "upl_seconds")[
-#         ["movie_id", "upl_seconds"]
-#     ]
-
-#     # Exclude starting times of clips that have already been uploaded
-#     potential_clips_df = (
-#         pd.merge(
-#             potential_start_df,
-#             uploaded_start,
-#             how="left",
-#             left_on=["movie_id", "pot_seconds"],
-#             right_on=["movie_id", "upl_seconds"],
-#             indicator=True,
-#         )
-#         .query('_merge == "left_only"')
-#         .drop(columns=["_merge"])
-#     )
-
-#     # Combine the flatten metadata with the subjects df
-#     subj_df = pd.concat([subj_df, meta_df], axis=1)
-
-#     # Filter clip subjects
-#     subj_df = subj_df[subj_df['Subject_type']=="clip"]
-
-#     # Create a dictionary with the right types of columns
-#     subj_df = {
-#     'subject_id': subj_df['subject_id'].astype(int),
-#     'upl_seconds': subj_df['upl_seconds'].astype(int),
-#     'clip_length': subj_df['#clip_length'].astype(int),
-#     'VideoFilename': subj_df['#VideoFilename'].astype(str),
-#     }
-
-#     # Transform the dictionary created above into a new DataFrame
-#     subj_df = pd.DataFrame(subj_df)
-
-#     # Calculate all the seconds uploaded
-#     subj_df["seconds"] = [list(range(i, i+j, 1)) for i, j in subj_df[['upl_seconds','clip_length']].values]
-
-#     # Reshape the dataframe of potential seconds for the new clips to start
-#     subj_df = expand_list(subj_df, "seconds", "upl_seconds").drop(columns=['clip_length'])
-
-
-#     # Estimate the maximum number of clips available
-#     survey_end_movie = movie_df["survey_end"].values[0]
-#     max_n_clips = math.floor(survey_end_movie/clip_length)
-
-#     ###### Select number of clips ##########
-#     # Display the number of potential clips available
-#     n_clips = widgets.IntSlider(
-#         value=max_n_clips,
-#         min=0,
-#         max=max_n_clips,
-#         step=1,
-#         description = 'Number of clips to upload:',
-#     )
-
-#     display(n_clips)
-
-#     return n_clips
-
-# def choose_subjectset_method():
-
-#     # Specify whether to upload to a new or existing workflow 
-#     subjectset_method = widgets.ToggleButtons(
-#         options=['Existing','New'],
-#         description='Subjectset destination:',
-#         disabled=False,
-#         button_style='success',
-#     )
-
-#     display(subjectset_method)
-#     return subjectset_method
-
-# def choose_subjectset(df, method):
-
-#     if method=="Existing":
-#         # Select subjectset availables
-#         subjectset = widgets.Combobox(
-#             options=list(df.subject_set_id.apply(str).unique()),
-#             description='Subjectset id:',
-#             ensure_option=True,
-#             disabled=False,
-#         )
-#     else:
-#         # Specify the name of the new subjectset
-#         subjectset = widgets.Text(
-#             placeholder='Type subjectset name',
-#             description='New subjectset name:',
-#             disabled=False
-#         )
-
-#     display(subjectset)
-#     return subjectset
-
-
-
-
-
-
-# def choose_subject_set1(subjectset_df):
-
-#     # Specify whether to upload to a new or existing workflow 
-#     subjectset_method = widgets.ToggleButtons(
-#         options=['Existing','New'],
-#         description='Subjectset destination:',
-#         disabled=False,
-#         button_style='success',
-#     )
-#     output = widgets.Output()
-
-#     def on_button_clicked(method):
-#         with output:
-#             if method['new']=="Existing":
-#                 output.clear_output()
-#                 # Select subjectset availables
-#                 subjectset = widgets.Combobox(
-#                     options=list(subjectset_df.subject_set_id.apply(str).unique()),
-#                     description='Subjectset id:',
-#                     ensure_option=True,
-#                     disabled=False,
-#                 )
-
-#                 display(subjectset)
-
-#                 return subjectset
-
-#             else:
-#                 output.clear_output()
-#                 # Specify the name of the new subjectset
-#                 subjectset = widgets.Text(
-#                     placeholder='Type subjectset name',
-#                     description='New subjectset name:',
-#                     disabled=False
-#                 )
-
-
-#                 display(subjectset)
-
-#                 return subjectset
-
-
-#     subjectset_method.observe(on_button_clicked, names='value')
-
-#     display(subjectset_method, output)
+    print("Subjects uploaded to Zooniverse")        
+        
+        

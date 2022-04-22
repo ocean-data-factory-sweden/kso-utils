@@ -9,7 +9,6 @@ import zipfile
 import boto3
 import paramiko
 import logging
-import difflib
 from tqdm import tqdm
 from pathlib import Path
 from paramiko import SSHClient
@@ -130,23 +129,7 @@ def get_db_init_info(project, server_dict):
     
 
 
-def update_db_init_info(project, csv_to_update):
-    
-    if project.server == "AWS":
-            
-        # Start AWS session
-        aws_access_key_id, aws_secret_access_key = aws_credentials()
-        client = connect_s3(aws_access_key_id, aws_secret_access_key)
-        bucket = project.bucket
-        key = project.key
 
-        csv_filename=csv_to_update.name
-
-        upload_file_to_s3(client,
-                              bucket=bucket,
-                              key=str(Path(key, csv_filename)),
-                              filename=str(csv_to_update))
-        
 def retrieve_movie_info_from_server(project, db_info_dict):
     
     server = project.server
@@ -156,7 +139,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     
     if server == "AWS":
         # Retrieve info from the bucket
-        server_df = get_matching_s3_keys(client = db_info_dict["client"], 
+        server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
                                                          bucket = bucket_i, 
                                                          suffix = movie_utils.get_movie_extensions())
         # Get the fpath(html) from the key
@@ -164,7 +147,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
         
     
     elif server == "SNIC":
-        server_df = get_snic_files(client = db_info_dict["client"], folder = movie_folder)
+        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
     
     elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
@@ -211,8 +194,39 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
     
     return available_movies_df
+
+def get_movie_url(project, server_dict, f_path):
+    '''
+    Function to get the url of the movie
+    '''
+    server = project.server
+    if server == "AWS":
+        movie_key = f_path.replace("%20"," ").split('/',3)[3]
+        movie_url = server_dict['client'].generate_presigned_url('get_object', 
+                                                            Params = {'Bucket': server_dict['bucket'], 
+                                                                      'Key': movie_key}, 
+                                                            ExpiresIn = 5400)
+        return movie_url
+    elif server == "SNIC":
+        return f_path
+    
+    
+def update_db_init_info(project, csv_to_update):
+    
+    if project.server == "AWS":
             
-            
+        # Start AWS session
+        aws_access_key_id, aws_secret_access_key = aws_credentials()
+        client = connect_s3(aws_access_key_id, aws_secret_access_key)
+        bucket = project.bucket
+        key = project.key
+
+        csv_filename=csv_to_update.name
+
+        upload_file_to_s3(client,
+                              bucket=bucket,
+                              key=str(Path(key, csv_filename)),
+                              filename=str(csv_to_update))
 
 
 #####################

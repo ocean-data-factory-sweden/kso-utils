@@ -6,6 +6,7 @@ import logging
 # widget imports
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
+from IPython.display import HTML
 
 # util imports
 import kso_utils.server_utils as server_utils
@@ -157,18 +158,18 @@ def choose_single_workflow(workflows_df):
 
     return workflow_name, subj_type
 
-# def choose_clip_workflows(workflows_df):
+# Function to preview underwater movies
+def preview_movie(project, db_info_dict, available_movies_df, movie_i):
+    
+    # Select the movie of interest
+    movie_selected = available_movies_df[available_movies_df["filename"]==movie_i].reset_index(drop=True)
 
-#     layout = widgets.Layout(width="auto", height="40px")  # set width and height
+    # Make sure only one movie is selected
+    if len(movie_selected.index)>1:
+        print("There are several movies with the same filename. This should be fixed!")
 
-#     # Display the names of the workflows
-#     workflow_name = widgets.SelectMultiple(
-#         options=workflows_df.display_name.unique().tolist(),
-#         description="Workflow name:",
-#         disabled=False,
-#     )
+    else:
+        # Generate temporary path to the movie select
+        movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
 
-
-#     display(workflow_name)
-
-#     return workflow_name
+        return HTML(f"""<video src={movie_path} width=800 controls/>"""), movie_path
