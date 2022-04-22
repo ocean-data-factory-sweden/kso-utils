@@ -347,9 +347,10 @@ def modify_clips(clips_list, modification_details, mod_clips_folder, gpu_availab
     # Create the information for each clip and modify it (printing a progress bar) 
     for clip_i in tqdm(clips_list):
         # Create the filename and path of the modified clip
-        output_clip_name = "modified_" + clip_i
+        output_clip_name = "modified_" + os.path.basename(clip_i)
         output_clip_path = mod_clips_folder + os.sep + output_clip_name
         
+        print(output_clip_path)
         
         if not os.path.exists("output_clip_path"):
             if gpu_available:
@@ -359,7 +360,6 @@ def modify_clips(clips_list, modification_details, mod_clips_folder, gpu_availab
                                  "-i", clip_i, 
                                  "-c:v", "h264_nvenc",
                                  output_clip_path])
-                os.chmod(output_clip_path, 0o755)
                 
             else:
                 # Set up input prompt
