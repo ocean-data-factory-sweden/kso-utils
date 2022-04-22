@@ -8,6 +8,7 @@ import gdown
 import zipfile
 import boto3
 import paramiko
+import difflib
 import logging
 from tqdm import tqdm
 from pathlib import Path
@@ -139,7 +140,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     
     if server == "AWS":
         # Retrieve info from the bucket
-        server_df = server_utils.get_matching_s3_keys(client = db_info_dict["client"], 
+        server_df = get_matching_s3_keys(client = db_info_dict["client"], 
                                                          bucket = bucket_i, 
                                                          suffix = movie_utils.get_movie_extensions())
         # Get the fpath(html) from the key
@@ -147,7 +148,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
         
     
     elif server == "SNIC":
-        server_df = server_utils.get_snic_files(client = db_info_dict["client"], folder = movie_folder)
+        server_df = get_snic_files(client = db_info_dict["client"], folder = movie_folder)
     
     elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
