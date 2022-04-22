@@ -651,6 +651,9 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     # Extract the videos and store them in the folder
     extract_clips(potential_start_df, movie_path, clip_length, clip_modification, gpu_available)
 
+    # Add information on the modification of the clips
+    potential_start_df["clip_modification_details"] = str(clip_modification)
+
     return potential_start_df      
 
 
@@ -681,10 +684,6 @@ def set_zoo_metadata(df, project, db_info_dict):
             "siteName": "#siteName"
             })
 
-    # Set clip path if no modification
-    if "modif_clip_path" in upload_to_zoo.columns and "no_modification" not in upload_to_zoo["modif_clip_path"].values:
-        upload_to_zoo["modif_clip_path"] = upload_to_zoo["clip_path"]
-    
     # Convert datetime to string to avoid JSON seriazible issues
     upload_to_zoo['#created_on'] = upload_to_zoo['#created_on'].astype(str)
     created_on = upload_to_zoo['#created_on'].unique()[0]
@@ -692,7 +691,7 @@ def set_zoo_metadata(df, project, db_info_dict):
     # Select only relevant columns
     upload_to_zoo = upload_to_zoo[
         [
-            "modif_clip_path",
+            "clip_path",
             "upl_seconds",
             "#clip_length",
             "#created_on",
@@ -789,7 +788,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     print(subject_set_name, "subject set created")
 
     # Save the df as the subject metadata
-    subject_metadata = upload_to_zoo.set_index('modif_clip_path').to_dict('index')
+    subject_metadata = upload_to_zoo.set_index('clip_path').to_dict('index')
 
     # Upload the clips to Zooniverse (with metadata)
     new_subjects = []
