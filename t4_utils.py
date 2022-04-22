@@ -300,7 +300,8 @@ def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: 
     # Koster-specific movie name extraction (i.e. make sure that weird naming does not happen))   
     if project_name == "Koster_Seafloor_Obs":
         movie_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
-        df["fpath"] = df.merge(movie_df, left_on="movie_id", right_on="id", how='left')["spath"]
+        df = df.merge(movie_df, left_on="movie_id", right_on="id", how='left')
+        df = df.rename(columns={"spath": "fpath"})
 
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
