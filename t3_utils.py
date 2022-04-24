@@ -643,22 +643,23 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
-
+    
     # Specify the number of parallel items
     pool = Pool(pool_size)
 
+    print("Extracting clips")
     # Read each movie and extract the clips 
     for index, row in potential_start_df.iterrows():
         if not os.path.exists(row['clip_path']):
             # Extract the videos and store them in the folder
             pool.apply_async(extract_clips, (movie_path, clip_length, row['upl_seconds'], row['clip_path'], modification_details, gpu_available,))
 
-        pool.close()
-        pool.join()
+    pool.close()
+    pool.join()
 
 
     # Add information on the modification of the clips
-    potential_start_df["clip_modification_details"] = str(clip_modification)
+    potential_start_df["clip_modification_details"] = str(modification_details)
 
     return potential_start_df      
 
