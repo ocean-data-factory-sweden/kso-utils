@@ -516,36 +516,6 @@ def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
         sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
     
 
-def check_movies_from_server(movies_df, sites_df, server_i):
-    if server_i=="AWS":
-        # Set aws account credentials
-        aws_access_key_id, aws_secret_access_key = aws_credentials()
-        
-        # Connect to S3
-        client = connect_s3(aws_access_key_id, aws_secret_access_key)
-        
-        # 
-        spyfish_utils.check_spyfish_movies(movies_df, client)
-        
-    # Find out files missing from the Server
-    missing_from_server = missing_info[missing_info["_merge"]=="right_only"]
-    missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
-    missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])&(missing_from_server["bucket"].isna())]
-    
-    print("There are", len(missing_from_server.index), "movies missing from", server_i)
-    print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
-    print(*missing_bad_deployment.filename.unique(), sep = "\n")
-    print(len(missing_no_bucket_info.index), "movies are good deployments but don't have bucket info. Their filenames are:")
-    print(*missing_no_bucket_info.filename.unique(), sep = "\n")
-    
-    # Find out files missing from the csv
-    missing_from_csv = missing_info[missing_info["_merge"]=="left_only"].reset_index(drop=True)
-    print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
-    print(*missing_from_csv.filename.unique(), sep = "\n")
-    
-    return missing_from_server, missing_from_csv
-
-
 ###################################        
 # #######Google Drive functions##### 
 # ##################################

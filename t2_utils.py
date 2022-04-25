@@ -668,15 +668,12 @@ def check_deployments_interest(db_info_dict, survey_i, deployments_interest):
     # Load the csv with with sites and survey choices
     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
     
+    # If new survey was added 
     if isinstance(survey_i.result, dict):
         # Save the responses as a new row for the survey csv file
         new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
         new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
-
-        # Save the year of the survey
-#         survey_year = new_survey_row["SurveyStartDate"].values[0].strftime("%Y")
-        survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
-        
+ 
                 
     else:
         # Read surveys csv
@@ -688,9 +685,8 @@ def check_deployments_interest(db_info_dict, survey_i, deployments_interest):
         # Save the SurveyID that match the survey name
         new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
                 
-        # Save the year of the survey
-        survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
-                       
+    # Save the year of the survey
+    survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
         
     # Get prepopulated fields for the survey
     new_survey_row[["ShortFolder"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["ShortFolder"]].values[0]
@@ -719,32 +715,40 @@ def check_deployments_interest(db_info_dict, survey_i, deployments_interest):
         
         if deployment_site_folder in deployments_server_name['Prefix'].to_list():
         
-        # Retrieve files within the folder of interest
+            # Retrieve files within the folder of interest
             files_in_deployment_dict = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
                                                                     Prefix=deployment_site_folder)
             
             # Convert info to dataframe
             files_in_deployment = pd.DataFrame.from_dict(files_in_deployment_dict['Contents'])
-            print("The deployment has the following files:","\n", files_in_deployment.Key.to_list())
             
             if len(files_in_deployment["Key"].unique())>1:
-                # Launch a dropdown to display the video of interest
-                movie_display = interactive(preview_aws_movie,
-                                            db_info_dict = db_info_dict,
-                                            movie_key = movies_to_preview(files_in_deployment["Key"])
-                                            )
+                print(deployment_site_folder, "deployment has the following files:","\n", files_in_deployment.Key.to_list())
+                
+                # If filename is not correct
+                
+                
+                # If movie is not in movies.csv
+                
+                
+#                 # Launch a dropdown to display the video of interest
+#                 movie_display = interactive(preview_aws_movie,
+#                                             db_info_dict = db_info_dict,
+#                                             movie_key = movies_to_preview(files_in_deployment["Key"])
+#                                             )
 
             else:
+                print(deployment_site_folder, "deployment has one file:","\n", files_in_deployment.Key.to_list())
                 movie_key = files_in_deployment["Key"].unique()[0]
-                movie_display = preview_aws_movie(
-                    db_info_dict = db_info_dict,
-                    movie_key = movie_key
-                )
-                      
-           
-            display(movie_display)
+#                 movie_display = preview_aws_movie(
+#                     db_info_dict = db_info_dict,
+#                     movie_key = movie_key
+#                 )
             
-        
+#                 display(movie_display)
+            
+        else:
+            print(deployment_site_folder, "doesn't have any movies")
 
 
 # Select site and date of the video

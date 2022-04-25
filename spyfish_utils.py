@@ -13,17 +13,17 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.db_utils as db_utils
 
 
-def check_spyfish_movies(movies_df, client, bucket_i):
+def check_spyfish_movies(movies_df, db_info_dict):
     
     # Get dataframe of movies from AWS
-    movies_s3_pd = server_utils.get_matching_s3_keys(client, bucket_i, suffix=movie_utils.get_movie_extensions())
+    movies_s3_pd = server_utils.get_matching_s3_keys(db_info_dict["client"], db_info_dict["bucket"], suffix = movie_utils.get_movie_extensions())
 
     # Specify the key of the movies (path in S3 of the object)
-    movies_df["Key"] = movies_df["prefix"] + filename
+    movies_s3_pd["filename"] = movies_s3_pd.Key.str.split("/").str[-1]
 
     # Missing info for files in the "buv-zooniverse-uploads"
-    movies_df = movies_df.merge(movies_s3_pd["Key"], 
-                                on=['Key'], how='left', 
+    movies_df = movies_df.merge(movies_s3_pd["filename"], 
+                                on=['filename'], how='left', 
                                 indicator=True)
 
     # Check that movies can be mapped

@@ -104,7 +104,10 @@ def check_fps_duration(db_info_dict, project):
 
      
 
-def check_sampling_start_end(df, movies_csv):
+def check_sampling_start_end(df, db_info_dict):
+    # Load the csv with movies information
+    movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
+    
     # Check if sampling start or end is missing from any movie
     if not df[["sampling_start", "sampling_end"]].isna().all().any():
         

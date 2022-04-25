@@ -31,7 +31,7 @@ def check_sites_csv(db_initial_info, project):
         sites_df, "sites", sites_df.columns
     )
     
-    print("The sites.csv file doesn't have any empty fields")
+    print("sites.csv file is all good!")
     
     return sites_df
 
@@ -39,7 +39,7 @@ def check_sites_csv(db_initial_info, project):
 def check_movies_csv(db_initial_info, project):
 
     # Check for missing fps and duration info
-    movies_df = movie_utils.check_fps_duration(db_initial_info, project.Project_name)
+    movies_df = movie_utils.check_fps_duration(db_initial_info, project)
     
     # Check if the project is the Spyfish Aotearoa
     if project.Project_name == "Spyfish_Aotearoa":
@@ -73,42 +73,47 @@ def check_movies_csv(db_initial_info, project):
         movies_db, "movies", movies_db.columns
     )
     
-    
-    
-    # Check for survey_start and survey_end info
-    movies_df = movie_utils.check_survey_start_end(movies_df, movies_csv)
+    # Check for sampling_start and sampling_end info
+    movies_df = movie_utils.check_sampling_start_end(movies_df, db_initial_info)
     
     # Ensure date is ISO 8601:2004(E) and compatible with Darwin Data standards
     date_time_check = pd.to_datetime(movies_df.created_on, infer_datetime_format=True)
-    print("The last dates from the created_on column are:")
-    print(date_time_check.tail())
-
-    # Check the sites information of the movies
-    sites_df = sites_df.rename(columns={"id": "site_id"})
-
-    # Merge movies and sites dfs
-    movies_df = pd.merge(
-        movies_df, 
-        sites_df[["siteName","site_id"]], 
-        how="left", 
-        on="siteName"
-    )
-    
-    # Select only those fields of interest
-    movies_db = movies_df[
-        ["movie_id", "filename", "created_on", "fps", "duration", "survey_start", "survey_end", "Author", "site_id"]
-    ]
-
-    # Roadblock to prevent empty information
-    db_utils.test_table(
-        movies_db, "movies", movies_db.columns
-    )
-    
-    print("The movies.csv file doesn't have any empty fields")    
+#     print("The last dates from the created_on column are:")
+#     print(date_time_check.tail())
+   
+    print("movies.csv is all good!")    
     
     return movies_df
     
+
+
+def check_movies_from_server(movies_df, sites_df, project, db_info_dict):
+    # Get project-specific server info
+    server = project.server
     
+    if server=="AWS":
+        # Retrieve movies that are missing info in the movies.csv
+        missing_info = spyfish_utils.check_spyfish_movies(movies_df, db_info_dict)
+        
+    # Find out files missing from the Server
+    missing_from_server = missing_info[missing_info["_merge"]=="right_only"]
+    missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
+    missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])]
+    
+    print("There are", len(missing_from_server.index), "movies missing from", server)
+    print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
+    print(*missing_bad_deployment.filename.unique(), sep = "\n")
+    print(len(missing_no_bucket_info.index), "movies are good deployments but don't have movies uploaded. Their filenames are:")
+    print(*missing_no_bucket_info.filename.unique(), sep = "\n")
+    
+    # Find out files missing from the csv
+    missing_from_csv = missing_info[missing_info["_merge"]=="left_only"].reset_index(drop=True)
+    print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
+    print(*missing_from_csv.filename.unique(), sep = "\n")
+    
+    return missing_from_server, missing_from_csv
+
+
     
 def upload_movies():
     
