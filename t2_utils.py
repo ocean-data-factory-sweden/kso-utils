@@ -685,7 +685,7 @@ def select_deployment(project, db_info_dict, survey_i):
 
     return deployment_widget, survey_row, survey_server_name 
 
-def select_eventdate():
+def select_eventdate(survey_row):
     # Set the beginning of the survey as default date
     default_date = pd.Timestamp(survey_row["SurveyStartDate"].values[0]).to_pydatetime()
     
@@ -732,23 +732,23 @@ def check_deployment(deployment_selected, deployment_date, survey_server_name, d
 
     deployment_filenames = []
     for deployment_i in deployment_selected.value:
-    # Specify the name of the deployment
-    deployment_name = deployment_i+"_"+EventDate_str
+        # Specify the name of the deployment
+        deployment_name = deployment_i+"_"+EventDate_str
 
-    if deployment_name in deployment_in_csv:
-        print("Deployment", deployment_name, "already exist in the csv file reselect new deployments before going any further!")
+        if deployment_name in deployment_in_csv:
+            print("Deployment", deployment_name, "already exist in the csv file reselect new deployments before going any further!")
 
-    # Specify the filename of the deployment
-    filename = deployment_name+".MP4"
+        # Specify the filename of the deployment
+        filename = deployment_name+".MP4"
 
-    if filename in deployments_in_server:
-        print("Deployment", deployment_name, "already exist in the server reselect new deployments before going any further!")
+        if filename in deployments_in_server:
+            print("Deployment", deployment_name, "already exist in the server reselect new deployments before going any further!")
 
-    else:
-        deployment_filenames = deployment_filenames + [filename]
-        print("There is no existing information in the database for deployment", deployment_name, ". You can continue uploading the information.")
+        else:
+            deployment_filenames = deployment_filenames + [filename]
+            print("There is no existing information in the database for deployment", deployment_name, ". You can continue uploading the information.")
 
-    return deployment_filenames
+        return deployment_filenames
 
 
 
@@ -804,499 +804,88 @@ def update_new_deployments(deployment_names, db_info_dict, survey_server_name):
         # Change the filename if only one file
         else:
             print("WIP")
+
+        return movie_files_server
         
-        
-        
-        
-# Select site and date of the video
-def select_SiteID(db_initial_info):
+
+def record_deployment_info(deployment_names, db_info_dict):
+
+    for deployment_i in deployment_names:
+      # Estimate the fps and length info
+      fps, duration = movie_utils.get_length(deployment_i, os.getcwd())
     
-    # Read csv as pd
-    sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
-
-    # Existing sites
-    exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
-    
-    site_widget = widgets.Dropdown(
-                options = exisiting_sites,
-                description = 'Site ID:',
-                disabled = False,
-                layout=Layout(width='50%'),
-                style = {'description_width': 'initial'}
-            )
-#     display(site_widget)
-
-    return site_widget
-
-
-def select_eventdate(default_date):
-    # Select the date 
-    date_widget = widgets.DatePicker(
-        description='Deployment or event date:',
-        value = default_date,
-        disabled=False,
-        layout=Layout(width='50%'),
-        style = {'description_width': 'initial'}
-    )
-#     display(date_widget)
-    
-    return date_widget
-
-# Function to preview the movie
-def preview_aws_movie(db_info_dict, movie_key):
-
-    # Generate temporary path to the movie select
-    movie_url = db_info_dict['client'].generate_presigned_url('get_object', 
-                                                            Params = {'Bucket': db_info_dict['bucket'], 
-                                                                      'Key': movie_key}, 
-                                                            ExpiresIn = 400)
-
-    return HTML(f"""<video src={movie_url} width=800 controls/>""")
-
-# Function to select the movie to preview
-def movies_to_preview(available_movies_df):
-    movie_to_preview_widget = widgets.Dropdown(
-                options = available_movies_df.unique().tolist(),
-                description = 'Movie to preview:',
-                disabled = False,
-                layout=Layout(width='50%'),
-                style = {'description_width': 'initial'}
-            )
-#     display(movie_to_preview_widget)
-
-    return movie_to_preview_widget
-
-
-def select_date_site(db_info_dict, survey_i, upload_method = "local"):
-    
-    ###### Save the name of the survey
-    # Load the csv with with sites and survey choices
-    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-    
-    if isinstance(survey_i.result, dict):
-        # Save the responses as a new row for the survey csv file
-        new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
-        new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
-       
-                
-    else:
-        # Read surveys csv
-        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
+      # Read csv as pd
+      movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+      
+      # Load the csv with with sites and survey choices
+      choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
         
-        # Return the name of the survey
-        survey_name = survey_i.result.value
-        
-        # Save the SurveyID that match the survey name
-        new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
-                               
-        
-    # Save the year of the survey
-#         survey_year = new_survey_row["SurveyStartDate"].values[0].strftime("%Y")
-    survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
-    
-    # Get prepopulated fields for the survey
-    new_survey_row[["ShortFolder"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["ShortFolder"]].values[0]
-    
-    # Save the "server filename" of the survey 
-    short_marine_reserve = new_survey_row["ShortFolder"].values[0]
+      deployment_info = {
+          # Select the start of the sampling
+          "SamplingStart": select_SamplingStart(duration),
+          
+          # Select the end of the sampling
+          "SamplingEnd": select_SamplingEnd(duration),
+          
+          # Specify if deployment is bad
+          "IsBadDeployment": select_IsBadDeployment(),
+          
+          # Write the number of the replicate within the site
+          "ReplicateWithinSite": write_ReplicateWithinSite(),
+          
+          # Select the person who recorded this deployment
+          "RecordedBy": select_RecordedBy(movies_df.RecordedBy.unique()),
+          
+          # Select depth stratum of the deployment
+          "DepthStrata": select_DepthStrata(),
+          
+          # Select the depth of the deployment 
+          "Depth": select_Depth(),
+          
+          # Select the underwater visibility
+          "UnderwaterVisibility": select_UnderwaterVisibility(choices_df.UnderwaterVisibility.dropna().unique().tolist()),
+          
+          # Select the time in
+          "TimeIn": deployment_TimeIn(),
+      
+          # Select the time out
+          "TimeOut": deployment_TimeOut(),
+          
+          # Add any comment related to the deployment
+          "NotesDeployment": write_NotesDeployment(),
+          
+          # Select the theoretical duration of the deployment 
+          "DeploymentDurationMinutes": select_DeploymentDurationMinutes(),
+          
+          # Write the type of habitat
+          "Habitat": write_Habitat(),
+          
+          # Write the number of NZMHCS_Abiotic
+          "NZMHCS_Abiotic": write_NZMHCS_Abiotic(),
+          
+          # Write the number of NZMHCS_Biotic
+          "NZMHCS_Biotic": write_NZMHCS_Biotic(),
+          
+          # Select the level of the tide
+          "TideLevel": select_TideLevel(choices_df.TideLevel.dropna().unique().tolist()),
+          
+          # Describe the weather of the deployment
+          "Weather": write_Weather(),
+          
+          # Select the model of the camera used
+          "CameraModel": select_CameraModel(choices_df.CameraModel.dropna().unique().tolist()),
+          
+          # Write the camera lens and settings used
+          "LensModel": write_LensModel(),
+          
+          # Specify the type of bait used
+          "BaitSpecies": write_BaitSpecies(),
+          
+          # Specify the amount of bait used
+          "BaitAmount": select_BaitAmount(),
+      }
 
-    # Save the "server filename" of the survey 
-    survey_server_name = short_marine_reserve + "-buv-" + str(survey_year) + "/"
-            
-    # Save the beginning of the survey
-    survey_start = pd.Timestamp(new_survey_row["SurveyStartDate"].values[0]).to_pydatetime()
-        
-    # Retrieve deployments info from the survey of interest
-    deployments_server_name = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-                                                            Prefix=survey_server_name,
-                                                            Delimiter='/')
-    # Convert info to dataframe
-    deployments_server_name = pd.DataFrame.from_dict(deployments_server_name['CommonPrefixes'])
-                
-    # Define function to select folder with go-pro files
-    def deployment_exist(site, date):
-        # Specify the name of the folder of the deployment
-        deployment_site_folder = survey_server_name + site + "/"
-        
-        # Save eventdate as str
-        date_str = date.strftime("%d_%m_%Y")
-
-        # Specify the name of the file of the deployment
-        deployment_date_site = site+"_"+date_str
-        
-        # If deployment_date_site selected exists...
-        if deployment_site_folder in deployments_server_name['Prefix'].to_list():
-            # Retrieve files within the folder of interest
-            files_in_deployment_dict = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-                                                                    Prefix=deployment_site_folder)
-            
-            # Convert info to dataframe
-            files_in_deployment = pd.DataFrame.from_dict(files_in_deployment_dict['Contents'])
-            print("The deployment has the following files:","\n", files_in_deployment.Key.to_list())
-            
-            if len(files_in_deployment["Key"].unique())>1:
-                # Launch a dropdown to display the video of interest
-                movie_display = interactive(preview_aws_movie,
-                                            db_info_dict = db_info_dict,
-                                            movie_key = movies_to_preview(files_in_deployment["Key"])
-                                            )
-
-            else:
-                movie_key = files_in_deployment["Key"].unique()[0]
-                movie_display = preview_aws_movie(
-                    db_info_dict = db_info_dict,
-                    movie_key = movie_key
-                )
-                      
-           
-            display(movie_display)
-        
-        
-        # If deployment_date_site selected exists...
-        if deployment_date_site in deployments_server_name['Prefix'].to_list():
-            
-            # Widget to verify the video is correct
-            w1 = interactive(sel_subfolder,
-                             survey_folder = widgets.Dropdown(
-                                 options = deployments_server_name['Prefix'].to_list(),
-                                 description = 'Select the folder of the survey to process:',
-                                 disabled = False,
-                                 layout=Layout(width='90%'),
-                                 style = {'description_width': 'initial'}
-                             )
-                            )
-#             display(w1)
-
-            return w1
-            
-            
-        else:
-            print(deployment_date_site, "is not in the server.")
-            
-            if upload_method == "Colab":
-                fc = widgets.Text(
-                      description='Write the path to the files:',
-                      disabled=False,
-                      layout=Layout(width='95%'),
-                      style = {'description_width': 'initial'}
-                  )   
-#                 display(fc) 
-
-                return fc
-
-            else:
-                # Widget to select the local folder of interest
-                fc = FileChooser('/')
-                fc.title = '<b>Select the local folder with the deployment videos</b>'
-                # Switch to folder-only mode
-                fc.show_only_dirs = True
-#                 display(fc)
-
-                return fc
-    
-    
-    # Display the options
-    w = interactive(deployment_exist,
-                    site = select_SiteID(db_info_dict),
-                    date = select_eventdate(survey_start),
-                   )
-
-#     display(w)
-
-    return w
-
-#datetime.date(2020,1,1)
-
-
-# # Select site and date of the video
-# def select_SiteID(db_initial_info):
-    
-#     # Read csv as pd
-#     sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
-
-#     # Existing sites
-#     exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
-    
-#     site_widget = widgets.Dropdown(
-#                 options = exisiting_sites,
-#                 description = 'Site ID:',
-#                 disabled = False,
-#                 layout=Layout(width='50%'),
-#                 style = {'description_width': 'initial'}
-#             )
-#     display(site_widget)
-
-#     return site_widget
-
-
-# def select_eventdate():
-#     # Select the date 
-#     date_widget = widgets.DatePicker(
-#         description='Deployment or event date:',
-#         disabled=False,
-#         layout=Layout(width='50%'),
-#         style = {'description_width': 'initial'}
-#     )
-#     display(date_widget)
-    
-#     return date_widget  
-
-def select_go_pro_folder(db_info_dict):
-    # Define function to select folder with go-pro files
-    def f(server_or_locally):
-        # If cloud slected...
-        if server_or_locally == 'Cloud':
-            # Define function for cloud option to select subfolder within the survey folder
-            def sel_subfolder(survey_folder):
-                # Retrieve info from the survey folders in the cloud
-                survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
-                                                                        Prefix=survey_folder, 
-                                                                        Delimiter='/')
-
-                # Convert info to dataframe
-                survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
-
-                # Widget to select the local folder of interest
-                survey_subfolder = widgets.Dropdown(
-                                        options = survey_subfolders.Prefix.unique(),
-                                        description = 'Select the folder of the deployment to process:',
-                                        disabled = False,
-                                        layout=Layout(width='80%'),
-                                        style = {'description_width': 'initial'}
-                )
-                display(survey_subfolder)
-
-                return survey_subfolder
-
-            # Retrieve info from the survey folders in the cloud
-            survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
-                                                                Prefix="", 
-                                                                Delimiter='/')
-
-            # Convert info to dataframe
-            survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
-
-            # Widget to select the survey folder of interest
-            w1 = interactive(sel_subfolder,
-                             survey_folder = widgets.Dropdown(
-                                 options = survey_folders.Prefix.unique(),
-                                 description = 'Select the folder of the survey to process:',
-                                 disabled = False,
-                                 layout=Layout(width='90%'),
-                                 style = {'description_width': 'initial'}
-                             )
-                            )
-            display(w1)
-
-            return w1
-        
-    
-        # If local slected...
-        if server_or_locally == 'Local':
-            # Widget to select the local folder of interest
-            fc = FileChooser('/')
-            fc.title = '<b>Select the local folder with the Go-pro videos</b>'
-            # Switch to folder-only mode
-            fc.show_only_dirs = True
-            display(fc)
-
-            return fc
-    
-    
-    # Display the options
-    w = interactive(f,
-                    server_or_locally = widgets.Dropdown(
-                        options = ['Local','Cloud'],
-                        description = 'Select files stored on the cloud or locally:',
-                        disabled = False,
-                        layout=Layout(width='90%'),
-                        style = {'description_width': 'initial'}
-                    )
-                   )
-
-    display(w)
-
-    return w
-
-def select_go_pro_files(go_pro_folder, db_info_dict):
-    if go_pro_folder.kwargs['server_or_locally']=="Cloud":
-        # Retrieve info from the survey folders in the cloud
-        go_pro_files_i = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
-                                               bucket = db_info_dict["bucket"], 
-                                               prefix = go_pro_folder.result.result.value)
-
-        go_pro_files_i = go_pro_files_i.Key.unique()        
-        
-    else:
-        go_pro_files_i = [os.path.join(go_pro_folder.result.selected, movie) for movie in os.listdir(go_pro_folder.result.selected)]
-
-    # Specify the formats of the movies to select
-    movie_formats = movie_utils.get_movie_extensions()
-
-    # Select only movie files
-    go_pro_movies_i = [s for s in go_pro_files_i if any(xs in s for xs in movie_formats)]
-
-    print("The movies selected are:")
-    print(*go_pro_movies_i, sep='\n')
-
-    return go_pro_movies_i 
-        
-
-# Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
-def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go_pro_files):
-
-    # Save eventdate as str
-    EventDate_str = EventDate.isoformat().replace("-","_")
-    
-    # Specify the name of the deployment
-    deployment_name = SiteID+"_"+EventDate_str
-
-    
-   
-    if go_pro_folder.kwargs['server_or_locally']=="Cloud":
-        concat_folder = "concat_video"
-        local_go_pro_files = [i.split('/', 2)[-1] for i in go_pro_files]
-        
-        print("Downloading the go_pro files")
-        # Download the movies from the S3
-        for movie_key in tqdm(go_pro_files, total=len(go_pro_files)):
-            local_filename = local_go_pro_files[go_pro_files.index(movie_key)]
-            if not os.path.exists(local_filename):
-                server_utils.download_object_from_s3(client = db_info_dict["client"],
-                                                bucket = db_info_dict["bucket"], 
-                                                key = movie_key,
-                                                filename = local_filename)
-        go_pro_files = local_go_pro_files
-        
-    else:
-        # Specify temp folder to host the concat video
-        concat_folder = go_pro_folder.result.selected+"concat_video"
-
-
-    # Specify the filename and path for the concatenated movie
-    filename = deployment_name+".MP4"
-    concat_video = os.path.join(concat_folder,filename)
-
-    # Save list as text file
-    textfile = open("a_file.txt", "w")
-    for go_pro_file in go_pro_files:
-        textfile.write("file '"+ go_pro_file + "'"+ "\n")
-    textfile.close()
-
-    
-    if not os.path.exists(concat_folder):
-        os.mkdir(concat_folder)
-    
-    if not os.path.exists(concat_video):
-        print("Concatenating ", concat_video)
-        
-        # Concatenate the videos
-        subprocess.call(["ffmpeg",
-                         "-f", "concat",
-                         "-safe", "0",
-                         "-i", "a_file.txt", 
-                         "-c", "copy",
-                         concat_video])
-            
-        print(concat_video, "concatenated successfully")
-        
-    # Delete the text file
-    os.remove("a_file.txt")
-        
-    # Update the fps and length info
-    fps, duration = movie_utils.get_length(concat_video)
-    
-    # Save evrything in a dictionary
-    video_info_dict = {
-        "fps": fps, 
-        "duration": duration, 
-        "concat_video": concat_video, 
-        "filename": filename, 
-        "SiteID": SiteID, 
-        "EventDate": EventDate, 
-        #"EventDate_str": EventDate_str,
-        "go_pro_files": go_pro_files, 
-        #"deployment_name": deployment_name,
-    }
-    
-    print("Open", concat_video, "to complete the next steps.")
-    
-    return video_info_dict
-
-def record_deployment_info(db_info_dict, video_info_dict):
-    
-    # Read csv as pd
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-    
-    # Load the csv with with sites and survey choices
-    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-       
-    deployment_info = {
-        # Select the start of the sampling
-        "SamplingStart": select_SamplingStart(video_info_dict["duration"]),
-        
-        # Select the end of the sampling
-        "SamplingEnd": select_SamplingEnd(video_info_dict["duration"]),
-        
-        # Specify if deployment is bad
-        "IsBadDeployment": select_IsBadDeployment(),
-        
-        # Write the number of the replicate within the site
-        "ReplicateWithinSite": write_ReplicateWithinSite(),
-        
-        # Select the person who recorded this deployment
-        "RecordedBy": select_RecordedBy(movies_df.RecordedBy.unique()),
-        
-         # Select depth stratum of the deployment
-        "DepthStrata": select_DepthStrata(),
-        
-        # Select the depth of the deployment 
-        "Depth": select_Depth(),
-        
-        # Select the underwater visibility
-        "UnderwaterVisibility": select_UnderwaterVisibility(choices_df.UnderwaterVisibility.dropna().unique().tolist()),
-        
-        # Select the time in
-        "TimeIn": deployment_TimeIn(),
-    
-        # Select the time out
-        "TimeOut": deployment_TimeOut(),
-        
-        # Add any comment related to the deployment
-        "NotesDeployment": write_NotesDeployment(),
-        
-        # Select the theoretical duration of the deployment 
-        "DeploymentDurationMinutes": select_DeploymentDurationMinutes(),
-        
-        # Write the type of habitat
-        "Habitat": write_Habitat(),
-        
-        # Write the number of NZMHCS_Abiotic
-        "NZMHCS_Abiotic": write_NZMHCS_Abiotic(),
-        
-        # Write the number of NZMHCS_Biotic
-        "NZMHCS_Biotic": write_NZMHCS_Biotic(),
-        
-        # Select the level of the tide
-        "TideLevel": select_TideLevel(choices_df.TideLevel.dropna().unique().tolist()),
-        
-        # Describe the weather of the deployment
-        "Weather": write_Weather(),
-        
-        # Select the model of the camera used
-        "CameraModel": select_CameraModel(choices_df.CameraModel.dropna().unique().tolist()),
-        
-        # Write the camera lens and settings used
-        "LensModel": write_LensModel(),
-        
-        # Specify the type of bait used
-        "BaitSpecies": write_BaitSpecies(),
-        
-        # Specify the amount of bait used
-        "BaitAmount": select_BaitAmount(),
-    }
-
-    return deployment_info
+      return deployment_info, 
 
 
 def select_SamplingStart(duration_i):
@@ -1660,85 +1249,104 @@ def to_hhmmss(seconds):
     
     return seconds
     
-def confirm_deployment_details(video_info_dict,
-                               db_info_dict,
-                               survey_i,
-                               deployment_info):
+def confirm_deployment_details(deployment_names, survey_server_name, db_info_dict, survey_i, deployment_info, movie_files_server, deployment_date):
     
-    # Save the deployment responses as a new row for the movies csv file
-    new_movie_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in deployment_info.items() }
+    for deployment_i in deployment_names:
+        
+        # Save the deployment responses as a new row for the movies csv file
+        new_movie_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in deployment_info[deployment_names.index(deployment_i)].items() }
 
-    new_movie_row = pd.DataFrame.from_records(new_movie_row_dict, index=[0])        
-        
-    # Read movies csv
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-    
-    # Get prepopulated fields for the movie deployment
-    # Add movie id
-    new_movie_row["movie_id"] = 1 + movies_df.movie_id.iloc[-1]
-    
-    # Read surveys csv
-    surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
-    
-    # Save the name of the survey
-    if isinstance(survey_i.result, dict):
-        
-        # Load the csv with survey information
-        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+        new_movie_row = pd.DataFrame.from_records(new_movie_row_dict, index=[0])        
             
-        # Save the SurveyID of the last survey added
-        new_movie_row["SurveyID"] = surveys_df.tail(1)["SurveyID"].values[0]
+        # Read movies csv
+        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+        
+        # Get prepopulated fields for the movie deployment
+        # Add movie id
+        new_movie_row["movie_id"] = 1 + movies_df.movie_id.iloc[-1]
+        
+        # Read surveys csv
+        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
         
         # Save the name of the survey
-        survey_name = surveys_df.tail(1)["SurveyName"].values[0]
-   
-    else:
-        # Return the name of the survey
-        survey_name = survey_i.result.value
-        
-        # Save the SurveyID that match the survey name
-        new_movie_row["SurveyID"] = surveys_df[surveys_df["SurveyName"]==survey_name]["SurveyID"].values[0]
-    
-    # Create temporary prefix (s3 path) for concatenated video
-    new_movie_row["prefix_conc"] = survey_name.replace(" ", "_") + "/" + video_info_dict["SiteID"] + "/" + video_info_dict["filename"]
-    
-    # Select previously processed movies within the same survey
-    survey_movies_df = movies_df[movies_df["SurveyID"]==new_movie_row["SurveyID"][0]].reset_index()
-    
-    # Create unit id
-    if survey_movies_df.empty:
-        # Start unit_id in 0
-        new_movie_row["UnitID"] = surveys_df["SurveyID"].values[0] + "_0000"
-        
-    else:
-        # Get the last unitID
-        last_unitID = str(survey_movies_df.sort_values("UnitID").tail(1)["UnitID"].values[0])[-4:]
-        
-        # Add one more to the last UnitID
-        next_unitID = str(int(last_unitID) + 1).zfill(4)
-        
-        # Add one more to the last UnitID
-        new_movie_row["UnitID"] = surveys_df["SurveyID"].values[0] + "_" + next_unitID
+        if isinstance(survey_i.result, dict):
             
-    # Make a dataframe of the responses collected while video concatenation
-    video_info_pd = pd.DataFrame.from_records(video_info_dict).head(1)
-    
-    # Add responses collected while video concatenation
-    new_movie_row =  pd.concat([new_movie_row, video_info_pd], axis=1)
-    
-    # Extract year, month and day
-    new_movie_row["Year"] = new_movie_row["EventDate"][0].year
-    new_movie_row["Month"] = new_movie_row["EventDate"][0].month
-    new_movie_row["Day"] = new_movie_row["EventDate"][0].day
-    
-    print("The details of the new deployment are:")
-    for ind in new_movie_row.T.index:
-        print(ind,"-->", new_movie_row.T[0][ind])
-    
-    return new_movie_row
+            # Load the ncsv with survey information
+            surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+                
+            # Save the SurveyID of the last survey added
+            new_movie_row["SurveyID"] = surveys_df.tail(1)["SurveyID"].values[0]
+            
+            # Save the name of the survey
+            survey_name = surveys_df.tail(1)["SurveyName"].values[0]
+      
+        else:
+            # Return the name of the survey
+            survey_name = survey_i.result.value
+            
+            # Save the SurveyID that match the survey name
+            new_movie_row["SurveyID"] = surveys_df[surveys_df["SurveyName"]==survey_name]["SurveyID"].values[0]
+        
+        
+        # Get the site information from the filename
+        site_deployment = '_'.join(deployment_i.split('_')[:2])
+
+        # Specify the folder with files in the server
+        deployment_folder = survey_server_name + site_deployment
+        
+        # Create temporary prefix (s3 path) for concatenated video
+        new_movie_row["prefix_conc"] = deployment_folder +"/"+ deployment_i
+
+        # Select previously processed movies within the same survey
+        survey_movies_df = movies_df[movies_df["SurveyID"]==new_movie_row["SurveyID"][0]].reset_index()
+        
+        # Create unit id
+        if survey_movies_df.empty:
+            # Start unit_id in 0
+            new_movie_row["UnitID"] = surveys_df["SurveyID"].values[0] + "_0000"
+            
+        else:
+            # Get the last unitID
+            last_unitID = str(survey_movies_df.sort_values("UnitID").tail(1)["UnitID"].values[0])[-4:]
+            
+            # Add one more to the last UnitID
+            next_unitID = str(int(last_unitID) + 1).zfill(4)
+            
+            # Add one more to the last UnitID
+            new_movie_row["UnitID"] = surveys_df["SurveyID"].values[0] + "_" + next_unitID
+        
+        
+        # Estimate the fps and length info
+        new_movie_row[["fps", "duration"]] = movie_utils.get_length(deployment_i, os.getcwd())
+        
+        # Specify location of the concat video
+        new_movie_row["concat_video"] = deployment_i
+            
+        # Specify filename of the video 
+        new_movie_row["filename"] = deployment_i
+
+        # Specify the site of the deployment
+        new_movie_row["SiteID"] = site_deployment
+
+        # Specify the date of the deployment
+        new_movie_row["EventDate"] = deployment_date.value
+
+        # Save the list of goprofiles
+        new_movie_row["go_pro_files"] = [movie_files_server]
+
+        # Extract year, month and day
+        new_movie_row["Year"] = new_movie_row["EventDate"][0].year
+        new_movie_row["Month"] = new_movie_row["EventDate"][0].month
+        new_movie_row["Day"] = new_movie_row["EventDate"][0].day
+        
+        print("The details of the new deployment are:")
+        for ind in new_movie_row.T.index:
+            print(ind,"-->", new_movie_row.T[0][ind])
+        
+        return new_movie_row
 
         
-def upload_concat_movie(db_info_dict, video_info_dict_i, new_deployment_row):
+def upload_concat_movie(db_info_dict, new_deployment_row):
     
     # Save to new deployment row df
     new_deployment_row["LinkToVideoFile"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+new_deployment_row["prefix_conc"][0]
@@ -1783,4 +1391,386 @@ def upload_concat_movie(db_info_dict, video_info_dict_i, new_deployment_row):
 
         print("Movies csv file succesfully updated in the server.")
     
+            
+        
+        
+# # Select site and date of the video
+# def select_SiteID(db_initial_info):
     
+#     # Read csv as pd
+#     sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
+
+#     # Existing sites
+#     exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
+    
+#     site_widget = widgets.Dropdown(
+#                 options = exisiting_sites,
+#                 description = 'Site ID:',
+#                 disabled = False,
+#                 layout=Layout(width='50%'),
+#                 style = {'description_width': 'initial'}
+#             )
+# #     display(site_widget)
+
+#     return site_widget
+
+# # Function to preview the movie
+# def preview_aws_movie(db_info_dict, movie_key):
+
+#     # Generate temporary path to the movie select
+#     movie_url = db_info_dict['client'].generate_presigned_url('get_object', 
+#                                                             Params = {'Bucket': db_info_dict['bucket'], 
+#                                                                       'Key': movie_key}, 
+#                                                             ExpiresIn = 400)
+
+#     return HTML(f"""<video src={movie_url} width=800 controls/>""")
+
+# # Function to select the movie to preview
+# def movies_to_preview(available_movies_df):
+#     movie_to_preview_widget = widgets.Dropdown(
+#                 options = available_movies_df.unique().tolist(),
+#                 description = 'Movie to preview:',
+#                 disabled = False,
+#                 layout=Layout(width='50%'),
+#                 style = {'description_width': 'initial'}
+#             )
+# #     display(movie_to_preview_widget)
+
+#     return movie_to_preview_widget
+
+
+# def select_date_site(db_info_dict, survey_i, upload_method = "local"):
+    
+#     ###### Save the name of the survey
+#     # Load the csv with with sites and survey choices
+#     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+    
+#     if isinstance(survey_i.result, dict):
+#         # Save the responses as a new row for the survey csv file
+#         new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
+#         new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
+       
+                
+#     else:
+#         # Read surveys csv
+#         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
+        
+#         # Return the name of the survey
+#         survey_name = survey_i.result.value
+        
+#         # Save the SurveyID that match the survey name
+#         new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
+                               
+        
+#     # Save the year of the survey
+# #         survey_year = new_survey_row["SurveyStartDate"].values[0].strftime("%Y")
+#     survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
+    
+#     # Get prepopulated fields for the survey
+#     new_survey_row[["ShortFolder"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["ShortFolder"]].values[0]
+    
+#     # Save the "server filename" of the survey 
+#     short_marine_reserve = new_survey_row["ShortFolder"].values[0]
+
+#     # Save the "server filename" of the survey 
+#     survey_server_name = short_marine_reserve + "-buv-" + str(survey_year) + "/"
+            
+#     # Save the beginning of the survey
+#     survey_start = pd.Timestamp(new_survey_row["SurveyStartDate"].values[0]).to_pydatetime()
+        
+#     # Retrieve deployments info from the survey of interest
+#     deployments_server_name = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
+#                                                             Prefix=survey_server_name,
+#                                                             Delimiter='/')
+#     # Convert info to dataframe
+#     deployments_server_name = pd.DataFrame.from_dict(deployments_server_name['CommonPrefixes'])
+                
+#     # Define function to select folder with go-pro files
+#     def deployment_exist(site, date):
+#         # Specify the name of the folder of the deployment
+#         deployment_site_folder = survey_server_name + site + "/"
+        
+#         # Save eventdate as str
+#         date_str = date.strftime("%d_%m_%Y")
+
+#         # Specify the name of the file of the deployment
+#         deployment_date_site = site+"_"+date_str
+        
+#         # If deployment_date_site selected exists...
+#         if deployment_site_folder in deployments_server_name['Prefix'].to_list():
+#             # Retrieve files within the folder of interest
+#             files_in_deployment_dict = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
+#                                                                     Prefix=deployment_site_folder)
+            
+#             # Convert info to dataframe
+#             files_in_deployment = pd.DataFrame.from_dict(files_in_deployment_dict['Contents'])
+#             print("The deployment has the following files:","\n", files_in_deployment.Key.to_list())
+            
+#             if len(files_in_deployment["Key"].unique())>1:
+#                 # Launch a dropdown to display the video of interest
+#                 movie_display = interactive(preview_aws_movie,
+#                                             db_info_dict = db_info_dict,
+#                                             movie_key = movies_to_preview(files_in_deployment["Key"])
+#                                             )
+
+#             else:
+#                 movie_key = files_in_deployment["Key"].unique()[0]
+#                 movie_display = preview_aws_movie(
+#                     db_info_dict = db_info_dict,
+#                     movie_key = movie_key
+#                 )
+                      
+           
+#             display(movie_display)
+        
+        
+#         # If deployment_date_site selected exists...
+#         if deployment_date_site in deployments_server_name['Prefix'].to_list():
+            
+#             # Widget to verify the video is correct
+#             w1 = interactive(sel_subfolder,
+#                              survey_folder = widgets.Dropdown(
+#                                  options = deployments_server_name['Prefix'].to_list(),
+#                                  description = 'Select the folder of the survey to process:',
+#                                  disabled = False,
+#                                  layout=Layout(width='90%'),
+#                                  style = {'description_width': 'initial'}
+#                              )
+#                             )
+# #             display(w1)
+
+#             return w1
+            
+            
+#         else:
+#             print(deployment_date_site, "is not in the server.")
+            
+#             if upload_method == "Colab":
+#                 fc = widgets.Text(
+#                       description='Write the path to the files:',
+#                       disabled=False,
+#                       layout=Layout(width='95%'),
+#                       style = {'description_width': 'initial'}
+#                   )   
+# #                 display(fc) 
+
+#                 return fc
+
+#             else:
+#                 # Widget to select the local folder of interest
+#                 fc = FileChooser('/')
+#                 fc.title = '<b>Select the local folder with the deployment videos</b>'
+#                 # Switch to folder-only mode
+#                 fc.show_only_dirs = True
+# #                 display(fc)
+
+#                 return fc
+    
+    
+#     # Display the options
+#     w = interactive(deployment_exist,
+#                     site = select_SiteID(db_info_dict),
+#                     date = select_eventdate(survey_start),
+#                    )
+
+# #     display(w)
+
+#     return w
+
+#datetime.date(2020,1,1)
+
+
+# # # Select site and date of the video
+# # def select_SiteID(db_initial_info):
+    
+# #     # Read csv as pd
+# #     sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
+
+# #     # Existing sites
+# #     exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
+    
+# #     site_widget = widgets.Dropdown(
+# #                 options = exisiting_sites,
+# #                 description = 'Site ID:',
+# #                 disabled = False,
+# #                 layout=Layout(width='50%'),
+# #                 style = {'description_width': 'initial'}
+# #             )
+# #     display(site_widget)
+
+# #     return site_widget
+
+
+# # def select_eventdate():
+# #     # Select the date 
+# #     date_widget = widgets.DatePicker(
+# #         description='Deployment or event date:',
+# #         disabled=False,
+# #         layout=Layout(width='50%'),
+# #         style = {'description_width': 'initial'}
+# #     )
+# #     display(date_widget)
+    
+# #     return date_widget  
+
+# def select_go_pro_folder(db_info_dict):
+#     # Define function to select folder with go-pro files
+#     def f(server_or_locally):
+#         # If cloud slected...
+#         if server_or_locally == 'Cloud':
+#             # Define function for cloud option to select subfolder within the survey folder
+#             def sel_subfolder(survey_folder):
+#                 # Retrieve info from the survey folders in the cloud
+#                 survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+#                                                                         Prefix=survey_folder, 
+#                                                                         Delimiter='/')
+
+#                 # Convert info to dataframe
+#                 survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
+
+#                 # Widget to select the local folder of interest
+#                 survey_subfolder = widgets.Dropdown(
+#                                         options = survey_subfolders.Prefix.unique(),
+#                                         description = 'Select the folder of the deployment to process:',
+#                                         disabled = False,
+#                                         layout=Layout(width='80%'),
+#                                         style = {'description_width': 'initial'}
+#                 )
+#                 display(survey_subfolder)
+
+#                 return survey_subfolder
+
+#             # Retrieve info from the survey folders in the cloud
+#             survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"], 
+#                                                                 Prefix="", 
+#                                                                 Delimiter='/')
+
+#             # Convert info to dataframe
+#             survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
+
+#             # Widget to select the survey folder of interest
+#             w1 = interactive(sel_subfolder,
+#                              survey_folder = widgets.Dropdown(
+#                                  options = survey_folders.Prefix.unique(),
+#                                  description = 'Select the folder of the survey to process:',
+#                                  disabled = False,
+#                                  layout=Layout(width='90%'),
+#                                  style = {'description_width': 'initial'}
+#                              )
+#                             )
+#             display(w1)
+
+#             return w1
+        
+    
+#         # If local slected...
+#         if server_or_locally == 'Local':
+#             # Widget to select the local folder of interest
+#             fc = FileChooser('/')
+#             fc.title = '<b>Select the local folder with the Go-pro videos</b>'
+#             # Switch to folder-only mode
+#             fc.show_only_dirs = True
+#             display(fc)
+
+#             return fc
+    
+    
+#     # Display the options
+#     w = interactive(f,
+#                     server_or_locally = widgets.Dropdown(
+#                         options = ['Local','Cloud'],
+#                         description = 'Select files stored on the cloud or locally:',
+#                         disabled = False,
+#                         layout=Layout(width='90%'),
+#                         style = {'description_width': 'initial'}
+#                     )
+#                    )
+
+#     display(w)
+
+#     return w
+
+# def select_go_pro_files(go_pro_folder, db_info_dict):
+#     if go_pro_folder.kwargs['server_or_locally']=="Cloud":
+#         # Retrieve info from the survey folders in the cloud
+#         go_pro_files_i = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
+#                                                bucket = db_info_dict["bucket"], 
+#                                                prefix = go_pro_folder.result.result.value)
+
+#         go_pro_files_i = go_pro_files_i.Key.unique()        
+        
+#     else:
+#         go_pro_files_i = [os.path.join(go_pro_folder.result.selected, movie) for movie in os.listdir(go_pro_folder.result.selected)]
+
+#     # Specify the formats of the movies to select
+#     movie_formats = movie_utils.get_movie_extensions()
+
+#     # Select only movie files
+#     go_pro_movies_i = [s for s in go_pro_files_i if any(xs in s for xs in movie_formats)]
+
+#     print("The movies selected are:")
+#     print(*go_pro_movies_i, sep='\n')
+
+#     return go_pro_movies_i 
+        
+
+# # Function to download go pro videos, concatenate them and upload the concatenated videos to aws 
+# def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go_pro_files):
+
+#     # Save eventdate as str
+#     EventDate_str = EventDate.isoformat().replace("-","_")
+    
+#     # Specify the name of the deployment
+#     deployment_name = SiteID+"_"+EventDate_str
+
+    
+   
+#     if go_pro_folder.kwargs['server_or_locally']=="Cloud":
+#         concat_folder = "concat_video"
+#         local_go_pro_files = [i.split('/', 2)[-1] for i in go_pro_files]
+        
+#         print("Downloading the go_pro files")
+#         # Download the movies from the S3
+#         for movie_key in tqdm(go_pro_files, total=len(go_pro_files)):
+#             local_filename = local_go_pro_files[go_pro_files.index(movie_key)]
+#             if not os.path.exists(local_filename):
+#                 server_utils.download_object_from_s3(client = db_info_dict["client"],
+#                                                 bucket = db_info_dict["bucket"], 
+#                                                 key = movie_key,
+#                                                 filename = local_filename)
+#         go_pro_files = local_go_pro_files
+        
+#     else:
+#         # Specify temp folder to host the concat video
+#         concat_folder = go_pro_folder.result.selected+"concat_video"
+
+
+#     # Specify the filename and path for the concatenated movie
+#     filename = deployment_name+".MP4"
+#     concat_video = os.path.join(concat_folder,filename)
+
+#     # Save list as text file
+#     textfile = open("a_file.txt", "w")
+#     for go_pro_file in go_pro_files:
+#         textfile.write("file '"+ go_pro_file + "'"+ "\n")
+#     textfile.close()
+
+    
+#     if not os.path.exists(concat_folder):
+#         os.mkdir(concat_folder)
+    
+#     if not os.path.exists(concat_video):
+#         print("Concatenating ", concat_video)
+        
+#         # Concatenate the videos
+#         subprocess.call(["ffmpeg",
+#                          "-f", "concat",
+#                          "-safe", "0",
+#                          "-i", "a_file.txt", 
+#                          "-c", "copy",
+#                          concat_video])
+            
+#         print(concat_video, "concatenated successfully")
+        
+#     # Delete the text file
+#     os.remove("a_file.txt")
