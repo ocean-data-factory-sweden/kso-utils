@@ -196,6 +196,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     
     return available_movies_df
 
+
 def get_movie_url(project, server_dict, f_path):
     '''
     Function to get the url of the movie
