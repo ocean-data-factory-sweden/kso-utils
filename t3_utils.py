@@ -8,6 +8,7 @@ import datetime
 import subprocess
 import logging
 import random
+import threading
 import difflib
 from pathlib import Path
 from multiprocessing.pool import ThreadPool as Pool
@@ -159,7 +160,6 @@ def extract_example_clips(output_clip_path, start_time_i, clip_length, movie_pat
                           str(output_clip_path)])
 
         os.chmod(output_clip_path, 0o755)
-    print("Clip", output_clip_path, "extracted successfully")
     
 def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection, pool_size = 4):
     
@@ -202,6 +202,7 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     pool.join()
     
     
+    print("Clips extracted succesfully")
     return example_clips    
 
 
@@ -306,10 +307,15 @@ def gpu_select():
             return gpu_available
         
         if gpu_option == "Colab GPU":
-            print("Installing the requirements for GPU video modification")
+            print("Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS")
             # Install ffmpeg with GPU version
-#             !git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git
-#             !cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/
+            subprocess.check_call(
+              "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
+              shell=True)
+            subprocess.check_call(
+              "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/",
+              shell=True)
+            print("GPU Requirements installed!")
             
             # Set GPU argument
             gpu_available = True
@@ -341,7 +347,6 @@ def gpu_select():
 def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
     
     if gpu_available:
-        print("clip_i", clip_i, "and output_clip_path", output_clip_path)
         subprocess.call(["ffmpeg",
                           "-hwaccel", "cuda",
                           "-hwaccel_output_format", "cuda",
@@ -644,18 +649,22 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
     
-    # Specify the number of parallel items
-    pool = Pool(pool_size)
-
     print("Extracting clips")
-    # Read each movie and extract the clips 
-    for index, row in potential_start_df.iterrows():
-        if not os.path.exists(row['clip_path']):
-            # Extract the videos and store them in the folder
-            pool.apply_async(extract_clips, (movie_path, clip_length, row['upl_seconds'], row['clip_path'], modification_details, gpu_available,))
-
-    pool.close()
-    pool.join()
+    
+    for i in range(0, potential_start_df.shape[0], pool_size):
+      print("Modifying", i, "to", i+pool_size, "out of", potential_start_df.shape[0])
+      
+      threadlist = []
+      # Read each movie and extract the clips 
+      for index, row in potential_start_df.iloc[i:i+pool_size].iterrows():
+        # Extract the videos and store them in the folder
+        t = threading.Thread(target = extract_clips, 
+                              args = (movie_path, clip_length, row['upl_seconds'], row['clip_path'], modification_details, gpu_available,))
+        threadlist.append(t)
+        t.start()
+      
+      for tr in threadlist:
+        tr.join()
 
 
     # Add information on the modification of the clips
