@@ -1,17 +1,8 @@
 # base imports
-import argparse, os, ffmpeg
-import kso_utils.db_utils as db_utils
-import pandas as pd
+import os
 import numpy as np
-import math
-import subprocess
 import shutil
-import logging
-import pims
-import cv2
-import difflib
 import wandb
-import pprint
 from ast import literal_eval
 
 # widget imports
@@ -69,7 +60,7 @@ def choose_model(project_name):
             if change["new"]=="No file":
                 print("Choose another file")
             else:
-                print({k:v for k,v in model_info[change["new"]].items() if "metrics" in k})
+                print({k.replace("metrics/", ""):v for k,v in model_info[change["new"]].items() if "metrics" in k})
                 #display(a)
                    
     model_widget.observe(on_change, names='value')
@@ -113,7 +104,7 @@ def view_file(path):
     extension = os.path.splitext(path)[1]
     file = open(path, "rb").read()
     if extension.lower() in [".jpeg", ".png", ".jpg"]:
-        widget = widgets.Image(value=file, format=extension, width=400, height=500)
+        widget = widgets.Image(value=file, format=extension, width=800, height=400)
     elif extension.lower() in [".mp4", ".mov", ".avi"]:
         if os.path.exists('linked_content'):
             shutil.rmtree('linked_content')
