@@ -1,14 +1,69 @@
 # base imports
-import os
+import argparse, os, ffmpeg
+import kso_utils.db_utils as db_utils
+import pandas as pd
 import numpy as np
+import math
+import subprocess
 import shutil
+import logging
+import pims
+import cv2
+import difflib
 import wandb
+import pprint
 from ast import literal_eval
 
 # widget imports
 from IPython.display import HTML, display, update_display, clear_output, Image
 from ipywidgets import interact, Layout, Video
+from PIL import Image as PILImage, ImageDraw
 import ipywidgets as widgets
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+out_df = pd.DataFrame()
+
+
+def get_data_viewer(data_path):
+    imgs = list(filter(lambda fn:fn.lower().endswith('.jpg'), os.listdir(data_path)))
+    def loadimg(k):
+        display(draw_box(os.path.join(data_path,imgs[k])))
+    return widgets.interact(loadimg ,k=(0,len(imgs)-1))
+
+
+def draw_box(path):
+    im = PILImage.open(path)
+    d = { line.split()[0] : line.split()[1:] for line in open(
+        path.replace("images", "labels").replace(".jpg", ".txt")) }
+    dw, dh = im._size
+    img1 = ImageDraw.Draw(im)
+    for i, vals in d.items():
+        vals = tuple(float(val) for val in vals)
+        vals_adjusted = tuple([int((vals[0]-vals[2]/2)*dw), int((vals[1]-vals[3]/2)*dh),
+                               int((vals[0]+vals[2]/2)*dw), int((vals[1]+vals[3]/2)*dh)])
+        img1.rectangle(vals_adjusted, outline="red", width=2)
+    return im
+
+
+def get_dataset(project_name, model):
+    api = wandb.Api()
+    run_id = model.split("_")[1]
+    run = api.run(f'koster/{project_name.lower()}/runs/{run_id}')
+    datasets = [artifact for artifact in run.used_artifacts() if artifact.type == 'dataset']
+    if len(datasets) == 0:
+        logging.error("No datasets are linked to these runs. Please try another run.")
+        return None, None
+    dirs = []
+    for i in range(len(["train", "val"])):
+        artifact = datasets[i]
+        print(f"Downloading {artifact.name} checkpoint...")
+        artifact_dir = artifact.download()
+        print(f"{artifact.name} - Dataset downloaded.")
+        dirs.append(artifact_dir)
+    return dirs
+
 
 def get_model(model_name, project_name):
     api = wandb.Api()
@@ -60,7 +115,7 @@ def choose_model(project_name):
             if change["new"]=="No file":
                 print("Choose another file")
             else:
-                print({k.replace("metrics/", ""):v for k,v in model_info[change["new"]].items() if "metrics" in k})
+                print({k:v for k,v in model_info[change["new"]].items() if "metrics" in k})
                 #display(a)
                    
     model_widget.observe(on_change, names='value')
@@ -104,7 +159,7 @@ def view_file(path):
     extension = os.path.splitext(path)[1]
     file = open(path, "rb").read()
     if extension.lower() in [".jpeg", ".png", ".jpg"]:
-        widget = widgets.Image(value=file, format=extension, width=800, height=400)
+        widget = widgets.Image(value=file, format=extension)
     elif extension.lower() in [".mp4", ".mov", ".avi"]:
         if os.path.exists('linked_content'):
             shutil.rmtree('linked_content')
