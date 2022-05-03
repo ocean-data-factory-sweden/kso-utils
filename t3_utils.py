@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # base imports
-import os, shutil, ffmpeg
+import os, shutil, ffmpeg as ffmpeg_python
 import pandas as pd
 import numpy as np
 import math
@@ -159,7 +159,7 @@ def extract_example_clips(output_clip_path, start_time_i, clip_length, movie_pat
                           "-force_key_frames", "1",
                           str(output_clip_path)])
 
-        os.chmod(output_clip_path, 0o755)
+        os.chmod(output_clip_path, 0o777)
     
 def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection, pool_size = 4):
     
@@ -179,6 +179,8 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
+        os.chmod(clips_folder, 0o777)
+        
 
     # Specify the number of parallel items
     pool = Pool(pool_size)
@@ -345,7 +347,6 @@ def gpu_select():
 
 
 def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
-    
     if gpu_available:
         subprocess.call(["ffmpeg",
                           "-hwaccel", "cuda",
@@ -356,7 +357,7 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
             
     else:
         # Set up input prompt
-        init_prompt = f"ffmpeg.input('{clip_i}')"
+        init_prompt = f"ffmpeg_python.input('{clip_i}')"
         full_prompt = init_prompt
 
         # Set up modification
@@ -378,8 +379,8 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
             # Run the modification
             try:
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                os.chmod(output_clip_path, 0o755)
-            except ffmpeg.Error as e:
+                os.chmod(output_clip_path, 0o777)
+            except ffmpeg_python.Error as e:
                 print('stdout:', e.stdout.decode('utf8'))
                 print('stderr:', e.stderr.decode('utf8'))
                 raise e
@@ -407,13 +408,14 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
         # Create the folder to store the videos if not exist
         if not os.path.exists(mod_clips_folder):
             os.mkdir(mod_clips_folder)
+            os.chmod(str(mod_clips_folder), 0o777)
             
         # Specify the number of parallel items
         pool = Pool(pool_size)
 
         # Create empty list to keep track of new clips
         modified_clips = []
-
+        results = []
         # Create the information for each clip and extract it (printing a progress bar) 
         for clip_i in clips_list:
             # Create the filename and path of the modified clip
@@ -424,11 +426,10 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
             modified_clips = modified_clips + [output_clip_path]
 
             # Modify the clips and store them in the folder
-            pool.apply_async(modify_clips, (clip_i, modification_details, output_clip_path, gpu_available,))
+            results.append(pool.apply_async(modify_clips, (clip_i, modification_details, output_clip_path, gpu_available,)))
 
         pool.close()
         pool.join()
-
         return modified_clips 
     else:
         print("No modification selected")
@@ -569,10 +570,10 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
                          "-an",#removes the audio
                          "-c:v", "h264_nvenc",
                          str(output_clip_path)])
-        os.chmod(str(output_clip_path), 0o755)
+        os.chmod(str(output_clip_path), 0o777)
     else:
         # Set up input prompt
-        init_prompt = f"ffmpeg.input('{movie_path}')"
+        init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
 
         # Set up modification
@@ -594,8 +595,8 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
             # Run the modification
             try:
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                os.chmod(str(output_clip_path), 0o755)
-            except ffmpeg.Error as e:
+                os.chmod(str(output_clip_path), 0o777)
+            except ffmpeg_python.Error as e:
                 print('stdout:', e.stdout.decode('utf8'))
                 print('stderr:', e.stderr.decode('utf8'))
                 raise e
@@ -648,6 +649,8 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
+        os.chmod(str(clips_folder), 0o777)
+        
     
     print("Extracting clips")
     

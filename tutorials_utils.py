@@ -170,6 +170,10 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
 
     else:
         # Generate temporary path to the movie select
-        movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
-
+        if project.server == "SNIC":
+            movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["spath"].values[0])
+            os.chdir(os.path.dirname(movie_path))
+            return HTML(f"""<video src={os.path.basename(movie_path)} width=800 controls/>"""), movie_path
+        else:
+            movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
         return HTML(f"""<video src={movie_path} width=800 controls/>"""), movie_path

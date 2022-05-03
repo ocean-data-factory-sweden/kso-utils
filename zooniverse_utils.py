@@ -1,4 +1,4 @@
-# base imports
+##ZOOniverse utils
 import io
 import getpass
 import pandas as pd
@@ -11,14 +11,16 @@ from panoptes_client import (
     Project,
     Panoptes,
 )
-from ast import literal_eval
 
-# util imports
+from ast import literal_eval
 from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
+import kso_utils.tutorials_utils as tutorials_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -27,6 +29,7 @@ logger.setLevel(logging.DEBUG)
 def zoo_credentials():
     zoo_user = getpass.getpass('Enter your Zooniverse user')
     zoo_pass = getpass.getpass('Enter your Zooniverse password')
+    
     return zoo_user, zoo_pass
 
 
@@ -52,7 +55,10 @@ def auth_session(username, password, project_n):
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(project, zoo_project, zoo_info: str):
-
+    if hasattr(project, "info_df"):
+        if project.info_df is not None:
+            print("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
+            return project.info_df
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
@@ -86,7 +92,7 @@ def retrieve_zoo_info(project, zoo_project, zoo_info: str):
                     
         # Add df to dictionary
         info_df[info_n] = export_df
-        
+        project.info_df = info_df
         print(info_n, "were retrieved successfully")
 
     return info_df

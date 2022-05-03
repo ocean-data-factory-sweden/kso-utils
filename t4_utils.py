@@ -1,6 +1,6 @@
 #t4 utils
 # base imports
-import os, ffmpeg
+import os, ffmpeg as ffmpeg_python
 import pandas as pd
 import numpy as np
 import shutil
@@ -268,10 +268,10 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
                 ret, frame = cap.read()
                 try:
                     cv2.imwrite(row["frame_path"], frame)
-                    os.chmod(row["frame_path"], 0o755)
+                    os.chmod(row["frame_path"], 0o777)
                 except:
                     cv2.imwrite(row["frame_path"], np.zeros((100,100,3), np.uint8))
-                    os.chmod(row["frame_path"], 0o755)
+                    os.chmod(row["frame_path"], 0o777)
                     print(f"No frame was extracted for {url} at frame {row['frame_number']}")
     else:
         print("Missing movie", url)
@@ -306,6 +306,7 @@ def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: 
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
         os.mkdir(frames_folder)
+        os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
         url = s_utils.get_movie_url(project, server_dict, movie)
@@ -344,7 +345,10 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
     if len(movie_df) == 0:
 
         # Extract frames of interest from a folder with frames
-        df = FileChooser('.')
+        if project.server == "SNIC":
+            df = FileChooser('/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir')
+        else:
+            df = FileChooser('.')
         df.title = '<b>Select frame folder location</b>'
             
         # Callback function
@@ -372,7 +376,10 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
         agg_params = t8.choose_agg_parameters("clip")
 
         # Select the temp location to store frames before uploading them to Zooniverse
-        df = FileChooser('.')
+        if project.server == "SNIC":
+            df = FileChooser('/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir')
+        else:
+            df = FileChooser('.')
         df.title = '<b>Choose location to store frames</b>'
             
         # Callback function
@@ -548,13 +555,14 @@ def modify_frames(frames_to_upload_df, species_i, modification_details, project)
         # Create the folder to store the videos if not exist
         if not os.path.exists(mod_frames_folder):
             os.mkdir(mod_frames_folder)
+            os.chmod(mod_frames_folder, 0o777)
 
         #### Modify the clips###
         # Read each clip and modify them (printing a progress bar) 
         for index, row in tqdm(frames_to_upload_df.iterrows(), total=frames_to_upload_df.shape[0]): 
             if not os.path.exists(row['modif_frame_path']):
                 # Set up input prompt
-                init_prompt = f"ffmpeg.input('{row['frame_path']}')"
+                init_prompt = f"ffmpeg_python.input('{row['frame_path']}')"
                 full_prompt = init_prompt
                 # Set up modification
                 for transform in modification_details.values():
@@ -573,8 +581,8 @@ def modify_frames(frames_to_upload_df, species_i, modification_details, project)
                 # Run the modification
                 try:
                     eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                    os.chmod(row['modif_frame_path'], 0o755)
-                except ffmpeg.Error as e:
+                    os.chmod(row['modif_frame_path'], 0o777)
+                except ffmpeg_python.Error as e:
                     print('stdout:', e.stdout.decode('utf8'))
                     print('stderr:', e.stderr.decode('utf8'))
                     raise e
@@ -603,11 +611,10 @@ def set_zoo_metadata(df, species_list, project, db_info_dict):
     # Set project-specific metadata
     if project_name == "Koster_Seafloor_Obs":
         conn = db_utils.create_connection(project.db_path)
-        movies_df = pd.read_sql_query("SELECT id, created_on, site_id FROM movies", conn)
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
-        movies_df = movies_df.merge(sites_df, left_on="site_id", right_on="id")
-        df = df.merge(movies_df, left_on="movie_id", right_on="id_x")
+        df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[["frame_path", "species_id", "movie_id", "created_on", "siteName"]]
+        
         
     elif project_name == "SGU":
         upload_to_zoo = df[["frame_path", "species_id", "filename"]]
