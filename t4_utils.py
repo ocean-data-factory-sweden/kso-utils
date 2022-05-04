@@ -415,7 +415,12 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             frame_df = check_frames_uploaded(frame_df, project, species_ids, conn)
             
             # Extract the frames from the videos and store them in the temp location
-            chooser.df = extract_frames(project, frame_df, server_dict, chooser.selected)
+            if project.server == "SNIC":
+                folder_name = chooser.selected
+                frames_folder = folder_name + "_".join(species_names_zoo) + "_frames"
+            else:
+                frames_folder = "_".join(species_names_zoo) + "_frames"
+            chooser.df = extract_frames(project, frame_df, server_dict, frames_folder)
                 
         # Register callback function
         df.register_callback(extract_files)
