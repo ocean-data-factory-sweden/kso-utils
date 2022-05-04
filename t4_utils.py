@@ -147,7 +147,7 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
 
         # Select only frames from movies that can be found
         frames_df = frames_df[frames_df.exists]
-        frames_df = frames_df[frames_df.fps != 99.0]
+        #frames_df = frames_df[frames_df.fps != 99.0]
         
         ##### Add species_id info ####
         # Retrieve species info
@@ -417,9 +417,9 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             # Extract the frames from the videos and store them in the temp location
             if project.server == "SNIC":
                 folder_name = chooser.selected
-                frames_folder = folder_name + "_".join(species_names_zoo) + "_frames"
+                frames_folder = folder_name + "_".join(species_names_zoo) + "_frames/"
             else:
-                frames_folder = "_".join(species_names_zoo) + "_frames"
+                frames_folder = "_".join(species_names_zoo) + "_frames/"
             chooser.df = extract_frames(project, frame_df, server_dict, frames_folder)
                 
         # Register callback function
