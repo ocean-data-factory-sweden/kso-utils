@@ -67,7 +67,7 @@ def choose_project(projects_csv: str = "../db_starter/projects_list.csv"):
     display(choose_project)
     return choose_project
 
-def get_project_info(project):
+def get_project_details(project):
     
     # Get the project-specific name of the database
     db_path = project.db_path
@@ -84,7 +84,7 @@ def get_project_info(project):
 def initiate_db(project):
     
     # Get project specific info
-    db_path, project_name, server_i_dict, db_initial_info = get_project_info(project)
+    db_path, project_name, server_i_dict, db_initial_info = get_project_details(project)
     
     # Initiate the sql db
     db_utils.init_db(db_path)
