@@ -124,6 +124,45 @@ def get_db_init_info(project, server_dict):
             logging.error("Insufficient information to build the database. Please fix the path to csv files.")
             db_initial_info = {}
 
+    elif server == "wildlife_ai":
+            
+        # Specify the id of the folder with csv files of the template project
+        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+        
+        # Download template csv files from Gdrive
+        db_initial_info = download_init_csv(gdrive_id, db_csv_info)
+        
+        print(db_csv_info)
+        for file in Path(db_csv_info).rglob("*.csv"):
+            print(file.name)
+            if 'sites' in file.name:
+                sites_csv = file
+            if 'movies' in file.name:
+                movies_csv = file
+            if 'photos' in file.name:
+                photos_csv = file
+            if 'survey' in file.name:
+                surveys_csv = file
+            if 'species' in file.name:
+                species_csv = file
+                
+        db_initial_info = {
+                "local_sites_csv": sites_csv,  
+                "local_species_csv": species_csv
+            }
+            
+        if "movies_csv" in vars():
+            db_initial_info["local_movies_csv"] = movies_csv
+
+        if "photos_csv" in vars():
+            db_initial_info["local_photos_csv"] = photos_csv
+
+        if "surveys_csv" in vars():
+            db_initial_info["local_surveys_csv"] = surveys_csv
+                
+                
+        return db_initial_info
+        
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
     return db_initial_info
