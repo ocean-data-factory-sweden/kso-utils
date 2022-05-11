@@ -132,9 +132,7 @@ def get_db_init_info(project, server_dict):
         # Download template csv files from Gdrive
         db_initial_info = download_init_csv(gdrive_id, db_csv_info)
         
-        print(db_csv_info)
         for file in Path(db_csv_info).rglob("*.csv"):
-            print(file.name)
             if 'sites' in file.name:
                 sites_csv = file
             if 'movies' in file.name:
@@ -159,9 +157,6 @@ def get_db_init_info(project, server_dict):
 
         if "surveys_csv" in vars():
             db_initial_info["local_surveys_csv"] = surveys_csv
-                
-                
-        return db_initial_info
         
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")

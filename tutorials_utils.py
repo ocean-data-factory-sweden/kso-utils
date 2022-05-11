@@ -67,20 +67,27 @@ def choose_project(projects_csv: str = "../db_starter/projects_list.csv"):
     display(choose_project)
     return choose_project
 
-def initiate_db(project):
+def get_project_info(project):
     
     # Get the project-specific name of the database
     db_path = project.db_path
     project_name = project.Project_name
-    
-    # Initiate the sql db
-    db_utils.init_db(db_path)
     
     # Connect to the server (or folder) hosting the csv files
     server_i_dict = server_utils.connect_to_server(project)
     
     # Get the initial info
     db_initial_info = server_utils.get_db_init_info(project, server_i_dict)
+    
+    return db_path, project_name, server_i_dict, db_initial_info
+
+def initiate_db(project):
+    
+    # Get project specific info
+    db_path, project_name, server_i_dict, db_initial_info = get_project_info(project)
+    
+    # Initiate the sql db
+    db_utils.init_db(db_path)
     
     # Populate the sites info
     if "local_sites_csv" in db_initial_info.keys():

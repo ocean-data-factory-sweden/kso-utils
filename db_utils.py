@@ -176,7 +176,6 @@ def find_duplicated_clips(conn):
 # ## Populate sites, movies and species
 
 def add_sites(db_initial_info, project_name, db_path):
-
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
     
@@ -185,6 +184,7 @@ def add_sites(db_initial_info, project_name, db_path):
         # Rename columns to match schema fields
         sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
+    print(sites_df)
     # Select relevant fields
     sites_df = sites_df[
         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]

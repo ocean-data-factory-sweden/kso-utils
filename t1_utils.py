@@ -1,5 +1,6 @@
 # base imports
 import pandas as pd
+import ipysheet
 
 # widget imports
 from IPython.display import display
@@ -11,10 +12,20 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 
 
-def check_sites_csv(db_initial_info, project):
-
+def open_sites_csv(db_initial_info):
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
+
+    # Load the df as ipysheet
+    sheet = ipysheet.from_dataframe(sites_df)
+
+    return sheet
+    
+
+def check_sites_database(db_initial_info, sites_df_sheet, project):
+
+    # Load the csv with sites information
+    sites_df = ipysheet.to_dataframe(sites_df_sheet)
     
     # Check if the project is the Spyfish Aotearoa
     if project.Project_name == "Spyfish_Aotearoa":
