@@ -46,8 +46,17 @@ def check_sites_database(db_initial_info, sites_df_sheet, project):
     
     return sites_df
 
-    
-def check_movies_csv(db_initial_info, project):
+def open_movies_csv(db_initial_info):
+    # Load the csv with movies information
+    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
+
+    # Load the df as ipysheet
+    sheet = ipysheet.from_dataframe(movies_df)
+
+    return sheet
+
+
+def check_movies_csv(db_initial_info, movies_df_sheet, project):
 
     # Check for missing fps and duration info
     movies_df = movie_utils.check_fps_duration(db_initial_info, project)
@@ -61,6 +70,10 @@ def check_movies_csv(db_initial_info, project):
     if project.Project_name == "Koster_Seafloor_Obs":
         movies_df = koster_utils.process_koster_movies_csv(movies_df)
     
+    # Check if project is the template
+    if project.Project_name == "Template project":
+        # Add path of the movies
+        movies_df["Fpath"] = "https://www.wildlife.ai/wp-content/uploads/2022/05/"+ movies_df["filename"]
     
     # Connect to database
     conn = db_utils.create_connection(db_initial_info['db_path'])
