@@ -184,7 +184,6 @@ def add_sites(db_initial_info, project_name, db_path):
         # Rename columns to match schema fields
         sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
-    print(sites_df)
     # Select relevant fields
     sites_df = sites_df[
         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
@@ -209,7 +208,6 @@ def add_movies(db_initial_info, project_name, db_path):
     # Check if the project is the Spyfish Aotearoa
     if project_name == "Spyfish_Aotearoa":
         movies_df = spyfish_utils.process_spyfish_movies(movies_df)
-        
         
     # Check if the project is the KSO
     if project_name == "Koster_Seafloor_Obs":
