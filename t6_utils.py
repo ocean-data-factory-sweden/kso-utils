@@ -1,5 +1,5 @@
 # base imports
-import argparse, os, ffmpeg
+import argparse, os, ffmpeg, re
 import kso_utils.db_utils as db_utils
 import pandas as pd
 import numpy as np
@@ -12,7 +12,10 @@ import cv2
 import difflib
 import wandb
 import pprint
+import torch
 from ast import literal_eval
+from pathlib import Path
+from natsort import index_natsorted
 
 # widget imports
 from IPython.display import HTML, display, update_display, clear_output, Image
@@ -25,6 +28,85 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 out_df = pd.DataFrame()
 
+
+def generate_csv_report(evaluation_path):
+    labels = os.listdir(Path(evaluation_path, "labels"))
+    data_dict = {}
+    for f in labels:
+        frame_no = int(f.split("_")[-1].replace(".txt", ""))
+        data_dict[f] = []
+        with open(Path(evaluation_path, "labels", f), "r") as infile:
+            lines = infile.readlines()
+            for line in lines:
+                class_id, x, y, w, h, conf = line.split(" ")
+                data_dict[f].append([class_id, frame_no, x, y, w, h, float(conf)])
+    dlist = [
+            [key, i[0], i[1], i[2], i[3], i[4], i[5], i[6]] for key, value in data_dict.items() for i in value
+            ]
+    detect_df = pd.DataFrame.from_records(
+                dlist, columns=["filename", "class_id", "frame_no", "x", "y", "w", "h", "conf"]
+                )
+    csv_out = Path(evaluation_path,"annotations.csv")
+    detect_df.sort_values(
+                    by="frame_no",
+                    key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
+                    ).to_csv(csv_out, index=False)
+    print("Report created at {}".format(csv_out))
+    return detect_df
+
+def generate_tracking_report(tracker_dir, eval_dir):
+    data_dict = {}
+    for track_file in os.listdir(tracker_dir):
+        if track_file.endswith(".txt"):
+            data_dict[track_file] = []
+            with open(Path(tracker_dir, track_file), "r") as infile:
+                lines = infile.readlines()
+                for line in lines:
+                    vals = line.split(" ")
+                    class_id, frame_no, tracker_id = vals[0], vals[1], vals[2]
+                    data_dict[track_file].append([class_id, frame_no, tracker_id])
+    dlist = [
+            [os.path.splitext(key)[0]+f"_{i[1]}.txt", i[0], i[1], i[2]] for key, value in data_dict.items() for i in value
+            ]
+    detect_df = pd.DataFrame.from_records(
+                dlist, columns=["filename", "class_id", "frame_no", "tracker_id"]
+                )
+    csv_out = Path(eval_dir,"tracking.csv")
+    detect_df.sort_values(
+                    by="frame_no",
+                    key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
+                    ).to_csv(csv_out, index=False)
+    print("Report created at {}".format(csv_out))
+    return detect_df
+
+def generate_counts(eval_dir, tracker_dir, model_dir):
+    model = torch.load(model_dir+"/best.pt")
+    names = {i: model["model"].names[i] for i in range(len(model["model"].names))}
+    class_df = generate_csv_report(eval_dir)
+    tracker_df = generate_tracking_report(tracker_dir, eval_dir)
+    tracker_df["frame_no"] = tracker_df["frame_no"].astype(int)
+    combined_df = pd.merge(class_df, tracker_df, on=["filename", "frame_no", "class_id"])
+    combined_df["species_name"] = combined_df["class_id"].apply(lambda x: names[int(x)])
+    print("--- DETECTION REPORT ---")
+    print("--------------------------------")
+    print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
+
+def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720):
+    # Enter the correct folder
+    try:
+        os.chdir("Yolov5_DeepSort_OSNet")
+    except:
+        pass
+    best_model = artifact_dir+"/best.pt"
+    subprocess.call(['track.py', "--conf-thres", conf_thres, "--save-txt", "--save-vid", "--yolo-model", best_model, "--source", source_dir, "--imgsz", img_size])
+    #!python track.py --conf-thres 0.5 --save-txt --save-vid --yolo_model $best_model --source $source_dir --imgsz 720
+    # Go up one directory
+    if "Yolov5_DeepSort_OSNet" in os.getcwd():
+        os.chdir("..")
+    tracker_root = "Yolov5_DeepSort_OSNet/runs/track/"
+    latest_tracker = tracker_root + sorted(os.listdir(tracker_root))[-1] + "/tracks"
+    print("Tracking completed succesfully")
+    return latest_tracker
 
 def get_data_viewer(data_path):
     imgs = list(filter(lambda fn:fn.lower().endswith('.jpg'), os.listdir(data_path)))
