@@ -91,18 +91,19 @@ def generate_counts(eval_dir, tracker_dir, model_dir):
     print("--------------------------------")
     print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
 
-def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720, tracker_folder):
+def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_size=720):
     # Enter the correct folder
     try:
         cwd = os.getcwd()
         os.chdir(tracker_folder)
     except:
         pass
-    best_model = artifact_dir+"/best.pt"
+    shutil.copyfile(artifact_dir+"/best.pt", "best.pt")
+    best_model = "best.pt"
     try:
-        subprocess.check_output([f'python {os.getcwd()}/track.py --conf-thres {str(conf_thres)}  \
+        out = subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
                                  --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
-                                 --imgsz {str(img_size)}'],
+                                 --imgsz {str(img_size)} --project {tracker_folder}/runs/track/'],
                      shell=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
