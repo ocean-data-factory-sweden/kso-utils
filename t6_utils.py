@@ -91,10 +91,11 @@ def generate_counts(eval_dir, tracker_dir, model_dir):
     print("--------------------------------")
     print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
 
-def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720):
+def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720, tracker_folder):
     # Enter the correct folder
     try:
-        os.chdir("Yolov5_DeepSort_OSNet")
+        cwd = os.getcwd()
+        os.chdir(tracker_folder)
     except:
         pass
     best_model = artifact_dir+"/best.pt"
@@ -107,8 +108,8 @@ def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720):
         raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
     # Go up one directory
     if "Yolov5_DeepSort_OSNet" in os.getcwd():
-        os.chdir("..")
-    tracker_root = "Yolov5_DeepSort_OSNet/runs/track/"
+        os.chdir(cwd)
+    tracker_root = tracker_folder+"/runs/track/"
     latest_tracker = tracker_root + sorted(os.listdir(tracker_root))[-1] + "/tracks"
     print("Tracking completed succesfully")
     return latest_tracker
@@ -152,7 +153,7 @@ def get_dataset(project_name, model):
     return dirs
 
 
-def get_model(model_name, project_name):
+def get_model(model_name, project_name, download_path):
     api = wandb.Api()
     collections = [
         coll for coll in api.artifact_type(type_name='model', project=f'koster/{project_name.lower()}').collections()
@@ -164,7 +165,7 @@ def get_model(model_name, project_name):
         print("No model found")
     artifact = api.artifact(f"koster/{project_name.lower()}/" + model.name + ":latest")
     print("Downloading model checkpoint...")
-    artifact_dir = artifact.download()
+    artifact_dir = artifact.download(root=download_path)
     print("Checkpoint downloaded.")
     return os.path.realpath(artifact_dir)
 
