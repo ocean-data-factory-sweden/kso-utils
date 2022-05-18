@@ -98,8 +98,13 @@ def track_objects(source_dir, artifact_dir, conf_thres=0.5, img_size=720):
     except:
         pass
     best_model = artifact_dir+"/best.pt"
-    subprocess.call(['track.py', "--conf-thres", conf_thres, "--save-txt", "--save-vid", "--yolo-model", best_model, "--source", source_dir, "--imgsz", img_size])
-    #!python track.py --conf-thres 0.5 --save-txt --save-vid --yolo_model $best_model --source $source_dir --imgsz 720
+    try:
+        subprocess.check_output([f'python {os.getcwd()}/track.py --conf-thres {str(conf_thres)}  \
+                                 --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
+                                 --imgsz {str(img_size)}'],
+                     shell=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
     # Go up one directory
     if "Yolov5_DeepSort_OSNet" in os.getcwd():
         os.chdir("..")
@@ -161,7 +166,7 @@ def get_model(model_name, project_name):
     print("Downloading model checkpoint...")
     artifact_dir = artifact.download()
     print("Checkpoint downloaded.")
-    return artifact_dir
+    return os.path.realpath(artifact_dir)
 
 
 # Function to compare original to modified frames
