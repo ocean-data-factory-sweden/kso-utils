@@ -14,23 +14,54 @@ import kso_utils.db_utils as db_utils
 
 
 def check_spyfish_movies(movies_df, db_info_dict):
+#     ################# Get survey and site id from the movies csv
     
-    # Get dataframe of movies from AWS
-    movies_s3_pd = server_utils.get_matching_s3_keys(db_info_dict["client"], db_info_dict["bucket"], suffix = movie_utils.get_movie_extensions())
+#     # Load the csv with with sites and survey choices
+#     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+    
+#     # Read surveys csv
+#     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
+    
+#     # Add short name of the marine reserve to the survey df
+#     surveys_df = surveys_df.merge(choices_df[["ShortFolder", "MarineReserve"]],
+#                                  righton="MarineReserve",
+#                                  lefton="LinkToMarineReserve",
+#                                  how="left")
+    
+#     # Add survey info to each movie
+#     movies_df = movies_df.merge(surveys_df, 
+#                                 on=['SurveyID'], 
+#                                 how='left')
+    
+#     # Add a column with the year of the survey
+#     movies_df["survey_year"] = movies_df["SurveyStartDate"].dt.year.values[0]    
+    
+#     # Create a column with the deployment folder each movie should be
+#     movies_df["deployment_folder"] = movies_df["ShortFolder"] + "-buv-" + movies_df["survey_year"] + "/"
+    
+    
+    # Get a dataframe of all movies from AWS
+    movies_s3_pd = server_utils.get_matching_s3_keys(db_info_dict["client"], 
+                                                     db_info_dict["bucket"], 
+                                                     suffix = movie_utils.get_movie_extensions())
 
     # Specify the key of the movies (path in S3 of the object)
     movies_s3_pd["filename"] = movies_s3_pd.Key.str.split("/").str[-1]
 
+    # Create a column with the deployment folder of each movie
+    movies_s3_pd["deployment_folder"] = movies_s3_pd.Key.str.split("/").str[:2].str.join("/")
+    
+    print(movies_s3_pd.head())
     # Missing info for files in the "buv-zooniverse-uploads"
-    movies_df = movies_df.merge(movies_s3_pd["filename"], 
+    movies_df = movies_df.merge(movies_s3_pd, 
                                 on=['filename'], how='left', 
                                 indicator=True)
 
     # Check that movies can be mapped
-    movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
+#     movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
         
     # Drop _merge columns to match sql squema
-    movies_df = movies_df.drop("_merge", axis=1)
+#     movies_df = movies_df.drop("_merge", axis=1)
         
     return movies_df
 

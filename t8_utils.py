@@ -644,10 +644,48 @@ def process_frames(df: pd.DataFrame, project_name):
     return pd.DataFrame(annot_df)
 
 
+from PIL import Image as PILImage, ImageDraw
+import requests
+import random
+from io import BytesIO
+from IPython.display import display
+
+def get_image_with_annotations(image_path, class_df_subject):
+    
+    # Read image
+    response = requests.get(image_path)
+    im = PILImage.open(BytesIO(response.content))
+    
+    # Calculate image size
+    dw, dh = im._size
+    
+    # Draw rectangles of each annotation
+    img1 = ImageDraw.Draw(im)
+    
+    # Merge annotation info into a tuple
+    class_df_subject["vals"] = class_df_subject[["x","y","w","h"]].values.tolist()
+    
+    for index, row in class_df_subject.iterrows():
+        # Specify the vals object
+        vals = row.vals
+        
+        # Adjust annotantions to image size
+        vals_adjusted = tuple([int((vals[0]-vals[2]/2)*dw), int((vals[1]-vals[3]/2)*dh),
+                               int((vals[0]+vals[2]/2)*dw), int((vals[1]+vals[3]/2)*dh)])
+        
+        # Draw annotation
+        img1.rectangle(vals_adjusted, outline=row.colour, width=2)
+        
+    return im
+
+
 def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
     try:
+        # Select the subject of interest
+        class_df_subject = class_df[class_df.subject_ids == subject_id]
 
-        subject_location = class_df[class_df.subject_ids == subject_id]["https_location"].unique()[0]
+        # Get the location of the subject
+        subject_location = class_df_subject["https_location"].unique()[0]
     except:
         raise Exception("The reference data does not contain media for this subject.")
     if not subject_location:
@@ -663,18 +701,21 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
           <source src={subject_location} type="video/mp4">
         </video>
         </div>
-        <div>{class_df[class_df.subject_ids == subject_id][['label','first_seen','how_many']].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
+        <div>{class_df_subject[['label','first_seen','how_many']].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
         </div>
         </html>"""
     elif subject_type == "frame":
+        # Create a temporary image with the annotations drawn on it
+        temp_image = get_image_with_annotations(subject_location, class_df_subject)
+        
         html_code = f"""
         <html>
         <div style="display: flex; justify-content: space-around">
         <div>
-          <img src={subject_location} type="image/jpeg" width=500>
+          <img src={temp_image} type="image/jpeg" width=500>
         </img>
         </div>
-        <div>{class_df[class_df.subject_ids == subject_id]['label'].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
+        <div>{class_df_subject[['label','colour']].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
         </div>
         </html>"""
     else:
@@ -684,6 +725,19 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
 
 def launch_viewer(class_df: pd.DataFrame, subject_type: str):
 
+    # If subject is frame assign a color to each label
+    if subject_type == "frame":
+        # Generate a list of random colors
+        random_color_list = []
+        for i in range(class_df.label.nunique()):
+            random_color_list = random_color_list + ["#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)])]
+    
+        # Create a list of unique labels
+        list_labels = class_df.label.unique().tolist()
+        
+        # Add a column with the color for each label
+        class_df["colour"] = class_df.apply(lambda row: random_color_list[list_labels.index(row.label)], axis=1) 
+    
     # Select the subject
     options = tuple(class_df[class_df["subject_type"] == subject_type]["subject_ids"].apply(int).apply(str).unique())
     subject_widget = widgets.Combobox(

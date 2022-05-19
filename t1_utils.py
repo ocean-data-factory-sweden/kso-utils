@@ -43,8 +43,6 @@ def check_sites_database(db_initial_info, sites_df_sheet, project):
     )
     
     print("sites.csv file is all good!")
-    
-    return sites_df
 
 def open_movies_csv(db_initial_info):
     # Load the csv with movies information
@@ -105,26 +103,26 @@ def check_movies_csv(db_initial_info, movies_df_sheet, project):
 #     print("The last dates from the created_on column are:")
 #     print(date_time_check.tail())
    
-    print("movies.csv is all good!")    
-    
-    return movies_df
+    print("movies.csv is all good!") 
     
 
 
-def check_movies_from_server(movies_df, sites_df, project, db_info_dict):
-    # Get project-specific server info
-    server = project.server
+def check_movies_from_server(db_info_dict, project):
+    # Load the csv with movies information
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"]) 
     
-    if server=="AWS":
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
         # Retrieve movies that are missing info in the movies.csv
         missing_info = spyfish_utils.check_spyfish_movies(movies_df, db_info_dict)
         
+#     print(missing_info)
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="right_only"]
     missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
     missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])]
     
-    print("There are", len(missing_from_server.index), "movies missing from", server)
+    print("There are", len(missing_from_server.index), "movies missing")
     print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
     print(*missing_bad_deployment.filename.unique(), sep = "\n")
     print(len(missing_no_bucket_info.index), "movies are good deployments but don't have movies uploaded. Their filenames are:")
@@ -132,13 +130,40 @@ def check_movies_from_server(movies_df, sites_df, project, db_info_dict):
     
     # Find out files missing from the csv
     missing_from_csv = missing_info[missing_info["_merge"]=="left_only"].reset_index(drop=True)
+            
     print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
-    print(*missing_from_csv.filename.unique(), sep = "\n")
+#     print(*missing_from_csv.filename.unique(), sep = "\n")
     
     return missing_from_server, missing_from_csv
 
-
+def concatenate_deployment_movies(missing_from_csv):
+    if missing_from_csv.shape[0]>0:        
+        # Widget to select the deployment of interest
+        deployment_widget = widgets.SelectMultiple(
+            options = missing_from_csv.deployment_folder.unique(),
+            description = 'New deployment:',
+            disabled = False,
+            layout=Layout(width='50%'),
+            style = {'description_width': 'initial'}
+        )
+        display(deployment_widget)
+        
+        return deployment_widget
     
+def select_eventdate():
+    # Select the date 
+    date_widget = widgets.DatePicker(
+        description='Date of deployment:',
+        value = datetime.date.today(),
+        disabled=False,
+        layout=Layout(width='50%'),
+        style = {'description_width': 'initial'}
+    )
+    display(date_widget)
+    
+    return date_widget
+
+
 def upload_movies():
     
     # Define widget to upload the files

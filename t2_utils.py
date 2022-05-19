@@ -544,8 +544,7 @@ def confirm_survey(survey_i, db_info_dict):
 
         # Load the csv with with sites and survey choices
         choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-        
-        
+                
         # Get prepopulated fields for the survey
         new_survey_row["OfficeContact"] = choices_df[choices_df["OfficeName"]==new_survey_row.OfficeName.values[0]]["OfficeContact"].values[0]
         new_survey_row[["SurveyLocation","Region"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["MarineReserveAbreviation", "Region"]].values[0]
@@ -557,18 +556,16 @@ def confirm_survey(survey_i, db_info_dict):
         print("The details of the new survey are:")
         for ind in new_survey_row.T.index:
             print(ind,"-->", new_survey_row.T[0][ind])
-            
-        return new_survey_row
-
-        # Save changes in survey csv- locally and in the server
-        async def f():
+        
+        # Save changes in survey csv locally and in the server
+        async def f(new_survey_row):
             x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
                 # Load the csv with sites information
                 surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
                 
                 # Drop unnecessary columns
-                new_survey_row = new_survey_row.drop(columns=['ShortFolder'])
+#                 new_survey_row = new_survey_row.drop(columns=['ShortFolder'])
                 
                 # Check the columns are the same
                 diff_columns = list(set(surveys_df.columns.sort_values().values) - set(new_survey_row.columns.sort_values().values))
@@ -577,6 +574,11 @@ def confirm_survey(survey_i, db_info_dict):
                     logging.error(f"The {diff_columns} columns are missing from the survey information.")
                     raise
                     
+                # Check if the survey exist in the csv
+                if new_survey_row.SurveyID.unique()[0] in surveys_df.SurveyID.unique():
+                    logging.error(f"The survey {new_survey_row.SurveyID.unique()[0]} already exists in the database.")
+                    raise
+                
                 print("Updating the new survey information.")
                 
                 # Add the new row to the choices df
@@ -609,7 +611,7 @@ def confirm_survey(survey_i, db_info_dict):
         for ind in surveys_df_i.T.index:
             print(ind,"-->", surveys_df_i.T[0][ind])
 
-        async def f():
+        async def f(new_survey_row):
             x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
                 print("Great, you can start uploading the movies.")
@@ -621,37 +623,43 @@ def confirm_survey(survey_i, db_info_dict):
     print("")
     print("Are the survey details above correct?")
     display(HBox([correct_button,wrong_button])) #<----Display both buttons in an HBox
-    asyncio.create_task(f())
+    asyncio.create_task(f(new_survey_row))
     
 
 ####################################################    
 ############### MOVIES FUNCTIONS ###################
 ####################################################
 
-def select_deployment(project, db_info_dict, survey_i):
-  ###### Save the name of the survey
-    # Load the csv with with sites and survey choices
-    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-
+def get_survey_name(survey_i):
+    # If new survey, review details and save changes in survey csv server
     if isinstance(survey_i.result, dict):
-        # Save the responses as a new row for the survey csv file
-        survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
-        survey_row = pd.DataFrame.from_records(survey_row_dict, index=[0])
-        
+        # Save the responses for the new survey as a dataframe
+        new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
+        survey_name = new_survey_row_dict['SurveyName']
                 
+    # If existing survey print the info for the pre-existing survey
     else:
-        # Read surveys csv
-        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
-        
         # Return the name of the survey
         survey_name = survey_i.result.value
         
-        # Save the SurveyID that match the survey name
-        survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
-                                
+    return survey_name
+    
+
+def select_deployment(project, db_info_dict, survey_i):
+    # Load the csv with with sites and survey choices
+    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+
+    # Read surveys csv
+    surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
         
+    # Get the name of the survey
+    survey_name = get_survey_name(survey_i)
+        
+    # Save the SurveyID that match the survey name
+    survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
+       
     # Save the year of the survey
-    #         survey_year = survey_row["SurveyStartDate"].values[0].strftime("%Y")
+#     survey_year = survey_row["SurveyStartDate"].values[0].strftime("%Y")
     survey_year = survey_row["SurveyStartDate"].dt.year.values[0]
 
     # Get prepopulated fields for the survey
@@ -703,9 +711,11 @@ def select_eventdate(survey_row):
 
 
 def check_deployment(deployment_selected, deployment_date, survey_server_name, db_info_dict, survey_i):
-    # Save eventdate as str
-    EventDate_str = deployment_date.value.isoformat().replace("-","_")
-
+    # Ensure at least one deployment has been selected
+    if not deployment_selected.value:
+        logging.error(f"Please select a deployment.")
+        raise
+    
     # Get list of movies available in server from that survey
     deployments_in_server_df = server_utils.get_matching_s3_keys(db_info_dict["client"], 
                                                            db_info_dict["bucket"],
@@ -718,8 +728,8 @@ def check_deployment(deployment_selected, deployment_date, survey_server_name, d
     # Read surveys csv
     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
 
-    # Return the name of the survey
-    survey_name = survey_i.result.value
+    # Get the name of the survey
+    survey_name = get_survey_name(survey_i)
 
     # Save the SurveyID that match the survey name
     SurveyID = surveys_df[surveys_df["SurveyName"]==survey_name].SurveyID.to_list()[0]
@@ -730,33 +740,41 @@ def check_deployment(deployment_selected, deployment_date, survey_server_name, d
     # Get a list of deployment names from the csv of the survey of interest
     deployment_in_csv = movies_df[movies_df["SurveyID"]==SurveyID].filename.to_list()
 
+    # Save eventdate as str
+    EventDate_str = deployment_date.value.strftime("%d_%m_%Y")
+    
     deployment_filenames = []
     for deployment_i in deployment_selected.value:
         # Specify the name of the deployment
         deployment_name = deployment_i+"_"+EventDate_str
 
         if deployment_name in deployment_in_csv:
-            print("Deployment", deployment_name, "already exist in the csv file reselect new deployments before going any further!")
+            logging.error(f"Deployment {deployment_name} already exist in the csv file reselect new deployments before going any further!")
+            raise
 
         # Specify the filename of the deployment
         filename = deployment_name+".MP4"
 
         if filename in deployments_in_server:
-            print("Deployment", deployment_name, "already exist in the server reselect new deployments before going any further!")
+            logging.error(f"Deployment {deployment_name} already exist in the server reselect new deployments before going any further!")
+            raise
 
         else:
             deployment_filenames = deployment_filenames + [filename]
-            print("There is no existing information in the database for deployment", deployment_name, ". You can continue uploading the information.")
+    print("There is no existing information in the database for", deployment_filenames, "You can continue uploading the information.")
 
-        return deployment_filenames
+    return deployment_filenames
 
 
 
-def update_new_deployments(deployment_names, db_info_dict, survey_server_name):
-    for deployment_i in deployment_names:
-      
+def update_new_deployments(deployment_filenames, db_info_dict, survey_server_name, deployment_date):
+    for deployment_i in deployment_filenames:      
+        # Save eventdate as str
+        EventDate_str = deployment_date.value.strftime("%d_%m_%Y")
+        
         # Get the site information from the filename
-        site_deployment = '_'.join(deployment_i.split('_')[:2])
+        site_deployment = deployment_i.replace("_"+EventDate_str+".MP4","")
+        print(site_deployment)
 
         # Specify the folder with files in the server
         deployment_folder = survey_server_name + site_deployment
@@ -768,8 +786,7 @@ def update_new_deployments(deployment_names, db_info_dict, survey_server_name):
         # Get a list of the movies in the server
         files_server = deployments_files.Key.to_list()
         movie_files_server = [file for file in files_server if file[-3:] in movie_utils.get_movie_extensions()]
-
-
+        
         # Concatenate the files if multiple
         if len(movie_files_server) > 1:
             print("The files", movie_files_server, "will be concatenated")
@@ -808,84 +825,84 @@ def update_new_deployments(deployment_names, db_info_dict, survey_server_name):
         return movie_files_server
         
 
-def record_deployment_info(deployment_names, db_info_dict):
+def record_deployment_info(deployment_filenames, db_info_dict):
 
-    for deployment_i in deployment_names:
-      # Estimate the fps and length info
-      fps, duration = movie_utils.get_length(deployment_i, os.getcwd())
-    
-      # Read csv as pd
-      movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-      
-      # Load the csv with with sites and survey choices
-      choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+    for deployment_i in deployment_filenames:
+        # Estimate the fps and length info
+        fps, duration = movie_utils.get_length(deployment_i, os.getcwd())
+
+        # Read csv as pd
+        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+
+        # Load the csv with with sites and survey choices
+        choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
+
+        deployment_info = {
+            # Select the start of the sampling
+            "SamplingStart": select_SamplingStart(duration),
+
+            # Select the end of the sampling
+            "SamplingEnd": select_SamplingEnd(duration),
+
+            # Specify if deployment is bad
+            "IsBadDeployment": select_IsBadDeployment(),
+
+            # Write the number of the replicate within the site
+            "ReplicateWithinSite": write_ReplicateWithinSite(),
+
+            # Select the person who recorded this deployment
+            "RecordedBy": select_RecordedBy(movies_df.RecordedBy.unique()),
+
+            # Select depth stratum of the deployment
+            "DepthStrata": select_DepthStrata(),
+
+            # Select the depth of the deployment 
+            "Depth": select_Depth(),
+
+            # Select the underwater visibility
+            "UnderwaterVisibility": select_UnderwaterVisibility(choices_df.UnderwaterVisibility.dropna().unique().tolist()),
+
+            # Select the time in
+            "TimeIn": deployment_TimeIn(),
+
+            # Select the time out
+            "TimeOut": deployment_TimeOut(),
+
+            # Add any comment related to the deployment
+            "NotesDeployment": write_NotesDeployment(),
+
+            # Select the theoretical duration of the deployment 
+            "DeploymentDurationMinutes": select_DeploymentDurationMinutes(),
+
+            # Write the type of habitat
+            "Habitat": write_Habitat(),
+
+            # Write the number of NZMHCS_Abiotic
+            "NZMHCS_Abiotic": write_NZMHCS_Abiotic(),
+
+            # Write the number of NZMHCS_Biotic
+            "NZMHCS_Biotic": write_NZMHCS_Biotic(),
+
+            # Select the level of the tide
+            "TideLevel": select_TideLevel(choices_df.TideLevel.dropna().unique().tolist()),
+
+            # Describe the weather of the deployment
+            "Weather": write_Weather(),
+
+            # Select the model of the camera used
+            "CameraModel": select_CameraModel(choices_df.CameraModel.dropna().unique().tolist()),
+
+            # Write the camera lens and settings used
+            "LensModel": write_LensModel(),
+
+            # Specify the type of bait used
+            "BaitSpecies": write_BaitSpecies(),
+
+            # Specify the amount of bait used
+            "BaitAmount": select_BaitAmount(),
+        }
         
-      deployment_info = {
-          # Select the start of the sampling
-          "SamplingStart": select_SamplingStart(duration),
-          
-          # Select the end of the sampling
-          "SamplingEnd": select_SamplingEnd(duration),
-          
-          # Specify if deployment is bad
-          "IsBadDeployment": select_IsBadDeployment(),
-          
-          # Write the number of the replicate within the site
-          "ReplicateWithinSite": write_ReplicateWithinSite(),
-          
-          # Select the person who recorded this deployment
-          "RecordedBy": select_RecordedBy(movies_df.RecordedBy.unique()),
-          
-          # Select depth stratum of the deployment
-          "DepthStrata": select_DepthStrata(),
-          
-          # Select the depth of the deployment 
-          "Depth": select_Depth(),
-          
-          # Select the underwater visibility
-          "UnderwaterVisibility": select_UnderwaterVisibility(choices_df.UnderwaterVisibility.dropna().unique().tolist()),
-          
-          # Select the time in
-          "TimeIn": deployment_TimeIn(),
-      
-          # Select the time out
-          "TimeOut": deployment_TimeOut(),
-          
-          # Add any comment related to the deployment
-          "NotesDeployment": write_NotesDeployment(),
-          
-          # Select the theoretical duration of the deployment 
-          "DeploymentDurationMinutes": select_DeploymentDurationMinutes(),
-          
-          # Write the type of habitat
-          "Habitat": write_Habitat(),
-          
-          # Write the number of NZMHCS_Abiotic
-          "NZMHCS_Abiotic": write_NZMHCS_Abiotic(),
-          
-          # Write the number of NZMHCS_Biotic
-          "NZMHCS_Biotic": write_NZMHCS_Biotic(),
-          
-          # Select the level of the tide
-          "TideLevel": select_TideLevel(choices_df.TideLevel.dropna().unique().tolist()),
-          
-          # Describe the weather of the deployment
-          "Weather": write_Weather(),
-          
-          # Select the model of the camera used
-          "CameraModel": select_CameraModel(choices_df.CameraModel.dropna().unique().tolist()),
-          
-          # Write the camera lens and settings used
-          "LensModel": write_LensModel(),
-          
-          # Specify the type of bait used
-          "BaitSpecies": write_BaitSpecies(),
-          
-          # Specify the amount of bait used
-          "BaitAmount": select_BaitAmount(),
-      }
-
-      return deployment_info, 
+        return deployment_info 
 
 
 def select_SamplingStart(duration_i):

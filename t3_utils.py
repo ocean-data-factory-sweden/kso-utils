@@ -352,7 +352,9 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
                           "-hwaccel", "cuda",
                           "-hwaccel_output_format", "cuda",
                           "-i", clip_i, 
+                          "-c:a", "copy",
                           "-c:v", "h264_nvenc",
+                          "-b:v", "7M",
                           output_clip_path])
             
     else:
@@ -568,7 +570,9 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
                          "-t", str(clip_length), 
                          "-i", movie_path,
                          "-an",#removes the audio
-                         "-c:v", "h264_nvenc",
+                         "-c:a", "copy",
+                          "-c:v", "h264_nvenc",
+                          "-b:v", "7M",
                          str(output_clip_path)])
         os.chmod(str(output_clip_path), 0o777)
     else:
