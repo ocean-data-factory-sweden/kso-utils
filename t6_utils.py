@@ -103,7 +103,8 @@ def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_
     try:
         out = subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
                                  --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
-                                 --imgsz {str(img_size)} --project {tracker_folder}/runs/track/'],
+                                 --imgsz {str(img_size)} --project {tracker_folder}/runs/track/ \
+                                 --deep_sort_model osnet_x0_5_msmt17'],
                      shell=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
