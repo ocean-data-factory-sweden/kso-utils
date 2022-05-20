@@ -1,6 +1,5 @@
 # base imports
 import pandas as pd
-import ipysheet
 import datetime
 import os
 import subprocess
@@ -27,36 +26,38 @@ def open_sites_csv(db_initial_info):
     return sheet
     
 
-def check_sites_database(db_initial_info, sites_df_sheet, project):
+# import ipysheet
 
-    # Load the csv with sites information
-    sites_df = ipysheet.to_dataframe(sites_df_sheet)
+# def check_sites_database(db_initial_info, sites_df_sheet, project):
+
+#     # Load the csv with sites information
+#     sites_df = ipysheet.to_dataframe(sites_df_sheet)
     
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        # Rename columns to match schema fields
-        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
+#     # Check if the project is the Spyfish Aotearoa
+#     if project.Project_name == "Spyfish_Aotearoa":
+#         # Rename columns to match schema fields
+#         sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
-    # Select relevant fields
-    sites_df = sites_df[
-        ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
-    ]
+#     # Select relevant fields
+#     sites_df = sites_df[
+#         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
+#     ]
     
-    # Roadblock to prevent empty lat/long/datum/countrycode
-    db_utils.test_table(
-        sites_df, "sites", sites_df.columns
-    )
+#     # Roadblock to prevent empty lat/long/datum/countrycode
+#     db_utils.test_table(
+#         sites_df, "sites", sites_df.columns
+#     )
     
-    print("sites.csv file is all good!")
+#     print("sites.csv file is all good!")
 
-def open_movies_csv(db_initial_info):
-    # Load the csv with movies information
-    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
+# def open_movies_csv(db_initial_info):
+#     # Load the csv with movies information
+#     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
 
-    # Load the df as ipysheet
-    sheet = ipysheet.from_dataframe(movies_df)
+#     # Load the df as ipysheet
+#     sheet = ipysheet.from_dataframe(movies_df)
 
-    return sheet
+#     return sheet
 
 
 def check_movies_csv(db_initial_info, movies_df_sheet, project):
@@ -121,17 +122,10 @@ def check_movies_from_server(db_info_dict, project):
         # Retrieve movies that are missing info in the movies.csv
         missing_info = spyfish_utils.check_spyfish_movies(movies_df, db_info_dict)
         
-#     print(missing_info)
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="left_only"]
-#     missing_bad_deployment = missing_from_server[missing_from_server["IsBadDeployment"]]
-#     missing_no_bucket_info = missing_from_server[~(missing_from_server["IsBadDeployment"])]
     
     print("There are", len(missing_from_server.index), "movies missing")
-#     print(len(missing_bad_deployment.index), "movies are bad deployments. Their filenames are:")
-#     print(*missing_bad_deployment.filename.unique(), sep = "\n")
-#     print(len(missing_no_bucket_info.index), "movies are good deployments but don't have movies uploaded. Their filenames are:")
-#     print(*missing_no_bucket_info.filename.unique(), sep = "\n")
     
     # Find out files missing from the csv
     missing_from_csv = missing_info[missing_info["_merge"]=="right_only"].reset_index(drop=True)
