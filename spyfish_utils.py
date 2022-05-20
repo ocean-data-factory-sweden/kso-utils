@@ -51,10 +51,10 @@ def check_spyfish_movies(movies_df, db_info_dict):
     # Create a column with the deployment folder of each movie
     movies_s3_pd["deployment_folder"] = movies_s3_pd.Key.str.split("/").str[:2].str.join("/")
     
-    print(movies_s3_pd.head())
+#     print(movies_s3_pd.head())
     # Missing info for files in the "buv-zooniverse-uploads"
     movies_df = movies_df.merge(movies_s3_pd, 
-                                on=['filename'], how='left', 
+                                on=['filename'], how='outer', 
                                 indicator=True)
 
     # Check that movies can be mapped
