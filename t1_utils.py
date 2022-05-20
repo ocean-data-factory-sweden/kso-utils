@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import os
 import subprocess
+import ipysheet
 
 # widget imports
 from IPython.display import display
@@ -26,38 +27,37 @@ def open_sites_csv(db_initial_info):
     return sheet
     
 
-# import ipysheet
 
-# def check_sites_database(db_initial_info, sites_df_sheet, project):
+def check_sites_database(db_initial_info, sites_df_sheet, project):
 
-#     # Load the csv with sites information
-#     sites_df = ipysheet.to_dataframe(sites_df_sheet)
+    # Load the csv with sites information
+    sites_df = ipysheet.to_dataframe(sites_df_sheet)
     
-#     # Check if the project is the Spyfish Aotearoa
-#     if project.Project_name == "Spyfish_Aotearoa":
-#         # Rename columns to match schema fields
-#         sites_df = spyfish_utils.process_spyfish_sites(sites_df)
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Rename columns to match schema fields
+        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
-#     # Select relevant fields
-#     sites_df = sites_df[
-#         ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
-#     ]
+    # Select relevant fields
+    sites_df = sites_df[
+        ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
+    ]
     
-#     # Roadblock to prevent empty lat/long/datum/countrycode
-#     db_utils.test_table(
-#         sites_df, "sites", sites_df.columns
-#     )
+    # Roadblock to prevent empty lat/long/datum/countrycode
+    db_utils.test_table(
+        sites_df, "sites", sites_df.columns
+    )
     
-#     print("sites.csv file is all good!")
+    print("sites.csv file is all good!")
 
-# def open_movies_csv(db_initial_info):
-#     # Load the csv with movies information
-#     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
+def open_movies_csv(db_initial_info):
+    # Load the csv with movies information
+    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
 
-#     # Load the df as ipysheet
-#     sheet = ipysheet.from_dataframe(movies_df)
+    # Load the df as ipysheet
+    sheet = ipysheet.from_dataframe(movies_df)
 
-#     return sheet
+    return sheet
 
 
 def check_movies_csv(db_initial_info, movies_df_sheet, project):
@@ -242,6 +242,13 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
 
             # Delete the concat video
             os.remove(concat_video)
+            
+            # Delete the movies from the S3 bucket
+            for movie_i in sorted(movie_files_server):
+                delete_file_from_s3(client = db_info_dict["client"],
+                                    bucket = db_info_dict["bucket"], 
+                                    key=movie_i,
+                                   )
 
 
         

@@ -442,6 +442,11 @@ def upload_file_to_s3(client, *, bucket, key, filename):
             )
         
 
+def delete_file_from_s3(client, *, bucket, key):
+    
+    client.delete_object(Bucket=bucket,Key=key)        
+        
+        
 def get_movie_url(project, server_dict, f_path):
     '''
     Function to get the url of the movie
