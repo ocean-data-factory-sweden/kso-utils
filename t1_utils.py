@@ -241,7 +241,7 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
             os.remove(textfile_name)
 
             # Delete the concat video
-            os.remove(concat_video)
+            os.remove(filename)
             
             # Delete the movies from the S3 bucket
             for movie_i in sorted(movie_files_server):
