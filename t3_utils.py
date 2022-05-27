@@ -256,10 +256,13 @@ def select_modification():
                             #borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
                             , "Zoo_low_compression": {
                             "crf": "25",
+                            "bv": "7",
                             }, "Zoo_medium_compression": {
                             "crf": "27",
+                            "bv": "6",
                             }, "Zoo_high_compression": {
                             "crf": "30",
+                            "bv": "5",
                             }, "Blur_sensitive_info": { "filter":
                             ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
                             ,thickness='fill').drawbox(0, 'ih*(95/100)', \
@@ -327,13 +330,17 @@ def gpu_select():
 
 def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
     if gpu_available:
+        # Unnest the modification detail dict
+        df = pd.json_normalize(modification_details, sep='_')
+        b_v = df.filter(regex='bv$',axis=1).values[0][0]+"M"
+        
         subprocess.call(["ffmpeg",
                           "-hwaccel", "cuda",
                           "-hwaccel_output_format", "cuda",
                           "-i", clip_i, 
                           "-c:a", "copy",
                           "-c:v", "h264_nvenc",
-                          "-b:v", "7M",
+                          "-b:v", b_v,
                           output_clip_path])
             
     else:
@@ -345,18 +352,15 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
         for transform in modification_details.values():
             if "filter" in transform:
                 mod_prompt = transform['filter']
-                full_prompt += mod_prompt
-
-            # Setup output prompt
-            crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
-            crf_value = [i for i in crf_value if i is not None]
-
-            if len(crf_value) > 0:
-                crf_prompt = str(max([int(i) for i in crf_value]))
-                full_prompt += f".output('{output_clip_path}', crf={crf_prompt}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-            else:
+                full_prompt += mod_prompt                
                 full_prompt += f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
 
+            else:
+                # Unnest the modification detail dict
+                df = pd.json_normalize(modification_details, sep='_')
+                crf = df.filter(regex='crf$',axis=1).values[0][0]
+                full_prompt += f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+            
             # Run the modification
             try:
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
@@ -542,6 +546,10 @@ def expand_list(df, list_column, new_column):
 # Function to extract the videos 
 def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modification_details, gpu_available): 
     if gpu_available:
+        # Unnest the modification detail dict
+        df = pd.json_normalize(modification_details, sep='_')
+        b_v = df.filter(regex='bv$',axis=1).values[0][0]+"M"
+        
         subprocess.call(["ffmpeg",
                          "-hwaccel", "cuda",
                          "-hwaccel_output_format", "cuda",                                 
@@ -551,7 +559,7 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
                          "-an",#removes the audio
                          "-c:a", "copy",
                           "-c:v", "h264_nvenc",
-                          "-b:v", "7M",
+                          "-b:v", b_v,
                          str(output_clip_path)])
         os.chmod(str(output_clip_path), 0o777)
     else:
@@ -564,16 +572,14 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
             if "filter" in transform:
                 mod_prompt = transform['filter']
                 full_prompt += mod_prompt
-
-            # Setup output prompt
-            crf_value = [transform["crf"] if "crf" in transform else None for transform in modification_details.values()]
-            crf_value = [i for i in crf_value if i is not None]
-
-            if len(crf_value) > 0:
-                crf_prompt = str(max([int(i) for i in crf_value]))
-                full_prompt += f".output('{str(output_clip_path)}', crf={crf_prompt}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-            else:
                 full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+
+            else:
+                # Unnest the modification detail dict
+                df = pd.json_normalize(modification_details, sep='_')
+                crf = df.filter(regex='crf$',axis=1).values[0][0]
+                full_prompt += f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+            
 
             # Run the modification
             try:
