@@ -165,6 +165,27 @@ def choose_single_workflow(workflows_df):
 
     return workflow_name, subj_type
 
+# Select the movie you want
+def select_movie(available_movies_df):
+
+    # Get the list of available movies
+    available_movies_tuple = tuple(sorted(available_movies_df.filename.unique()))
+    
+    # Widget to select the movie
+    select_movie_widget = widgets.Dropdown(
+                    options = available_movies_tuple,
+                    description = "Movie of interest:",
+                    ensure_option = True,
+                    disabled = False,
+                    layout = widgets.Layout(width='50%'),
+                    style = {'description_width': 'initial'},
+                )
+    
+    display(select_movie_widget)
+    
+    return select_movie_widget
+
+
 # Function to preview underwater movies
 def preview_movie(project, db_info_dict, available_movies_df, movie_i):
     
