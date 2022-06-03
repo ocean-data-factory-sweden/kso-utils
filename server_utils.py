@@ -241,7 +241,7 @@ def get_movie_url(project, server_dict, f_path):
         movie_url = server_dict['client'].generate_presigned_url('get_object', 
                                                             Params = {'Bucket': server_dict['bucket'], 
                                                                       'Key': movie_key}, 
-                                                            ExpiresIn = 5400)
+                                                            ExpiresIn = 86400)
         return movie_url
     elif server == "SNIC":
         return f_path
