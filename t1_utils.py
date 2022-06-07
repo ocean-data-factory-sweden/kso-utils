@@ -220,7 +220,9 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
                                  "-f", "concat", 
                                  "-safe", "0",
                                  "-i", "a_file.txt", 
-                                 "-c", "copy", 
+                                 "-c:a", "copy",
+                                 "-c:v", "h264",
+                                 "-crf", "22",
                                  filename])
                 
             # Upload the concatenated video to the S3
