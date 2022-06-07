@@ -147,6 +147,9 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
 
         # Select only frames from movies that can be found
         frames_df = frames_df[frames_df.exists]
+        if len(frames_df) == 0:
+            logging.error("There are no frames for this species that meet your aggregation criteria."
+                           "Please adjust your aggregation criteria / species choice and try again.")
         #frames_df = frames_df[frames_df.fps != 99.0]
         
         ##### Add species_id info ####
@@ -160,7 +163,7 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
         
         # Match format of species name to Zooniverse labels
         species_ids["label"] = species_ids["label"].str.upper()
-        species_ids["label"] = species_ids["label"].str.replace(" ", "")
+        species_ids["label"] = species_ids["label"].str.replace(" ", "").replace("-", "")
         
         # Combine the aggregated clips and subjects dataframes
         frames_df = pd.merge(frames_df, species_ids, how="left", on="label").drop(columns=["id"])
@@ -181,7 +184,7 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
         
         # Match format of species name to Zooniverse labels
         species_ids["label"] = species_ids["label"].str.upper()
-        species_ids["label"] = species_ids["label"].str.replace(" ", "")
+        species_ids["label"] = species_ids["label"].str.replace(" ", "").replace("-", "")
         
         # Combine the aggregated clips and subjects dataframes
         frames_df = pd.merge(frames_df, species_ids, how="left", on="label").drop(columns=["id"])
@@ -230,9 +233,11 @@ def check_frames_uploaded(frames_df: pd.DataFrame, project, species_ids, conn):
         )
 
         # Filter out frames that have already been uploaded
-        if len(uploaded_frames_df) > 0:
+        if len(uploaded_frames_df) > 0 and not uploaded_frames_df["frame_number"].isnull().any():
             print("There are some frames already uploaded in Zooniverse for the species selected. \
                   Checking if those are the frames you are trying to upload")
+            uploaded_frames_df["frame_number"] = uploaded_frames_df["frame_number"].astype(int)
+            frames_df["frame_number"] = frames_df["frame_number"].astype(int)
             merge_df = pd.merge(frames_df, uploaded_frames_df, 
                                 left_on=["movie_id", "frame_number"], 
                                 right_on=["movie_id", "frame_number"],
@@ -394,7 +399,7 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             
             # Match format of species name to Zooniverse labels
             species_names_zoo = [species_name.upper() for species_name in species_names]
-            species_names_zoo = [species_name.replace(" ", "") for species_name in species_names_zoo]
+            species_names_zoo = [species_name.replace(" ", "").replace("-", "") for species_name in species_names_zoo]
             
             # Select only aggregated classifications of species of interest:
             sp_agg_clips_df = agg_clips_df[agg_clips_df["label"].isin(species_names_zoo)]
