@@ -182,7 +182,6 @@ def select_movie(available_movies_df):
                 )
     
     display(select_movie_widget)
-    
     return select_movie_widget
 
 
@@ -191,6 +190,8 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
     
     # Select the movie of interest
     movie_selected = available_movies_df[available_movies_df["filename"]==movie_i].reset_index(drop=True)
+    movie_selected_view = movie_selected.T
+    movie_selected_view.columns = ["Movie summary"]
 
     # Make sure only one movie is selected
     if len(movie_selected.index)>1:
@@ -200,8 +201,17 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
         # Generate temporary path to the movie select
         if project.server == "SNIC":
             movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["spath"].values[0])
-            os.chdir(os.path.dirname(movie_path))
-            return HTML(f"""<video src={os.path.basename(movie_path)} width=800 controls/>"""), movie_path
+            movie_path = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
         else:
             movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
-        return HTML(f"""<video src={movie_path} width=800 controls/>"""), movie_path
+        html_code = f"""<html>
+                <div style="display: flex; justify-content: space-around; align-items: center">
+                <div>
+                  <video width=500 controls>
+                  <source src={movie_path}>
+                  </video>
+                </div>
+                <div>{movie_selected_view.to_html()}</div>
+                </div>
+                </html>"""
+        display(HTML(html_code))
