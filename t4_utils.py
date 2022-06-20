@@ -1,6 +1,7 @@
 #t4 utils
 # base imports
 import os, ffmpeg as ffmpeg_python
+import re
 import pandas as pd
 import numpy as np
 import shutil
@@ -79,6 +80,14 @@ def choose_folder():
     display(fc)
     return fc
 
+#Function to clean label (no non-alpha characters)
+def clean_label(label_string):
+    label_string = label_string.upper()
+    label_string = label_string.replace(" ", "")
+    pattern = r'[^A-Za-z0-9]+'
+    cleaned_string = re.sub(pattern, '', label_string)
+    return cleaned_string
+
 # Function to match species selected to species id
 def get_species_ids(project, species_list: list):
     """
@@ -154,19 +163,18 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
         
         ##### Add species_id info ####
         # Retrieve species info
-        species_ids = pd.read_sql_query(
+        species_df = pd.read_sql_query(
             f"SELECT id, label, scientificName FROM species",
             conn,)
 
         # Retrieve species info
-        species_ids = species_ids.rename(columns={"id": "species_id"})
+        species_df = species_df.rename(columns={"id": "species_id"})
         
         # Match format of species name to Zooniverse labels
-        species_ids["label"] = species_ids["label"].str.upper()
-        species_ids["label"] = species_ids["label"].str.replace(" ", "").replace("-", "")
+        species_df["label"] = species_df["label"].apply(clean_label)
         
         # Combine the aggregated clips and subjects dataframes
-        frames_df = pd.merge(frames_df, species_ids, how="left", on="label").drop(columns=["id"])
+        frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(columns=["id"])
 
     if server == "AWS":
         
@@ -175,19 +183,18 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
         
         ##### Add species_id info ####
         # Retrieve species info
-        species_ids = pd.read_sql_query(
+        species_df = pd.read_sql_query(
             f"SELECT id, label, scientificName FROM species",
             conn,)
 
         # Retrieve species info
-        species_ids = species_ids.rename(columns={"id": "species_id"})
+        species_df = species_df.rename(columns={"id": "species_id"})
         
         # Match format of species name to Zooniverse labels
-        species_ids["label"] = species_ids["label"].str.upper()
-        species_ids["label"] = species_ids["label"].str.replace(" ", "").replace("-", "")
+        species_df["label"] = species_df["label"].apply(clean_label)
         
         # Combine the aggregated clips and subjects dataframes
-        frames_df = pd.merge(frames_df, species_ids, how="left", on="label").drop(columns=["id"])
+        frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(columns=["id"])
   
     # Identify the ordinal number of the frames expected to be extracted
     if len(frames_df) == 0:
@@ -398,8 +405,7 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
                                                                         project, agg_params=agg_params)
             
             # Match format of species name to Zooniverse labels
-            species_names_zoo = [species_name.upper() for species_name in species_names]
-            species_names_zoo = [species_name.replace(" ", "").replace("-", "") for species_name in species_names_zoo]
+            species_names_zoo = [clean_label(species_name) for species_name in species_names]
             
             # Select only aggregated classifications of species of interest:
             sp_agg_clips_df = agg_clips_df[agg_clips_df["label"].isin(species_names_zoo)]
