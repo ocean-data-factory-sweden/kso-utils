@@ -196,22 +196,25 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
     # Make sure only one movie is selected
     if len(movie_selected.index)>1:
         print("There are several movies with the same filename. This should be fixed!")
+        return None
 
     else:
         # Generate temporary path to the movie select
         if project.server == "SNIC":
             movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["spath"].values[0])
-            movie_path = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
+            local_path = movie_path
+            url = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
         else:
-            movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
+            url = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
+            movie_path = url
         html_code = f"""<html>
                 <div style="display: flex; justify-content: space-around; align-items: center">
                 <div>
                   <video width=500 controls>
-                  <source src={movie_path}>
+                  <source src={url}>
                   </video>
                 </div>
                 <div>{movie_selected_view.to_html()}</div>
                 </div>
                 </html>"""
-        display(HTML(html_code))
+        return HTML(html_code), movie_path
