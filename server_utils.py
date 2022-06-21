@@ -173,6 +173,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     project_name = project.Project_name
     
     if server == "AWS":
+        print("Retrieving movies from AWS server")
         # Retrieve info from the bucket
         server_df = get_matching_s3_keys(client = db_info_dict["client"], 
                                                          bucket = bucket_i, 
@@ -192,6 +193,15 @@ def retrieve_movie_info_from_server(project, db_info_dict):
             server_files = os.listdir(movie_folder)
             server_paths = [movie_folder + i for i in server_files]
             server_df = pd.DataFrame(server_paths, columns="spath") 
+    elif server == "wildlife_ai":
+      # Combine wildlife.ai storage and filenames of the movie examples
+      server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
+      
+      # Get the fpath(html) from the key
+      server_df = server_df.rename(columns={"filename": "fpath"})
+
+      server_df["spath"] = "https://www.wildlife.ai/wp-content/uploads/2022/05/" + server_df.fpath.astype(str)
+      
     else:
         raise ValueError("The server type you selected is not currently supported.")
     
@@ -202,8 +212,11 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     # Query info about the movie of interest
     movies_df = pd.read_sql_query(f"SELECT * FROM movies", conn)
 
-    # Missing info for files in the "buv-zooniverse-uploads"
-    movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
+    if project_name == "Spyfish_Aotearoa":
+      # Add missing info for files in the "buv-zooniverse-uploads"
+      movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
+    
+    # Merge the server path to the filepath
     movies_df = movies_df.merge(server_df["spath"], 
                                 left_on=['fpath'],
                                 right_on=['spath'], 
