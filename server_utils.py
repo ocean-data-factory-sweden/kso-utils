@@ -194,13 +194,13 @@ def retrieve_movie_info_from_server(project, db_info_dict):
             server_paths = [movie_folder + i for i in server_files]
             server_df = pd.DataFrame(server_paths, columns="spath") 
     elif server == "wildlife_ai":
-      # Combine wildlife.ai storage and filenames of the movie examples
-      server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
+        # Combine wildlife.ai storage and filenames of the movie examples
+        server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
       
-      # Get the fpath(html) from the key
-      server_df = server_df.rename(columns={"filename": "fpath"})
+        # Get the fpath(html) from the key
+        server_df = server_df.rename(columns={"filename": "fpath"})
 
-      server_df["spath"] = "https://www.wildlife.ai/wp-content/uploads/2022/05/" + server_df.fpath.astype(str)
+        server_df["spath"] = "https://www.wildlife.ai/wp-content/uploads/2022/06/" + server_df.fpath.astype(str)
       
     else:
         raise ValueError("The server type you selected is not currently supported.")
