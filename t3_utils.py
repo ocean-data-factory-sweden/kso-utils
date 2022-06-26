@@ -291,16 +291,21 @@ def gpu_select():
             return gpu_available
         
         if gpu_option == "Colab GPU":
-            print("Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS")
-            # Install ffmpeg with GPU version
-            subprocess.check_call(
-              "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
-              shell=True)
-            subprocess.check_call(
-              "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/",
-              shell=True)
-            print("GPU Requirements installed!")
-            
+            # Install the GPU requirements
+            if not os.path.exists("./colab-ffmpeg-cuda/bin/."):
+                try:
+                    print('Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS')# Install ffmpeg with GPU version
+                    subprocess.check_call(
+                        "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
+                        shell=True)
+                    subprocess.check_call(
+                        "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/",
+                        shell=True)
+                    print("GPU Requirements installed!")
+
+                    except Error:
+                        print("There was an issues trying to install the GPU requirements")
+
             # Set GPU argument
             gpu_available = True
             return gpu_available
