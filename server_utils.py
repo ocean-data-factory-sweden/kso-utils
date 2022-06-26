@@ -256,7 +256,7 @@ def get_movie_url(project, server_dict, f_path):
                                                                       'Key': movie_key}, 
                                                             ExpiresIn = 86400)
         return movie_url
-    elif server == "SNIC":
+    else:
         return f_path
     
     
