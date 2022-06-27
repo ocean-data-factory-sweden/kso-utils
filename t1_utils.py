@@ -170,34 +170,39 @@ def update_csv(db_info_dict, project, sheet_df, local_csv, serv_csv):
 ############### MOVIES FUNCTIONS ###################
 ####################################################
 
-def open_movies_csv(db_initial_info):
+def choose_movie_review():
+    choose_movie_review_widget = widgets.RadioButtons(
+          options=["Basic: Check for empty cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
+          description='What method you want to use to review the movies:',
+          disabled=False,
+          layout=Layout(width='95%'),
+          style = {'description_width': 'initial'}
+      )
+    display(choose_movie_review_widget)
+    
+    return choose_movie_review_widget
+
+def check_movies_csv(db_initial_info, project, review_method):
     # Load the csv with movies information
     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
-
-    # Load the df as ipysheet
-    sheet = ipysheet.from_dataframe(movies_df)
-
-    return sheet
-
-
-def check_movies_csv(db_initial_info, movies_df_sheet, project):
-
-    # Check for missing fps and duration info
-    movies_df = movie_utils.check_fps_duration(db_initial_info, project)
     
-    # Check if the project is the Spyfish Aotearoa
+    if review_method.value.startswith("Basic"):
+      check_empty_movies_csv(db_initial_info, project, movies_df)
+
+
+def check_empty_movies_csv(db_initial_info, project, movies_df):
+    # Process Spyfish Aotearoa movies
     if project.Project_name == "Spyfish_Aotearoa":
         movies_df = spyfish_utils.process_spyfish_movies(movies_df)
         
-        
-    # Check if the project is the KSO
+    # Process KSO movies
     if project.Project_name == "Koster_Seafloor_Obs":
         movies_df = koster_utils.process_koster_movies_csv(movies_df)
     
-    # Check if project is the template
+    # Process template movies
     if project.Project_name == "Template project":
         # Add path of the movies
-        movies_df["Fpath"] = "https://www.wildlife.ai/wp-content/uploads/2022/05/"+ movies_df["filename"]
+        movies_df["Fpath"] = "https://www.wildlife.ai/wp-content/uploads/2022/06/"+ movies_df["filename"]
     
     # Connect to database
     conn = db_utils.create_connection(db_initial_info['db_path'])
@@ -216,6 +221,14 @@ def check_movies_csv(db_initial_info, movies_df_sheet, project):
         ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
     ]
 
+    # TODO if empty cells display the movies.csv
+    # if ...:
+        # Load the df as ipysheet
+        # sheet = ipysheet.from_dataframe(movies_df)
+
+        # print(There are empty cells, please fill them up and confirm the changes)
+        # return sheet
+        
     # Roadblock to prevent empty information
     db_utils.test_table(
         movies_db, "movies", movies_db.columns
@@ -230,7 +243,17 @@ def check_movies_csv(db_initial_info, movies_df_sheet, project):
 #     print(date_time_check.tail())
    
     print("movies.csv is all good!") 
-    
+
+
+
+def open_movies_csv(db_initial_info):
+    # Load the csv with movies information
+    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
+
+    # Load the df as ipysheet
+    sheet = ipysheet.from_dataframe(movies_df)
+
+    return sheet
 
 
 def check_movies_from_server(db_info_dict, project):

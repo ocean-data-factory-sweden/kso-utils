@@ -46,7 +46,7 @@ def check_fps_duration(db_info_dict, project):
         # Select only those movies with the missing parameters
         miss_par_df = df[df["fps"].isna()|df["duration"].isna()]
         
-        print("Updating the fps and duration information of:")
+        print("Retrieving fps and duration of:")
         print(*miss_par_df.filename.unique(), sep = "\n")
         
         ##### Estimate the fps/duration of the movies ####
@@ -78,15 +78,6 @@ def check_fps_duration(db_info_dict, project):
             df["fps"] = df.fps.fillna(miss_par_df.fps)
             df["duration"] = df.duration.fillna(miss_par_df.duration)
             
-            
-            # Update the local and server movies.csv file with the new fps/duration info
-            df.to_csv(db_info_dict["local_movies_csv"], index=False)
-            server_utils.upload_file_to_s3(client = db_info_dict['client'],
-                                           bucket = db_info_dict['bucket'], 
-                                           key = db_info_dict["server_movies_csv"],
-                                           filename = db_info_dict["local_movies_csv"])
-            print("The fps and duration columns have been updated in movies.csv")
-
         else:   
             # Set the fps and duration of each movie
             movie_files = server_utils.get_snic_files(db_info_dict["client"], movie_folder)["spath"].tolist()
