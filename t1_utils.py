@@ -48,8 +48,11 @@ def map_site(db_info_dict, project):
     # Combine information of interest into a list to display for each site
     sites_df["site_info"] = sites_df.values.tolist()
 
+    # Save the names of the columns
+    df_cols = sites_df.columns
+
     # Add each site to the map 
-    sites_df.apply(lambda row:folium.CircleMarker(location=[row["decimalLatitude"], row["decimalLongitude"]], radius = 14, popup=row["site_info"], tooltip=row["siteName"]) .add_to(kso_map), axis=1)
+    sites_df.apply(lambda row:folium.CircleMarker(location=[row[df_cols.str.contains("Latitude")], row[df_cols.str.contains("Longitude")]], radius = 14, popup=row["site_info"], tooltip=row[df_cols.str.contains("siteName", case=False)]) .add_to(kso_map), axis=1)
 
     # Add a minimap to the corner for reference
     minimap = folium.plugins.MiniMap()
@@ -83,8 +86,11 @@ def display_changes(db_info_dict, isheet, local_csv):
         logging.error(f"There are no changes to update")
         raise
     else:
+        # Retieve the column name of the site_id
+        site_id_col = [col for col in df.columns if 'site_id' in col][0]
+        
         # Concatenate DataFrames and distinguish each frame with the keys parameter
-        df_all = pd.concat([df.set_index('site_id'), sheet_df.set_index('site_id')],
+        df_all = pd.concat([df.set_index(site_id_col), sheet_df.set_index(site_id_col)],
             axis='columns', keys=['Origin', 'Update'])
         
         # Rearrange columns to have them next to each other
