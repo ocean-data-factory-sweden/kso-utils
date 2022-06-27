@@ -162,8 +162,25 @@ def get_db_init_info(project, server_dict):
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
     return db_initial_info
     
+def update_csv_server(project, db_info_dict, orig_csv, updated_csv):
+    server = project.server
+    
+    # TODO: email original csv to project owner before updating the file
 
-
+    
+    if server == "AWS":
+        print("Updating sites.csv in AWS server")
+        # Update csv to AWS
+        upload_file_to_s3(db_info_dict["client"],
+        bucket=db_info_dict["bucket"], 
+                                               key=db_info_dict[orig_csv], 
+                                               filename=db_info_dict[updated_csv])
+ 
+    
+    elif server == "SNIC":
+        # print("Updating sites.csv in SNIC server")
+        print("Work in progress")
+      
 
 def retrieve_movie_info_from_server(project, db_info_dict):
     

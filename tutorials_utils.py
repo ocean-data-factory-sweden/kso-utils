@@ -7,6 +7,7 @@ import logging
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import HTML
+import asyncio
 
 # util imports
 import kso_utils.server_utils as server_utils
@@ -218,3 +219,15 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
                 </div>
                 </html>"""
         return HTML(html_code), movie_path
+
+
+# Function to update widget based on user interaction (eg. click)
+def wait_for_change(widget1, widget2): 
+    future = asyncio.Future()
+    def getvalue(change):
+        future.set_result(change.description)
+        widget1.on_click(getvalue, remove=True) 
+        widget2.on_click(getvalue, remove=True) 
+    widget1.on_click(getvalue)
+    widget2.on_click(getvalue) 
+    return future

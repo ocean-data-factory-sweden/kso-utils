@@ -1,22 +1,22 @@
 # base imports
 import os
-
-# widget imports
-from ipyfilechooser import FileChooser
-from ipywidgets import interactive, Layout, HBox
-from IPython.display import HTML
-
-# util imports
-import asyncio
-import kso_utils.movie_utils as movie_utils
-import kso_utils.server_utils as server_utils
 import pandas as pd
-import ipywidgets as widgets
 import subprocess
 import datetime
 import logging
 from tqdm import tqdm
 
+# widget imports
+from ipyfilechooser import FileChooser
+import ipywidgets as widgets
+from ipywidgets import interactive, Layout, HBox
+from IPython.display import HTML
+import asyncio
+
+# util imports
+import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
+import kso_utils.tutorials_utils as t_utils
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -506,18 +506,6 @@ def write_LinkToOriginalData():
     
     return LinkToOriginalData
 
-
-def wait_for_change(widget1, widget2): 
-    future = asyncio.Future()
-    def getvalue(change):
-        future.set_result(change.description)
-        widget1.on_click(getvalue, remove=True) 
-        widget2.on_click(getvalue, remove=True) 
-    widget1.on_click(getvalue)
-    widget2.on_click(getvalue) 
-    return future
-
-
 # Confirm the details of the survey
 def confirm_survey(survey_i, db_info_dict):
 
@@ -559,7 +547,7 @@ def confirm_survey(survey_i, db_info_dict):
         
         # Save changes in survey csv locally and in the server
         async def f(new_survey_row):
-            x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
+            x = await t_utils.wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
                 # Load the csv with sites information
                 surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])

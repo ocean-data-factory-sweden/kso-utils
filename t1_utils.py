@@ -1,8 +1,10 @@
 # base imports
-import pandas as pd
-import datetime
 import os
 import subprocess
+import pandas as pd
+import numpy as np
+import datetime
+import logging
 
 # widget imports
 from IPython.display import display
@@ -11,13 +13,19 @@ import ipywidgets as widgets
 import ipysheet
 import folium
 from folium.plugins import MarkerCluster
+import asyncio
 
 # util imports
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.server_utils as server_utils
+import kso_utils.tutorials_utils as t_utils
 
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+out_df = pd.DataFrame()
 
 ####################################################    
 ############### SITES FUNCTIONS ###################
@@ -43,6 +51,10 @@ def map_site(db_info_dict, project):
     # Add each site to the map 
     sites_df.apply(lambda row:folium.CircleMarker(location=[row["decimalLatitude"], row["decimalLongitude"]], radius = 14, popup=row["site_info"], tooltip=row["siteName"]) .add_to(kso_map), axis=1)
 
+    # Add a minimap to the corner for reference
+    minimap = folium.plugins.MiniMap()
+    kso_map = kso_map.add_child(minimap)
+    
     # Return the map
     return kso_map
 
@@ -56,42 +68,27 @@ def open_sites_csv(db_initial_info):
 
     return sheet
     
-def update_sites_csv(sites_sheet, db_info_dict):
-    # Read the csv file with site information
-    sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+def display_changes(db_info_dict, isheet, local_csv):
+    # Read the local csv file
+    df = pd.read_csv(db_info_dict[local_csv])
 
     # Convert ipysheet to pandas
-    sites_sheet_df = ipysheet.to_dataframe(sites_sheet)
+    sheet_df = ipysheet.to_dataframe(isheet)
     
     # Check the differences between the spreadsheet and sites_csv
-    sites_diff_df = pd.concat([sites_df , sites_sheet_df]).drop_duplicates(keep=False)
+    sheet_diff_df = pd.concat([df , sheet_df]).drop_duplicates(keep=False)
     
     # If changes in dataframes display them and ask the user to confirm them
-    if sites_diff_df.empty:
-      print("There are no changes to update")
+    if sheet_diff_df.empty:
+        logging.error(f"There are no changes to update")
+        raise
     else:
-        # Create button to confirm changes
-        confirm_button = widgets.Button(
-          description = 'Yes, details are correct',
-          layout=Layout(width='25%'),
-          style = {'description_width': 'initial'},
-          button_style='danger'
-          )
-
-        # Create button to deny changes
-        deny_button = widgets.Button(
-            description = 'No, I will go back and fix them',
-            layout=Layout(width='45%'),
-            style = {'description_width': 'initial'}, 
-            button_style='danger'
-        )
-
         # Concatenate DataFrames and distinguish each frame with the keys parameter
-        df_all = pd.concat([sites_df.set_index('site_id'), sites_sheet_pd.set_index('site_id')],
+        df_all = pd.concat([df.set_index('site_id'), sheet_df.set_index('site_id')],
             axis='columns', keys=['Origin', 'Update'])
         
         # Rearrange columns to have them next to each other
-        df_final = df_all.swaplevel(axis='columns')[sites_df.columns[1:]]
+        df_final = df_all.swaplevel(axis='columns')[df.columns[1:]]
         
 
         # Create a function to highlight the changes
@@ -102,79 +99,66 @@ def update_sites_csv(sites_sheet, db_info_dict):
                                 index=data.index, columns=data.columns)
 
         # Return the df with the changes highlighted
-        df_final.style.apply(highlight_diff, axis=None)
+        highlight_changes = df_final.style.apply(highlight_diff, axis=None)
 
+        return highlight_changes, sheet_df
 
-#         # Save changes in survey csv locally and in the server
-#         async def f(updated_df):
-#             x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
-#             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
-#                 print("Updating the new information.")
-                
-#                 # Save the updated df locally
-#                 surveys_df.to_csv(db_info_dict["local_surveys_csv"],index=False)
-            
-#                 # Save the updated df in the server
-#                 server_utils.upload_file_to_s3(db_info_dict["client"],
-#                                                bucket=db_info_dict["bucket"], 
-#                                                key=db_info_dict["server_surveys_csv"], 
-#                                                filename=db_info_dict["local_surveys_csv"].__str__())
-                
-#                 print("Survey information updated!")
-                
-#             else:
-#                 print("Come back when the data is tidy!")
+def update_csv(db_info_dict, project, sheet_df, local_csv, serv_csv):
+    # Create button to confirm changes
+    confirm_button = widgets.Button(
+      description = 'Yes, details are correct',
+      layout=Layout(width='25%'),
+      style = {'description_width': 'initial'},
+      button_style='danger'
+      )
 
-
-#     # If existing survey print the info for the pre-existing survey
-#     else:
-#         # Load the csv with surveys information
-#         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
-
-#         # Select the specific survey info
-#         surveys_df_i = surveys_df[surveys_df["SurveyName"]==survey_i.result.value].reset_index(drop=True)
-
-#         print("The details of the selected survey are:")
-#         for ind in surveys_df_i.T.index:
-#             print(ind,"-->", surveys_df_i.T[0][ind])
-
-#         async def f(new_survey_row):
-#             x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
-#             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
-#                 print("Great, you can start uploading the movies.")
-                
-#             else:
-#                 print("Come back when the data is tidy!")
-
-#     print("")
-#     print("")
-#     print("Are the survey details above correct?")
-#     display(HBox([correct_button,wrong_button])) #<----Display both buttons in an HBox
-#     asyncio.create_task(f(new_survey_row))
-
-
-
-def check_sites_database(db_initial_info, sites_df_sheet, project):
-
-    # Load the csv with sites information
-    sites_df = ipysheet.to_dataframe(sites_df_sheet)
-    
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        # Rename columns to match schema fields
-        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
-        
-    # Select relevant fields
-    sites_df = sites_df[
-        ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
-    ]
-    
-    # Roadblock to prevent empty lat/long/datum/countrycode
-    db_utils.test_table(
-        sites_df, "sites", sites_df.columns
+    # Create button to deny changes
+    deny_button = widgets.Button(
+        description = 'No, I will go back and fix them',
+        layout=Layout(width='45%'),
+        style = {'description_width': 'initial'}, 
+        button_style='danger'
     )
+
+    # Save changes in survey csv locally and in the server
+    async def f(sheet_df):
+        x = await t_utils.wait_for_change(confirm_button,deny_button) #<---- Pass both buttons into the function
+        if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
+            print("Checking if changes can be incorporated to the database")
+            
+            # Check if the project is the Spyfish Aotearoa
+            if project.Project_name == "Spyfish_Aotearoa":
+                # Rename columns to match schema fields
+                sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
+        
+            # Select relevant fields
+            sheet_df = sheet_df[
+                ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
+            ]
     
-    print("sites.csv file is all good!")
+            # Roadblock to prevent empty lat/long/datum/countrycode
+            db_utils.test_table(
+                sheet_df, "sites", sheet_df.columns
+            )
+            
+            print("Updating the changes into the csv files for the database.")
+            
+            # Save the updated df locally
+            sheet_df.to_csv(db_info_dict[local_csv],index=False)
+        
+            # Save the updated df in the server
+            server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
+            print("SUCCESS: The changes have been added!")
+            
+        else:
+            print("Run this cell again when the changes are correct!")
+
+    print("")
+    print("")
+    print("Are the site changes above correct?")
+    display(HBox([confirm_button,deny_button])) #<----Display both buttons in an HBox
+    asyncio.create_task(f(sheet_df))
+
 
 ####################################################    
 ############### MOVIES FUNCTIONS ###################
