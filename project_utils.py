@@ -1,5 +1,6 @@
 # base imports
-import os, logging
+import os
+import logging
 import pandas as pd
 from dataclasses import dataclass
 from dataclass_csv import DataclassReader, DataclassWriter
@@ -12,7 +13,7 @@ logger.setLevel(logging.DEBUG)
 @dataclass
 class Project:
     Project_name: str
-    Zooniverse_number: str = None
+    Zooniverse_number: int = 0
     db_path: str = None
     server: str = None
     bucket: str = None
@@ -34,7 +35,7 @@ def find_project(project_name: str = ''):
         logging.error("A csv file was not selected. Please try again.")
 
     elif os.path.exists(project_path) and os.path.exists(snic_path):
-        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/projects_list.csv"
+        project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
         
     # If list of projects doesn't exist retrieve it from github
     elif not os.path.exists(project_path):
@@ -56,7 +57,7 @@ def add_project(project_info: dict = {}):
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     if not os.path.exists(project_path) and os.path.exists(snic_path):
-        project_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/db_starter/projects_list.csv"
+        project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
     with open(project_path, "a") as f:
         project = [Project(*list(project_info.values()))]
         w = DataclassWriter(f, project, Project)

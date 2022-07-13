@@ -105,7 +105,6 @@ def get_movies_id(df, db_path):
     # Check all the movies have a unique ID
     df_unique = df.movie_filename.unique()
     movies_df_unique = movies_df.movie_filename.unique()
-    
     diff_filenames = set(df_unique).difference(movies_df_unique)
     
     if diff_filenames:

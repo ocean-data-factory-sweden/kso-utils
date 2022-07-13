@@ -1,13 +1,18 @@
 # base imports
-import os, cv2
+import os
+import cv2
 import pandas as pd
 from tqdm import tqdm
 import difflib
+import logging
 
 # util imports
 import kso_utils.server_utils as server_utils
-import kso_utils.db_utils as db_utils
 
+# Logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Calculate length and fps of a movie
 def get_length(video_file, movie_folder):
@@ -20,7 +25,7 @@ def get_length(video_file, movie_folder):
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         length = frame_count/fps
     else:
-        print("Length and fps for", video_file, "were not calculated - probably missing")
+        logging.error("Length and fps for", video_file, "were not calculated - probably missing")
         length, fps = None, None
         
     return fps, length
@@ -36,7 +41,7 @@ def check_fps_duration(db_info_dict, project):
     # Check if fps or duration is missing from any movie
     if not df[["fps", "duration"]].isna().any().all():
         
-        print("Fps and duration information checked")
+        logging.info("Fps and duration information checked")
         
     else:
 
@@ -46,8 +51,8 @@ def check_fps_duration(db_info_dict, project):
         # Select only those movies with the missing parameters
         miss_par_df = df[df["fps"].isna()|df["duration"].isna()]
         
-        print("Retrieving fps and duration of:")
-        print(*miss_par_df.filename.unique(), sep = "\n")
+        logging.info("Retrieving fps and duration of:")
+        logging.info(*miss_par_df.filename.unique(), sep = "\n")
         
         ##### Estimate the fps/duration of the movies ####
         # Add info from AWS
@@ -89,7 +94,7 @@ def check_fps_duration(db_info_dict, project):
             df["SamplingEnd"] = df["duration"]
             df.to_csv(db_info_dict["local_movies_csv"], index=False)
             
-        print("Fps and duration information updated")
+        logging.info("Fps and duration information updated")
         
     return df
 
@@ -102,12 +107,12 @@ def check_sampling_start_end(df, db_info_dict):
     # Check if sampling start or end is missing from any movie
     if not df[["sampling_start", "sampling_end"]].isna().all().any():
         
-        print("sampling_start and survey_end information checked")
+        logging.info("sampling_start and survey_end information checked")
         
     else:
         
-        print("Updating the survey_start or survey_end information of:")
-        print(*df[df[["sampling_start", "sampling_end"]].isna()].filename.unique(), sep = "\n")
+        logging.info("Updating the survey_start or survey_end information of:")
+        logging.info(*df[df[["sampling_start", "sampling_end"]].isna()].filename.unique(), sep = "\n")
         
         # Set the start of each movie to 0 if empty
         df.loc[df["sampling_start"].isna(),"sampling_start"] = 0
@@ -119,13 +124,13 @@ def check_sampling_start_end(df, db_info_dict):
         # Update the local movies.csv file with the new sampling start/end info
         df.to_csv(movies_csv, index=False)
         
-        print("The survey start and end columns have been updated in movies.csv")
+        logging.info("The survey start and end columns have been updated in movies.csv")
 
         
     # Prevent ending sampling times longer than actual movies
     if (df["sampling_end"] > df["duration"]).any():
-        print("The sampling_end times of the following movies are longer than the actual movies")
-        print(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
+        logging.info("The sampling_end times of the following movies are longer than the actual movies")
+        logging.info(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
 
     return df
 

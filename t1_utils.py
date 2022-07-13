@@ -8,11 +8,10 @@ import logging
 
 # widget imports
 from IPython.display import display
-from ipywidgets import interactive, Layout, HBox
+from ipywidgets import Layout, HBox
 import ipywidgets as widgets
 import ipysheet
 import folium
-from folium.plugins import MarkerCluster
 import asyncio
 
 # util imports
@@ -21,6 +20,7 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as t_utils
+import kso_utils.koster_utils as koster_utils
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ def display_changes(db_info_dict, isheet, local_csv):
     
     # If changes in dataframes display them and ask the user to confirm them
     if sheet_diff_df.empty:
-        logging.error(f"There are no changes to update")
+        logging.error("There are no changes to update")
         raise
     else:
         # Retieve the column name of the site_id
@@ -238,11 +238,11 @@ def check_empty_movies_csv(db_initial_info, project, movies_df):
     movies_df = movie_utils.check_sampling_start_end(movies_df, db_initial_info)
     
     # Ensure date is ISO 8601:2004(E) and compatible with Darwin Data standards
-    date_time_check = pd.to_datetime(movies_df.created_on, infer_datetime_format=True)
+    #date_time_check = pd.to_datetime(movies_df.created_on, infer_datetime_format=True)
 #     print("The last dates from the created_on column are:")
 #     print(date_time_check.tail())
    
-    print("movies.csv is all good!") 
+    logging.info("movies.csv is all good!") 
 
 
 
@@ -268,12 +268,12 @@ def check_movies_from_server(db_info_dict, project):
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="left_only"]
     
-    print("There are", len(missing_from_server.index), "movies missing")
+    logging.info("There are", len(missing_from_server.index), "movies missing")
     
     # Find out files missing from the csv
     missing_from_csv = missing_info[missing_info["_merge"]=="right_only"].reset_index(drop=True)
             
-    print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
+    logging.info("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
 #     print(*missing_from_csv.filename.unique(), sep = "\n")
     
     return missing_from_server, missing_from_csv
@@ -308,7 +308,7 @@ def select_eventdate():
 
 def update_new_deployments(deployment_selected, db_info_dict, event_date):
     for deployment_i in deployment_selected.value:      
-        print(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
+        logging.info(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
         
         # Get a dataframe of movies from the deployment
         movies_s3_pd = server_utils.get_matching_s3_keys(db_info_dict["client"], 
@@ -321,10 +321,10 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
         
         
         if len(movie_files_server)<2:
-            print(f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}")
+            logging.info(f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}")
         else:
             # Concatenate the files if multiple
-            print("The files", movie_files_server, "will be concatenated")
+            logging.info("The files", movie_files_server, "will be concatenated")
 
             # Start text file and list to keep track of the videos to concatenate
             textfile_name = "a_file.txt"
@@ -356,7 +356,7 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
 
             # Concatenate the files
             if not os.path.exists(filename):
-                print("Concatenating ",filename)
+                logging.info("Concatenating ", filename)
 
                 # Concatenate the videos
                 subprocess.call(["ffmpeg", 
@@ -376,7 +376,7 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
                 filename=filename,
             )
 
-            print(filename, "successfully uploaded to", deployment_i)
+            logging.info(filename, "successfully uploaded to", deployment_i)
 
             # Delete the raw videos downloaded from the S3 bucket
             for f in video_list:

@@ -1,32 +1,26 @@
 # base imports
-import argparse, os, ffmpeg, re
-import kso_utils.db_utils as db_utils
+import os
 import pandas as pd
 import numpy as np
-import math
 import subprocess
 import shutil
 import logging
-import pims
-import cv2
-import difflib
 import wandb
-import pprint
 import torch
 from ast import literal_eval
 from pathlib import Path
 from natsort import index_natsorted
 
 # widget imports
-from IPython.display import HTML, display, update_display, clear_output, Image
-from ipywidgets import interact, Layout, Video
+from IPython.display import HTML, display, clear_output
+from ipywidgets import Layout
 from PIL import Image as PILImage, ImageDraw
 import ipywidgets as widgets
 
+# logging setup
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-out_df = pd.DataFrame()
 
 
 def generate_csv_report(evaluation_path):
@@ -41,7 +35,7 @@ def generate_csv_report(evaluation_path):
                 class_id, x, y, w, h, conf = line.split(" ")
                 data_dict[f].append([class_id, frame_no, x, y, w, h, float(conf)])
     dlist = [
-            [key, i[0], i[1], i[2], i[3], i[4], i[5], i[6]] for key, value in data_dict.items() for i in value
+            [key, *i] for key, value in data_dict.items() for i in value
             ]
     detect_df = pd.DataFrame.from_records(
                 dlist, columns=["filename", "class_id", "frame_no", "x", "y", "w", "h", "conf"]
@@ -51,7 +45,7 @@ def generate_csv_report(evaluation_path):
                     by="frame_no",
                     key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
                     ).to_csv(csv_out, index=False)
-    print("Report created at {}".format(csv_out))
+    logging.info("Report created at {}".format(csv_out))
     return detect_df
 
 def generate_tracking_report(tracker_dir, eval_dir):
@@ -76,7 +70,7 @@ def generate_tracking_report(tracker_dir, eval_dir):
                     by="frame_no",
                     key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
                     ).to_csv(csv_out, index=False)
-    print("Report created at {}".format(csv_out))
+    logging.info("Report created at {}".format(csv_out))
     return detect_df
 
 def generate_counts(eval_dir, tracker_dir, model_dir):
@@ -93,15 +87,15 @@ def generate_counts(eval_dir, tracker_dir, model_dir):
 
 def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_size=720):
     # Enter the correct folder
-    try:
+    if os.path.exists(tracker_folder):
         cwd = os.getcwd()
         os.chdir(tracker_folder)
-    except:
-        pass
+    else:
+        logging.error("The tracker folder does not exist. Please try again")
     shutil.copyfile(artifact_dir+"/best.pt", "best.pt")
     best_model = "best.pt"
     try:
-        out = subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
+        subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
                                  --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
                                  --imgsz {str(img_size)} --project {tracker_folder}/runs/track/ \
                                  --deep_sort_model osnet_x0_5_msmt17'],
@@ -113,7 +107,7 @@ def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_
         os.chdir(cwd)
     tracker_root = tracker_folder+"/runs/track/"
     latest_tracker = tracker_root + sorted(os.listdir(tracker_root))[-1] + "/tracks"
-    print("Tracking completed succesfully")
+    logging.info("Tracking completed succesfully")
     return latest_tracker
 
 def get_data_viewer(data_path):
@@ -148,9 +142,9 @@ def get_dataset(project_name, model):
     dirs = []
     for i in range(len(["train", "val"])):
         artifact = datasets[i]
-        print(f"Downloading {artifact.name} checkpoint...")
+        logging.info(f"Downloading {artifact.name} checkpoint...")
         artifact_dir = artifact.download()
-        print(f"{artifact.name} - Dataset downloaded.")
+        logging.info(f"{artifact.name} - Dataset downloaded.")
         dirs.append(artifact_dir)
     return dirs
 
@@ -164,11 +158,11 @@ def get_model(model_name, project_name, download_path):
     if len(model) == 1:
         model = model[0]
     else:
-        print("No model found")
+        logging.error("No model found")
     artifact = api.artifact(f"koster/{project_name.lower()}/" + model.name + ":latest")
-    print("Downloading model checkpoint...")
+    logging.info("Downloading model checkpoint...")
     artifact_dir = artifact.download(root=download_path)
-    print("Checkpoint downloaded.")
+    logging.info("Checkpoint downloaded.")
     return os.path.realpath(artifact_dir)
 
 
@@ -261,6 +255,6 @@ def view_file(path):
                     </video>
                 """)
     else:
-        print("File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi.")
+        logging.error("File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi.")
 
     return widget

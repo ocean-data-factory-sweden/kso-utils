@@ -6,14 +6,13 @@ import logging
 # widget imports
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
-from IPython.display import HTML
+from IPython.display import HTML, display
 import asyncio
 
 # util imports
 import kso_utils.server_utils as server_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
-import kso_utils.project_utils as project_utils
 
 
 # Logging
@@ -143,8 +142,6 @@ def retrieve__populate_zoo_info(project, db_info_dict, zoo_project, zoo_info):
 
 def choose_single_workflow(workflows_df):
 
-    layout = widgets.Layout(width="auto", height="40px")  # set width and height
-
     # Display the names of the workflows
     workflow_name = widgets.Dropdown(
         options=workflows_df.display_name.unique().tolist(),
@@ -196,14 +193,13 @@ def preview_movie(project, db_info_dict, available_movies_df, movie_i):
 
     # Make sure only one movie is selected
     if len(movie_selected.index)>1:
-        print("There are several movies with the same filename. This should be fixed!")
+        logging.info("There are several movies with the same filename. This should be fixed!")
         return None
 
     else:
         # Generate temporary path to the movie select
         if project.server == "SNIC":
             movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["spath"].values[0])
-            local_path = movie_path
             url = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
         else:
             url = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])

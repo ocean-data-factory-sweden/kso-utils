@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # base imports
-import os, shutil, ffmpeg as ffmpeg_python
+import os
+import shutil
+import ffmpeg as ffmpeg_python
 import pandas as pd
 import numpy as np
 import math
@@ -9,25 +11,20 @@ import subprocess
 import logging
 import random
 import threading
-import difflib
-from pathlib import Path
 from multiprocessing.pool import ThreadPool as Pool
 
 # widget imports
 from tqdm import tqdm
-from IPython.display import HTML, display, clear_output
-from ipywidgets import interact, interactive, Layout
+from IPython.display import display, clear_output
+from ipywidgets import interactive, Layout
 import ipywidgets as widgets
 from panoptes_client import (
     SubjectSet,
     Subject,
-    Project,
-    Panoptes,
 )
 
 # util imports
 import kso_utils.db_utils as db_utils
-import kso_utils.server_utils as server_utils
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
@@ -35,7 +32,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-   
 ############################################################
 ######## Create some clip examples #########################
 ############################################################
@@ -47,7 +43,8 @@ def check_movie_uploaded(movie_i, db_info_dict):
     conn = db_utils.create_connection(db_info_dict["db_path"])
 
     # Query info about the clip subjects uploaded to Zooniverse
-    subjects_df = pd.read_sql_query("SELECT id, subject_type, filename, clip_start_time, clip_end_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
+    subjects_df = pd.read_sql_query("SELECT id, subject_type, filename, clip_start_time,"
+                                    "clip_end_time, movie_id FROM subjects WHERE subject_type='clip'", conn)
 
     # Save the video filenames of the clips uploaded to Zooniverse 
     videos_uploaded = subjects_df.filename.unique()
@@ -57,10 +54,10 @@ def check_movie_uploaded(movie_i, db_info_dict):
 
     if already_uploaded:
         clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
-        print(movie_i, "has clips already uploaded. The clips start and finish at:")
-        print(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
+        logging.info(movie_i, "has clips already uploaded. The clips start and finish at:")
+        logging.info(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
     else:
-        print(movie_i, "has not been uploaded to Zooniverse yet")
+        logging.info(movie_i, "has not been uploaded to Zooniverse yet")
         
 def select_clip_length():
     # Widget to record the length of the clips
@@ -99,7 +96,7 @@ def select_random_clips(movie_i, db_info_dict):
                 "random_clip_length": clip_length
         }
 
-        print("The initial seconds of the examples will be:", *random_clips_info["clip_start_time"], sep = "\n")
+        logging.info("The initial seconds of the examples will be:", *random_clips_info["clip_start_time"], sep = "\n")
 
         return random_clips_info
 
@@ -120,7 +117,6 @@ def select_random_clips(movie_i, db_info_dict):
 
                                    
     display(clip_length_number)
-    
     return clip_length_number  
 
 
@@ -183,7 +179,7 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     pool.join()
     
     
-    print("Clips extracted succesfully")
+    logging.info("Clips extracted succesfully")
     return example_clips    
 
 
@@ -199,10 +195,10 @@ def check_clip_size(clips_list):
     df['Size'] = df['Size']/1000000
     
     if df['Size'].ge(8).any():
-        print("Clips are too large (over 8 MB) to be uploaded to Zooniverse. Compress them!")
+        logging.info("Clips are too large (over 8 MB) to be uploaded to Zooniverse. Compress them!")
         return df
     else:
-        print("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
+        logging.info("Clips are a good size (below 8 MB). Ready to be uploaded to Zooniverse")
         return df
 
 
@@ -285,7 +281,7 @@ def gpu_select():
     
     def gpu_output(gpu_option):
         if gpu_option == "No GPU":
-            print("You are set to start the modifications")
+            logging.info("You are set to start the modifications")
             # Set GPU argument
             gpu_available = False
             return gpu_available
@@ -294,17 +290,17 @@ def gpu_select():
             # Install the GPU requirements
             if not os.path.exists("./colab-ffmpeg-cuda/bin/."):
                 try:
-                    print('Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS')# Install ffmpeg with GPU version
+                    logging.info('Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS')# Install ffmpeg with GPU version
                     subprocess.check_call(
                         "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
                         shell=True)
                     subprocess.check_call(
                         "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/",
                         shell=True)
-                    print("GPU Requirements installed!")
+                    logging.info("GPU Requirements installed!")
 
-                    except Error:
-                        print("There was an issues trying to install the GPU requirements")
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"There was an issues trying to install the GPU requirements, {e}")
 
             # Set GPU argument
             gpu_available = True
@@ -371,11 +367,11 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
                 os.chmod(output_clip_path, 0o777)
             except ffmpeg_python.Error as e:
-                print('stdout:', e.stdout.decode('utf8'))
-                print('stderr:', e.stderr.decode('utf8'))
+                logging.info('stdout:', e.stdout.decode('utf8'))
+                logging.info('stderr:', e.stderr.decode('utf8'))
                 raise e
 
-    print("Clip", clip_i, "modified successfully")
+    logging.info("Clip", clip_i, "modified successfully")
         
     
 def create_modified_clips(clips_list, movie_i, modification_details, project, gpu_available, pool_size = 4):
@@ -422,7 +418,7 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
         pool.join()
         return modified_clips 
     else:
-        print("No modification selected")
+        logging.info("No modification selected")
     
     
 # Display the clips side-by-side
@@ -473,7 +469,7 @@ def compare_clips(example_clips, modified_clips):
         with main_out:
             clear_output()
             if change["new"]=="0 No movie":
-                print("It is OK to modify the clips again")
+                logging.info("It is OK to modify the clips again")
             else:
                 a = view_clips(example_clips, change["new"])
                 display(a)
@@ -502,7 +498,7 @@ def select_clip_n_len(movie_i, db_info_dict):
         # Calculate the number of clips
         clips = int((clips_range[1]-clips_range[0])/clip_length)
 
-        print("Number of clips to upload:", clips)
+        logging.info("Number of clips to upload:", clips)
 
         return clips
 
@@ -530,11 +526,11 @@ def review_clip_selection(clip_selection, movie_i, clip_modification):
     end_trim = clip_selection.kwargs['clips_range'][1]
 
     # Review the clips that will be created
-    print("You are about to create", round(clip_selection.result), 
+    logging.info("You are about to create", round(clip_selection.result), 
           "clips from", movie_i)
-    print("starting at", datetime.timedelta(seconds=start_trim), 
+    logging.info("starting at", datetime.timedelta(seconds=start_trim), 
           "and ending at", datetime.timedelta(seconds=end_trim))
-    print("The modification selected is", clip_modification)
+    logging.info("The modification selected is", clip_modification)
 
 
 # Func to expand seconds
@@ -591,13 +587,13 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
                 os.chmod(str(output_clip_path), 0o777)
             except ffmpeg_python.Error as e:
-                print('stdout:', e.stdout.decode('utf8'))
-                print('stderr:', e.stderr.decode('utf8'))
+                logging.info('stdout:', e.stdout.decode('utf8'))
+                logging.info('stderr:', e.stderr.decode('utf8'))
                 raise e
     
                 
                 
-        print("Clips extracted successfully")
+        logging.info("Clips extracted successfully")
                 
     
 def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_selection, project, modification_details, gpu_available, pool_size = 4):
@@ -623,7 +619,7 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     potential_start_df["clip_length"] = clip_length
 
     if not clip_numbers==potential_start_df.shape[0]:
-        print("There was an issue estimating the starting seconds for the", clip_numbers, "clips")
+        logging.info("There was an issue estimating the starting seconds for the", clip_numbers, "clips")
 
     # Get project-specific server info
     server = project.server
@@ -646,10 +642,10 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
         os.chmod(str(clips_folder), 0o777)
         
     
-    print("Extracting clips")
+    logging.info("Extracting clips")
     
     for i in range(0, potential_start_df.shape[0], pool_size):
-      print("Modifying", i, "to", i+pool_size, "out of", potential_start_df.shape[0])
+      logging.info("Modifying", i, "to", i+pool_size, "out of", potential_start_df.shape[0])
       
       threadlist = []
       # Read each movie and extract the clips 
@@ -661,7 +657,7 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
         t.start()
       
       for tr in threadlist:
-        tr.join()
+          tr.join()
 
 
     # Add information on the modification of the clips
@@ -677,7 +673,7 @@ def set_zoo_metadata(df, project, db_info_dict):
 
     # Query info about the movie of interest
     sitesdf = pd.read_sql_query(
-        f"SELECT * FROM sites", conn)
+        "SELECT * FROM sites", conn)
         
     # Combine site info to the df
     if "site_id" in df.columns:
@@ -779,7 +775,7 @@ def set_zoo_metadata(df, project, db_info_dict):
         
     # Prevent NANs on any column
     if upload_to_zoo.isnull().values.any():
-        print("The following columns have NAN values", 
+        logging.info("The following columns have NAN values", 
               upload_to_zoo.columns[upload_to_zoo.isna().any()].tolist())
         
     return upload_to_zoo, sitename, created_on
@@ -798,7 +794,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
 
     subject_set.save()
 
-    print(subject_set_name, "subject set created")
+    logging.info(subject_set_name, "subject set created")
 
     # Save the df as the subject metadata
     subject_metadata = upload_to_zoo.set_index('clip_path').to_dict('index')
@@ -806,7 +802,7 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     # Upload the clips to Zooniverse (with metadata)
     new_subjects = []
 
-    print("uploading subjects to Zooniverse")
+    logging.info("Uploading subjects to Zooniverse")
     for modif_clip_path, metadata in tqdm(subject_metadata.items(), total=len(subject_metadata)):
         # Create a subject
         subject = Subject()
@@ -827,6 +823,6 @@ def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
     # Upload all subjects
     subject_set.add(new_subjects)
 
-    print("Subjects uploaded to Zooniverse")        
+    logging.info("Subjects uploaded to Zooniverse")        
         
         

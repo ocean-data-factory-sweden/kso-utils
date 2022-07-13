@@ -1,8 +1,7 @@
 # base imports
 import os
-import sqlite3
+import logging
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 import subprocess
 from pathlib import Path
@@ -11,6 +10,11 @@ from pathlib import Path
 import kso_utils.server_utils as server_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.db_utils as db_utils
+
+# Logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def check_spyfish_movies(movies_df, db_info_dict):
@@ -140,7 +144,7 @@ def concatenate_videos(df, session):
         textfile = open(textfile_name, "w")
         video_list = []
 
-        print("Downloading", len(list_go_pro), "videos")
+        logging.info("Downloading", len(list_go_pro), "videos")
 
         # Download each go pro video from the S3 bucket
         for go_pro_i in tqdm(list_go_pro, total=len(list_go_pro)):
@@ -169,7 +173,7 @@ def concatenate_videos(df, session):
 
         if not os.path.exists(concat_video):
 
-            print("Concatenating ",concat_video)
+            logging.info("Concatenating ", concat_video)
 
             # Concatenate the videos
             subprocess.call(["ffmpeg", 
@@ -180,7 +184,7 @@ def concatenate_videos(df, session):
                              #"-an",#removes the audio
                              concat_video])
             
-        print(concat_video, "concatenated successfully")
+        logging.info(concat_video, "concatenated successfully")
 
         # Upload the concatenated video to the S3
         s3_destination = row['prefix'] + "/" + concat_video
@@ -191,7 +195,7 @@ def concatenate_videos(df, session):
             filename=concat_video,
         )
                     
-        print(concat_video, "successfully uploaded to", s3_destination)
+        logging.info(concat_video, "successfully uploaded to", s3_destination)
         
         # Delete the raw videos downloaded from the S3 bucket
         for f in video_list:
@@ -206,7 +210,7 @@ def concatenate_videos(df, session):
         # Delete the concat video
         os.remove(concat_video)
 
-        print("Temporary files and videos removed")
+        logging.info("Temporary files and videos removed")
 
 
 def process_spyfish_subjects(subjects, db_path):

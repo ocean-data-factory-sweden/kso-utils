@@ -1,6 +1,7 @@
 # base imports
 import os
 import sqlite3
+import logging
 import db_starter.schema as schema
 import pandas as pd
 
@@ -9,6 +10,10 @@ import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.sgu_utils as sgu_utils
 
+# Logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Utility functions for common database operations
 
@@ -44,7 +49,7 @@ def create_connection(db_file):
         conn.execute("PRAGMA foreign_keys = 1")
         return conn
     except sqlite3.Error as e:
-        print(e)
+        logging.error(e)
 
     return conn
 
@@ -77,7 +82,7 @@ def retrieve_query(conn, query):
         cur = conn.cursor()
         cur.execute(query)
     except sqlite3.Error as e:
-        print(e)
+        logging.error(e)
 
     rows = cur.fetchall()
 
@@ -94,7 +99,7 @@ def execute_sql(conn, sql):
         c = conn.cursor()
         c.executescript(sql)
     except sqlite3.Error as e:
-        print(e)
+        logging.error(e)
 
 
 def add_to_table(db_path, table_name, values, num_fields):
@@ -109,11 +114,11 @@ def add_to_table(db_path, table_name, values, num_fields):
             num_fields,
         )
     except sqlite3.Error as e:
-        print(e)
+        logging.error(e)
 
     conn.commit()
 
-    print(f"Updated {table_name}")
+    logging.info(f"Updated {table_name}")
 
 
 def test_table(df, table_name, keys=["id"]):
@@ -121,10 +126,10 @@ def test_table(df, table_name, keys=["id"]):
         # check that there are no id columns with a NULL value, which means that they were not matched
         assert len(df[df[keys].isnull().any(axis=1)]) == 0
     except AssertionError:
-        print(
+        logging.error(
             f"The table {table_name} has invalid entries, please ensure that all columns are non-zero"
         )
-        print(
+        logging.error(
             f"The invalid entries are {df[df[keys].isnull().any(axis=1)]}"
         )
 
@@ -134,7 +139,7 @@ def get_id(row, field_name, table_name, conn, conditions={"a": "=b"}):
     # Get id from a table where a condition is met
 
     if isinstance(conditions, dict):
-        condition_string = f" AND ".join(
+        condition_string = " AND ".join(
             [k + v[0] + f"{v[1:]}" for k, v in conditions.items()]
         )
     else:
@@ -153,7 +158,7 @@ def find_duplicated_clips(conn):
 
     # Retrieve the information of all the clips uploaded
     subjects_df = pd.read_sql_query(
-        f"SELECT id, movie_id, clip_start_time, clip_end_time FROM subjects WHERE subject_type='clip'",
+        "SELECT id, movie_id, clip_start_time, clip_end_time FROM subjects WHERE subject_type='clip'",
         conn,
     )
 
@@ -230,7 +235,8 @@ def add_movies(db_initial_info, project_name, db_path):
         movies_df["Fpath"] = movies_df["filename"]
         
     movies_db = movies_df[
-        ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
+        ["movie_id", "filename", "created_on", "fps", "duration",
+         "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
     ]
 
     # Roadblock to prevent empty information

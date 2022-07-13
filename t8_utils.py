@@ -1,8 +1,14 @@
 # base imports
+import os
+import requests
+import random
 import pandas as pd
 import numpy as np
 import json
 import logging
+from io import BytesIO
+
+# module imports
 import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 from kso_utils.spyfish_utils import process_clips_spyfish
@@ -12,13 +18,12 @@ import kso_utils.tutorials_utils as tutorials_utils
 from IPython.display import HTML, display, clear_output
 import ipywidgets as widgets
 from itables import show
-
+from PIL import Image as PILImage, ImageDraw
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-out_df = pd.DataFrame()
 
 #### Set up ####
 def setup_initial_info(project):
@@ -224,8 +229,6 @@ class WidgetMaker(widgets.VBox):
 
 def choose_w_version(workflows_df, workflow_id):
 
-    layout = widgets.Layout(width="auto", height="40px")  # set width and height
-
     # Estimate the versions of the workflow available
     versions_available = workflows_df[workflows_df.display_name==workflow_id].version.unique().tolist()
     
@@ -244,7 +247,6 @@ def choose_w_version(workflows_df, workflow_id):
         )
         
     else:
-        
         raise ValueError("There are no versions available for this workflow.")
 
     #display(w_version)
@@ -314,7 +316,7 @@ def get_classifications(
                                             how='any').reset_index(drop=True)
         
         # Report on the issue
-        print("There are", 
+        logging.info("There are", 
               (classes_df.shape[0]-filtered_class_df.shape[0]), 
               "classifications out of",
               classes_df.shape[0],
@@ -323,7 +325,7 @@ def get_classifications(
         classes_df = filtered_class_df
         
     
-    print("Zooniverse classifications have been retrieved")
+    logging.info("Zooniverse classifications have been retrieved")
 
     return classes_df
 
@@ -353,15 +355,15 @@ def aggregrate_labels(raw_class_df, agg_users, min_users):
 
 def aggregrate_classifications(df, subj_type, project, agg_params):
 
-    print("Aggregrating the classifications")
+    logging.info("Aggregrating the classifications")
     
     # We take the raw classifications and process them to get the aggregated labels.
     if subj_type == "frame":
         
         # Get the aggregration parameters
-        try:
+        if not isinstance(agg_params, list):
             agg_users, min_users, agg_obj, agg_iou, agg_iua = [i.value for i in agg_params]
-        except:
+        else:
             agg_users, min_users, agg_obj, agg_iou, agg_iua = agg_params
         
         # Process the raw classifications
@@ -480,9 +482,9 @@ def aggregrate_classifications(df, subj_type, project, agg_params):
   
     else:
         # Get the aggregration parameters
-        try:
+        if not isinstance(agg_params, list):
             agg_users, min_users = [i.value for i in agg_params]
-        except:
+        else:
             agg_users, min_users = agg_params
         
         # Process the raw classifications
@@ -503,7 +505,7 @@ def aggregrate_classifications(df, subj_type, project, agg_params):
         on="classification_id"
     )
     
-    print(agg_class_df.shape[0], "classifications aggregated out of",
+    logging.info(agg_class_df.shape[0], "classifications aggregated out of",
           df.subject_ids.nunique(), "unique subjects available")
     
     return agg_class_df, raw_class_df
@@ -644,12 +646,7 @@ def process_frames(df: pd.DataFrame, project_name):
     return pd.DataFrame(annot_df)
 
 
-from PIL import Image as PILImage, ImageDraw
-import requests
-import random
-import os
-from io import BytesIO
-# from IPython.display import display
+
 
 def get_image_with_annotations(im, class_df_subject):
     # Calculate image size
@@ -676,16 +673,17 @@ def get_image_with_annotations(im, class_df_subject):
 
 
 def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
-    try:
+    if subject_id in class_df.subject_ids.tolist():
         # Select the subject of interest
         class_df_subject = class_df[class_df.subject_ids == subject_id].reset_index(drop=True)
 
         # Get the location of the subject
         subject_location = class_df_subject["https_location"].unique()[0]
         
-    except:
+    else:
         raise Exception("The reference data does not contain media for this subject.")
-    if not subject_location:
+    
+    if len(subject_location) == 0:
         raise Exception("Subject not found in provided annotations")
 
     # Get the HTML code to show the selected subject
@@ -701,7 +699,9 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
         <div>{class_df_subject[['label','first_seen','how_many']].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
         </div>
         </html>"""
+
     elif subject_type == "frame":
+        
         # Read image
         response = requests.get(subject_location)
         im = PILImage.open(BytesIO(response.content))

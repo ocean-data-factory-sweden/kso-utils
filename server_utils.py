@@ -1,5 +1,6 @@
 # base imports
-import os, io
+import os
+import io
 import requests
 import pandas as pd
 import numpy as np
@@ -82,7 +83,6 @@ def get_db_init_info(project, server_dict):
     elif server in ["local", "SNIC"]:
         
         csv_folder = db_csv_info
-        movie_folder = project.movie_folder
         
         # Define the path to the csv files with initial info to build the db
         if not os.path.exists(csv_folder):
@@ -103,26 +103,27 @@ def get_db_init_info(project, server_dict):
         if "movies_csv" not in vars() and "photos_csv" not in vars() and os.path.exists(csv_folder):
             logging.info("No movies or photos found, an empty movies file will be created.")
             with open(f'{csv_folder}/movies.csv', 'w') as fp:
-                pass
+                fp.close()
                 
-        try:
-            db_initial_info = {
-                "local_sites_csv": sites_csv,  
-                "local_species_csv": species_csv
-            }
+        db_initial_info = {}
+
+        if "sites_csv" in vars():
+            db_initial_info["local_sites_csv"] = sites_csv
+
+        if "species_csv" in vars():
+            db_initial_info["local_species_csv"] = species_csv
+        
+        if "movies_csv" in vars():
+            db_initial_info["local_movies_csv"] = movies_csv
             
-            if "movies_csv" in vars():
-                db_initial_info["local_movies_csv"] = movies_csv
-                
-            if "photos_csv" in vars():
-                db_initial_info["local_photos_csv"] = photos_csv
-                
-            if "surveys_csv" in vars():
-                db_initial_info["local_surveys_csv"] = surveys_csv
+        if "photos_csv" in vars():
+            db_initial_info["local_photos_csv"] = photos_csv
             
-        except:
+        if "surveys_csv" in vars():
+            db_initial_info["local_surveys_csv"] = surveys_csv
+            
+        if len(db_initial_info) == 0:
             logging.error("Insufficient information to build the database. Please fix the path to csv files.")
-            db_initial_info = {}
 
     elif server == "wildlife_ai":
             
@@ -144,20 +145,26 @@ def get_db_init_info(project, server_dict):
             if 'species' in file.name:
                 species_csv = file
                 
-        db_initial_info = {
-                "local_sites_csv": sites_csv,  
-                "local_species_csv": species_csv
-            }
-            
+        db_initial_info = {}
+
+        if "sites_csv" in vars():
+            db_initial_info["local_sites_csv"] = sites_csv
+
+        if "species_csv" in vars():
+            db_initial_info["local_species_csv"] = species_csv
+        
         if "movies_csv" in vars():
             db_initial_info["local_movies_csv"] = movies_csv
-
+            
         if "photos_csv" in vars():
             db_initial_info["local_photos_csv"] = photos_csv
-
+            
         if "surveys_csv" in vars():
             db_initial_info["local_surveys_csv"] = surveys_csv
-        
+            
+        if len(db_initial_info) == 0:
+            logging.error("Insufficient information to build the database. Please fix the path to csv files.")
+
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
     return db_initial_info
@@ -169,17 +176,17 @@ def update_csv_server(project, db_info_dict, orig_csv, updated_csv):
 
     
     if server == "AWS":
-        print("Updating sites.csv in AWS server")
+        logging.info("Updating sites.csv in AWS server")
         # Update csv to AWS
         upload_file_to_s3(db_info_dict["client"],
         bucket=db_info_dict["bucket"], 
-                                               key=db_info_dict[orig_csv], 
-                                               filename=db_info_dict[updated_csv])
+        key=db_info_dict[orig_csv], 
+        filename=db_info_dict[updated_csv])
  
     
     elif server == "SNIC":
         # print("Updating sites.csv in SNIC server")
-        print("Work in progress")
+        logging.info("Work in progress")
       
 
 def retrieve_movie_info_from_server(project, db_info_dict):
@@ -190,11 +197,11 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     project_name = project.Project_name
     
     if server == "AWS":
-        print("Retrieving movies from AWS server")
+        logging.info("Retrieving movies from AWS server")
         # Retrieve info from the bucket
         server_df = get_matching_s3_keys(client = db_info_dict["client"], 
-                                                         bucket = bucket_i, 
-                                                         suffix = movie_utils.get_movie_extensions())
+                                         bucket = bucket_i, 
+                                         suffix = movie_utils.get_movie_extensions())
         # Get the fpath(html) from the key
         server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
         
@@ -227,7 +234,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     conn = db_utils.create_connection(db_info_dict["db_path"])
 
     # Query info about the movie of interest
-    movies_df = pd.read_sql_query(f"SELECT * FROM movies", conn)
+    movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
 
     if project_name == "Spyfish_Aotearoa":
       # Add missing info for files in the "buv-zooniverse-uploads"
@@ -539,9 +546,6 @@ def get_snic_files(client, folder):
     snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
     return snic_df
 
-
-
-
 def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str ='.'):
     """
     Download an object from SNIC with progress bar.
@@ -594,7 +598,7 @@ def download_init_csv(gdrive_id, db_csv_info):
     # Specify the url of the file to download
     url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
     
-    print("Retrieving the file from ", url_input)
+    logging.info("Retrieving the file from ", url_input)
     
     # Specify the output of the file
     zip_file = 'db_csv_info.zip'

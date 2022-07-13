@@ -4,13 +4,11 @@ import pandas as pd
 import subprocess
 import datetime
 import logging
-from tqdm import tqdm
 
 # widget imports
-from ipyfilechooser import FileChooser
 import ipywidgets as widgets
 from ipywidgets import interactive, Layout, HBox
-from IPython.display import HTML
+from IPython.display import display
 import asyncio
 
 # util imports
@@ -600,7 +598,7 @@ def confirm_survey(survey_i, db_info_dict):
             print(ind,"-->", surveys_df_i.T[0][ind])
 
         async def f(new_survey_row):
-            x = await wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
+            x = await t_utils.wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
             if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
                 print("Great, you can start uploading the movies.")
                 
@@ -701,7 +699,7 @@ def select_eventdate(survey_row):
 def check_deployment(deployment_selected, deployment_date, survey_server_name, db_info_dict, survey_i):
     # Ensure at least one deployment has been selected
     if not deployment_selected.value:
-        logging.error(f"Please select a deployment.")
+        logging.error("Please select a deployment.")
         raise
     
     # Get list of movies available in server from that survey

@@ -3,17 +3,22 @@ import pandas as pd
 import datetime
 import os
 import subprocess
+import logging
 
 # widget imports
 from IPython.display import display
-from ipywidgets import interactive, Layout, HBox
+from ipywidgets import Layout
 import ipywidgets as widgets
 
 # util imports
-import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.server_utils as server_utils
+
+# Logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def check_movies_from_server(db_info_dict, project):
@@ -28,12 +33,12 @@ def check_movies_from_server(db_info_dict, project):
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="left_only"]
     
-    print("There are", len(missing_from_server.index), "movies missing")
+    logging.info("There are", len(missing_from_server.index), "movies missing")
     
     # Find out files missing from the csv
     missing_from_csv = missing_info[missing_info["_merge"]=="right_only"].reset_index(drop=True)
      
-    print("There are", len(missing_from_csv.index), "movies missing from movies.csv")
+    logging.info("There are", len(missing_from_csv.index), "movies missing from movies.csv")
             
 #     print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
 #     print(*missing_from_csv.filename.unique(), sep = "\n")
@@ -71,7 +76,7 @@ def select_eventdate():
 
 def update_new_deployments(deployment_selected, db_info_dict, event_date):
     for deployment_i in deployment_selected.value:      
-        print(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
+        logging.info(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
         
         # Get a dataframe of movies from the deployment
         movies_s3_pd = server_utils.get_matching_s3_keys(db_info_dict["client"], 
@@ -84,10 +89,10 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
         
         
         if len(movie_files_server)<2:
-            print(f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}")
+            logging.info(f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}")
         else:
             # Concatenate the files if multiple
-            print("The files", movie_files_server, "will be concatenated")
+            logging.info("The files", movie_files_server, "will be concatenated")
 
             # Start text file and list to keep track of the videos to concatenate
             textfile_name = "a_file.txt"
@@ -119,7 +124,7 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
 
             # Concatenate the files
             if not os.path.exists(filename):
-                print("Concatenating ",filename)
+                logging.info("Concatenating ",filename)
 
                 # Concatenate the videos
                 subprocess.call(["ffmpeg", 
@@ -137,7 +142,7 @@ def update_new_deployments(deployment_selected, db_info_dict, event_date):
                 filename=filename,
             )
 
-            print(filename, "successfully uploaded to", deployment_i)
+            logging.info(filename, "successfully uploaded to", deployment_i)
 
             # Delete the raw videos downloaded from the S3 bucket
             for f in video_list:

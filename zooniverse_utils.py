@@ -6,8 +6,6 @@ import json
 import logging
 import numpy as np
 from panoptes_client import (
-    SubjectSet,
-    Subject,
     Project,
     Panoptes,
 )
@@ -16,8 +14,6 @@ from ast import literal_eval
 from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
-import kso_utils.tutorials_utils as tutorials_utils
-import kso_utils.project_utils as project_utils
 
 # Logging
 
@@ -43,8 +39,8 @@ def auth_session(username, password, project_n):
     # Connect to Zooniverse with your username and password
     auth = Panoptes.connect(username=username, password=password)
 
-#     if not auth.logged_in:
-#         raise AuthenticationError("Your credentials are invalid. Please try again.")
+    if not auth.logged_in:
+        raise AuthenticationError("Your credentials are invalid. Please try again.")
 
     # Specify the project number of the koster lab
     try:
@@ -57,20 +53,21 @@ def auth_session(username, password, project_n):
 def retrieve_zoo_info(project, zoo_project, zoo_info: str):
     if hasattr(project, "info_df"):
         if project.info_df is not None:
-            print("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
+            logging.info("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
             return project.info_df
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
     for info_n in zoo_info:
-        print("Retrieving", info_n, "from Zooniverse")
+        logging.info("Retrieving", info_n, "from Zooniverse")
 
         # Get the information of interest from Zooniverse
         export = zoo_project.get_export(info_n)
 
-        try:
-            # Save the info as pandas data frame
-            export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
+        # Save the info as pandas data frame
+        export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
+
+        if len(export_df) > 0:
             
             # If KSO deal with duplicated subjects
             if project.Project_name == "Koster_Seafloor_Obs":
@@ -83,8 +80,9 @@ def retrieve_zoo_info(project, zoo_project, zoo_info: str):
                 if info_n == "classifications":
                     export_df = combine_annot_from_duplicates(export_df, project)
 
-        except:
-            raise ValueError("Request time out, please try again in 1 minute.")
+        else:
+            raise ValueError("The export is empty. This may be due to a "
+                             "request time out, please try again in 1 minute.")
 
         # Ensure subject_ids match db format
         if info_n == "classifications":
@@ -93,7 +91,7 @@ def retrieve_zoo_info(project, zoo_project, zoo_info: str):
         # Add df to dictionary
         info_df[info_n] = export_df
         project.info_df = info_df
-        print(info_n, "were retrieved successfully")
+        logging.info(info_n, "were retrieved successfully")
 
     return info_df
 
@@ -199,7 +197,7 @@ def populate_subjects(subjects, project, db_path):
     frame_subjs = subjects_df[subjects_df["subject_type"]=="frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"]=="clip"].shape[0]
     
-    print("The database has a total of", frame_subjs,
+    logging.info("The database has a total of", frame_subjs,
           "frame subjects and", clip_subjs,
           "clip subjects have been updated")
 

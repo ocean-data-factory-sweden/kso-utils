@@ -12,8 +12,6 @@ import ipywidgets as widgets
 # util imports
 import kso_utils.db_utils as db_utils
 
-# -
-
 def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: str, password: str):
     #api = wandb.Api()
     #collection = [
