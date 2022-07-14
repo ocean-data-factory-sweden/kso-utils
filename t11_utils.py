@@ -14,6 +14,7 @@ import ipywidgets as widgets
 import kso_utils.movie_utils as movie_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.server_utils as server_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
@@ -21,7 +22,15 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def check_movies_from_server(db_info_dict, project):
+def check_movies_from_server(db_info_dict: dict, project: project_utils.Project):
+    """
+    It takes in a dataframe with movies information and a dictionary with the database information, and
+    returns two dataframes: one with the movies that are missing from the server, and one with the
+    movies that are missing from the csv
+    
+    :param db_info_dict: a dictionary with the following keys:
+    :param project: the project object
+    """
     # Load the csv with movies information
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"]) 
     
@@ -45,7 +54,15 @@ def check_movies_from_server(db_info_dict, project):
     
     return missing_from_server, missing_from_csv
 
-def select_deployment(missing_from_csv):
+def select_deployment(missing_from_csv: pd.DataFrame):
+    """
+    > This function takes a dataframe of missing files and returns a widget that allows the user to
+    select the deployment of interest
+    
+    :param missing_from_csv: a dataframe of the files that are in the data folder but not in the csv
+    file
+    :return: A widget object
+    """
     if missing_from_csv.shape[0]>0:        
         # Widget to select the deployment of interest
         deployment_widget = widgets.SelectMultiple(
@@ -61,6 +78,11 @@ def select_deployment(missing_from_csv):
         return deployment_widget
     
 def select_eventdate():
+    """
+    > This function creates a date picker widget that allows the user to select a date. 
+    The function is called `select_eventdate()` and it returns a date picker widget. 
+    :return: The date widget
+    """
     # Select the date 
     date_widget = widgets.DatePicker(
         description='Date of deployment:',
@@ -74,7 +96,16 @@ def select_eventdate():
     return date_widget
 
 
-def update_new_deployments(deployment_selected, db_info_dict, event_date):
+def update_new_deployments(deployment_selected, db_info_dict: dict, event_date: widgets.Widget):
+    """
+    > The function `update_new_deployments` takes a list of deployments, a dictionary with the database
+    information, and an event date and concatenates the movies inside each deployment
+    
+    :param deployment_selected: the deployment you want to concatenate
+    :param db_info_dict: a dictionary with the following keys:
+    :type db_info_dict: dict
+    :param event_date: the date of the event you want to concatenate
+    """
     for deployment_i in deployment_selected.value:      
         logging.info(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
         

@@ -21,6 +21,7 @@ import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.koster_utils as koster_utils
+import kso_utils.project_utils as project_utils
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -30,7 +31,16 @@ out_df = pd.DataFrame()
 ####################################################    
 ############### SITES FUNCTIONS ###################
 ####################################################
-def map_site(db_info_dict, project):
+def map_site(db_info_dict: dict, project: project_utils.Project):
+    """
+    > This function takes a dictionary of database information and a project object as input, and
+    returns a map of the sites in the database
+    
+    :param db_info_dict: a dictionary containing the information needed to connect to the database
+    :type db_info_dict: dict
+    :param project: The project object
+    :return: A map with all the sites plotted on it.
+    """
     if project.server == "SNIC":
       # Set initial location to Gothenburg 
       init_location = [57.708870, 11.974560]
@@ -52,7 +62,11 @@ def map_site(db_info_dict, project):
     df_cols = sites_df.columns
 
     # Add each site to the map 
-    sites_df.apply(lambda row:folium.CircleMarker(location=[row[df_cols.str.contains("Latitude")], row[df_cols.str.contains("Longitude")]], radius = 14, popup=row["site_info"], tooltip=row[df_cols.str.contains("siteName", case=False)]) .add_to(kso_map), axis=1)
+    sites_df.apply(lambda row:folium.CircleMarker(location=[row[df_cols.str.contains("Latitude")], 
+                                                            row[df_cols.str.contains("Longitude")]], 
+                                                            radius = 14, popup=row["site_info"], 
+                                                            tooltip=row[df_cols.str.contains("siteName", 
+                                                            case=False)]).add_to(kso_map), axis=1)
 
     # Add a minimap to the corner for reference
     minimap = folium.plugins.MiniMap()
@@ -62,7 +76,14 @@ def map_site(db_info_dict, project):
     return kso_map
 
 
-def open_sites_csv(db_initial_info):
+def open_sites_csv(db_initial_info: dict):
+    """
+    > This function loads the sites csv file into a pandas dataframe, and then loads the dataframe into
+    an ipysheet
+    
+    :param db_initial_info: a dictionary with the following keys:
+    :return: A dataframe with the sites information
+    """
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
 
@@ -71,7 +92,18 @@ def open_sites_csv(db_initial_info):
 
     return sheet
     
-def display_changes(db_info_dict, isheet, local_csv):
+def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, local_csv: str):
+    """
+    It takes the dataframe from the ipysheet and compares it to the dataframe from the local csv file.
+    If there are any differences, it highlights them and returns the dataframe with the changes
+    highlighted
+    
+    :param db_info_dict: a dictionary containing the database information
+    :type db_info_dict: dict
+    :param isheet: The ipysheet object that contains the data
+    :param local_csv: The name of the csv file that is stored locally
+    :return: A tuple with the highlighted changes and the sheet_df
+    """
     # Read the local csv file
     df = pd.read_csv(db_info_dict[local_csv])
 
@@ -109,7 +141,16 @@ def display_changes(db_info_dict, isheet, local_csv):
 
         return highlight_changes, sheet_df
 
-def update_csv(db_info_dict, project, sheet_df, local_csv, serv_csv):
+def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, local_csv: str, serv_csv: str):
+    """
+    This function is used to update the csv files for the database
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param project: The project object
+    :param sheet_df: The dataframe of the sheet you want to update
+    :param local_csv: The name of the csv file in the local directory
+    :param serv_csv: The name of the csv file in the server
+    """
     # Create button to confirm changes
     confirm_button = widgets.Button(
       description = 'Yes, details are correct',
@@ -171,6 +212,11 @@ def update_csv(db_info_dict, project, sheet_df, local_csv, serv_csv):
 ####################################################
 
 def choose_movie_review():
+    """
+    This function creates a widget that allows the user to choose between two methods to review the
+    movies.csv file.
+    :return: The widget is being returned.
+    """
     choose_movie_review_widget = widgets.RadioButtons(
           options=["Basic: Check for empty cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
           description='What method you want to use to review the movies:',
@@ -182,7 +228,14 @@ def choose_movie_review():
     
     return choose_movie_review_widget
 
-def check_movies_csv(db_initial_info, project, review_method):
+def check_movies_csv(db_initial_info: dict, project: project_utils.Project, review_method: widgets.Widget):
+    """
+    > The function `check_movies_csv` loads the csv with movies information and checks if it is empty
+    
+    :param db_initial_info: a dictionary with the following keys:
+    :param project: The project name
+    :param review_method: The method used to review the movies
+    """
     # Load the csv with movies information
     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
     
@@ -190,7 +243,17 @@ def check_movies_csv(db_initial_info, project, review_method):
       check_empty_movies_csv(db_initial_info, project, movies_df)
 
 
-def check_empty_movies_csv(db_initial_info, project, movies_df):
+def check_empty_movies_csv(db_initial_info: dict, project: project_utils.Project, movies_df: pd.DataFrame):
+    """
+    It checks if the movies.csv is empty, if it is, it displays the movies.csv as an ipysheet and asks
+    the user to fill it up
+    
+    :param db_initial_info: dict, project, movies_df: pd.DataFrame
+    :type db_initial_info: dict
+    :param project: the project object
+    :param movies_df: the dataframe of the movies.csv file
+    :type movies_df: pd.DataFrame
+    """
     # Process Spyfish Aotearoa movies
     if project.Project_name == "Spyfish_Aotearoa":
         movies_df = spyfish_utils.process_spyfish_movies(movies_df)
@@ -246,7 +309,13 @@ def check_empty_movies_csv(db_initial_info, project, movies_df):
 
 
 
-def open_movies_csv(db_initial_info):
+def open_movies_csv(db_initial_info: dict):
+    """
+    It loads the movies csv file into a pandas dataframe, and then loads that dataframe into an ipysheet
+    
+    :param db_initial_info: a dictionary with the following keys:
+    :return: A sheet with the movies information
+    """
     # Load the csv with movies information
     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
 
@@ -256,7 +325,14 @@ def open_movies_csv(db_initial_info):
     return sheet
 
 
-def check_movies_from_server(db_info_dict, project):
+def check_movies_from_server(db_info_dict: dict, project: project_utils.Project):
+    """
+    It takes in a dataframe of movies and a dictionary of database information, and returns two
+    dataframes: one of movies missing from the server, and one of movies missing from the csv
+    
+    :param db_info_dict: a dictionary with the following keys:
+    :param project: the project object
+    """
     # Load the csv with movies information
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"]) 
     
@@ -278,7 +354,14 @@ def check_movies_from_server(db_info_dict, project):
     
     return missing_from_server, missing_from_csv
 
-def select_deployment(missing_from_csv):
+def select_deployment(missing_from_csv: pd.DataFrame):
+    """
+    > This function takes a dataframe of missing files and returns a widget that allows the user to
+    select the deployment of interest
+    
+    :param missing_from_csv: a dataframe of the files that are missing from the csv file
+    :return: A widget object
+    """
     if missing_from_csv.shape[0]>0:        
         # Widget to select the deployment of interest
         deployment_widget = widgets.SelectMultiple(
@@ -289,11 +372,15 @@ def select_deployment(missing_from_csv):
             style = {'description_width': 'initial'}
         )
         display(deployment_widget)
-        
         return deployment_widget
     
 def select_eventdate():
     # Select the date 
+    """
+    > This function creates a date picker widget that allows the user to select a date. 
+    
+    The function is called `select_eventdate()` and it returns a date picker widget. 
+    """
     date_widget = widgets.DatePicker(
         description='Date of deployment:',
         value = datetime.date.today(),
@@ -302,11 +389,18 @@ def select_eventdate():
         style = {'description_width': 'initial'}
     )
     display(date_widget)
-    
     return date_widget
 
 
-def update_new_deployments(deployment_selected, db_info_dict, event_date):
+def update_new_deployments(deployment_selected: widgets.Widget, db_info_dict: dict, event_date: widgets.Widget):
+    """
+    It takes a deployment, downloads all the movies from that deployment, concatenates them, uploads the
+    concatenated video to the S3 bucket, and deletes the raw movies from the S3 bucket
+    
+    :param deployment_selected: the deployment you want to concatenate
+    :param db_info_dict: a dictionary with the following keys:
+    :param event_date: the date of the event you want to concatenate
+    """
     for deployment_i in deployment_selected.value:      
         logging.info(f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected")
         

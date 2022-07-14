@@ -13,7 +13,7 @@ import difflib
 import logging
 from tqdm import tqdm
 from pathlib import Path
-from paramiko import SSHClient
+from paramiko import SFTPClient, SSHClient
 
 # util imports
 import kso_utils.spyfish_utils as spyfish_utils
@@ -30,7 +30,14 @@ logger.setLevel(logging.DEBUG)
 # ###### Common server functions ######
 # #####################################
 
-def connect_to_server(project):
+def connect_to_server(project: project_utils.Project):
+    """
+    > This function connects to the server specified in the project object and returns a dictionary with
+    the client and sftp client
+    
+    :param project: the project object
+    :return: A dictionary with the client and sftp_client
+    """
     # Get project-specific server info
     server = project.server
     
@@ -57,7 +64,16 @@ def connect_to_server(project):
     return server_dict
 
         
-def get_db_init_info(project, server_dict):
+def get_db_init_info(project: project_utils.Project, server_dict: dict):
+    """
+    This function downloads the csv files from the server and returns a dictionary with the paths to the
+    csv files
+    
+    :param project: the project object
+    :param server_dict: a dictionary containing the server information
+    :type server_dict: dict
+    :return: A dictionary with the paths to the csv files with the initial info to build the db.
+    """
     
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder
@@ -169,12 +185,22 @@ def get_db_init_info(project, server_dict):
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
     return db_initial_info
     
-def update_csv_server(project, db_info_dict, orig_csv, updated_csv):
+def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_csv: str, updated_csv: str):
+    """
+    > This function updates the original csv file with the updated csv file in the server
+    
+    :param project: the project object
+    :param db_info_dict: a dictionary containing the following keys:
+    :type db_info_dict: dict
+    :param orig_csv: the original csv file name
+    :type orig_csv: str
+    :param updated_csv: the updated csv file
+    :type updated_csv: str
+    """
     server = project.server
     
     # TODO: email original csv to project owner before updating the file
 
-    
     if server == "AWS":
         logging.info("Updating sites.csv in AWS server")
         # Update csv to AWS
@@ -189,7 +215,22 @@ def update_csv_server(project, db_info_dict, orig_csv, updated_csv):
         logging.info("Work in progress")
       
 
-def retrieve_movie_info_from_server(project, db_info_dict):
+def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict: dict):
+    """
+    This function uses the project information and the database information, and returns a dataframe with the
+    movie information
+    
+    :param project: the project object
+    :param db_info_dict: a dictionary containing the path to the database and the client to the server
+    :type db_info_dict: dict
+    :return: A dataframe with the following columns:
+    - index
+    - movie_id
+    - fpath
+    - spath
+    - exists
+    - filename_ext
+    """
     
     server = project.server
     bucket_i = project.bucket
@@ -268,7 +309,7 @@ def retrieve_movie_info_from_server(project, db_info_dict):
     return available_movies_df
 
 
-def get_movie_url(project, server_dict, f_path):
+def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str):
     '''
     Function to get the url of the movie
     '''
@@ -284,7 +325,14 @@ def get_movie_url(project, server_dict, f_path):
         return f_path
     
     
-def update_db_init_info(project, csv_to_update):
+def update_db_init_info(project: project_utils.Project, csv_to_update: str):
+    """
+    This function takes a project and a csv file as input, and uploads the csv file to the project's AWS
+    S3 bucket.
+    
+    :param project: the project object
+    :param csv_to_update: the csv file to be updated
+    """
     
     if project.server == "AWS":
             
@@ -314,7 +362,7 @@ def aws_credentials():
     return aws_access_key_id, aws_secret_access_key
 
                 
-def connect_s3(aws_access_key_id, aws_secret_access_key):
+def connect_s3(aws_access_key_id: str, aws_secret_access_key: str):
     # Connect to the s3 bucket
     client = boto3.client('s3',
                           aws_access_key_id = aws_access_key_id, 
@@ -330,7 +378,7 @@ def get_aws_client():
 
     return client
 
-def get_matching_s3_objects(client, bucket, prefix="", suffix=""):
+def get_matching_s3_objects(client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""):
     """
     ## Code modified from alexwlchan (https://alexwlchan.net/2019/07/listing-s3-keys/)
     Generate objects in an S3 bucket.
@@ -369,7 +417,7 @@ def get_matching_s3_objects(client, bucket, prefix="", suffix=""):
                     yield obj
 
 
-def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
+def get_matching_s3_keys(client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""):
     """
     ## Code from alexwlchan (https://alexwlchan.net/2019/07/listing-s3-keys/)
     Generate the keys in an S3 bucket.
@@ -388,7 +436,19 @@ def get_matching_s3_keys(client, bucket, prefix="", suffix=""):
     
     return contents_s3_pd
 
-def download_csv_aws(project_name, server_dict, db_csv_info):
+def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
+    """
+    > The function downloads the csv files from the server and saves them in the local directory
+    
+    :param project_name: str
+    :type project_name: str
+    :param server_dict: a dictionary containing the server information
+    :type server_dict: dict
+    :param db_csv_info: the path to the folder where the csv files will be downloaded
+    :type db_csv_info: dict
+    :return: A dict with the bucket, key, local_sites_csv, local_movies_csv, local_species_csv,
+    local_surveys_csv, server_sites_csv, server_movies_csv, server_species_csv, server_surveys_csv
+    """
     # Provide bucket and key
     project = project_utils.find_project(project_name=project_name)
     bucket = project.bucket
@@ -425,7 +485,7 @@ def download_csv_aws(project_name, server_dict, db_csv_info):
     return db_initial_info
     
     
-def download_object_from_s3(client, *, bucket, key, version_id=None, filename):
+def download_object_from_s3(client: boto3.client, *, bucket: str, key: str, version_id: str = None, filename: str):
     """
     Download an object from S3 with a progress bar.
 
@@ -457,7 +517,15 @@ def download_object_from_s3(client, *, bucket, key, version_id=None, filename):
         )
 
 
-def upload_file_to_s3(client, *, bucket, key, filename):
+def upload_file_to_s3(client: boto3.client, *, bucket: str, key: str, filename: str):
+    """
+    > Upload a file to S3, and show a progress bar if the file is large enough
+    
+    :param client: The boto3 client to use
+    :param bucket: The name of the bucket to upload to
+    :param key: The name of the file in S3
+    :param filename: The name of the file to upload
+    """
     
     # Get the size of the file to upload
     file_size = os.stat(filename).st_size
@@ -479,8 +547,17 @@ def upload_file_to_s3(client, *, bucket, key, filename):
             )
         
 
-def delete_file_from_s3(client, *, bucket, key):
+def delete_file_from_s3(client: boto3.client, *, bucket: str, key: str):
+    """
+    > Delete a file from S3.
     
+    :param client: boto3.client - the client object that you created in the previous step
+    :type client: boto3.client
+    :param bucket: The name of the bucket that contains the object to delete
+    :type bucket: str
+    :param key: The name of the file
+    :type key: str
+    """
     client.delete_object(Bucket=bucket,Key=key)        
         
         
@@ -504,7 +581,6 @@ def snic_credentials():
     # Save your access key for the SNIC server. 
     snic_user = getpass.getpass('Enter your username for SNIC server')
     snic_pass = getpass.getpass('Enter your password for SNIC server')
-    
     return snic_user, snic_pass
 
 
@@ -536,7 +612,7 @@ def get_snic_client():
 
     return client, sftp_client
 
-def get_snic_files(client, folder):
+def get_snic_files(client: SSHClient, folder: str):
     """ 
     Get list of movies from SNIC server using ssh client.
     
@@ -546,7 +622,7 @@ def get_snic_files(client, folder):
     snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
     return snic_df
 
-def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str ='.'):
+def download_object_from_snic(sftp_client: SFTPClient, remote_fpath: str, local_fpath: str ='.'):
     """
     Download an object from SNIC with progress bar.
     """
@@ -561,7 +637,7 @@ def download_object_from_snic(sftp_client, remote_fpath: str, local_fpath: str =
         sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
         
         
-def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
+def upload_object_to_snic(sftp_client: SFTPClient, local_fpath: str, remote_fpath: str):
     """
     Upload an object to SNIC with progress bar.
     """
@@ -580,7 +656,7 @@ def upload_object_to_snic(sftp_client, local_fpath: str, remote_fpath: str):
 # #######Google Drive functions##### 
 # ##################################
 
-def download_csv_from_google_drive(file_url):
+def download_csv_from_google_drive(file_url: str):
 
     # Download the csv files stored in Google Drive with initial information about
     # the movies and the species
@@ -593,7 +669,7 @@ def download_csv_from_google_drive(file_url):
     return dfs
 
 
-def download_init_csv(gdrive_id, db_csv_info):
+def download_init_csv(gdrive_id: str, db_csv_info: dict):
     
     # Specify the url of the file to download
     url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)

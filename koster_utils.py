@@ -9,10 +9,12 @@ from collections import Counter
 
 # util imports
 import kso_utils.db_utils as db_utils
+import kso_utils.project_utils as project_utils
 
 
 # Function to prevent issues with Swedish characters
-def unswedify(string):
+# Converting the Swedish characters ä and ö to utf-8.
+def unswedify(string: str):
     """Convert ä and ö to utf-8"""
     return (
         string.encode("utf-8")
@@ -22,7 +24,7 @@ def unswedify(string):
     )
 
 # Function to prevent issues with Swedish characters
-def reswedify(string):
+def reswedify(string: str):
     """Convert ä and ö to utf-8"""
     return (
         string.encode("utf-8")
@@ -32,7 +34,7 @@ def reswedify(string):
     )
 
 # Function to extract metadata from subjects
-def extract_metadata(subj_df):
+def extract_metadata(subj_df: pd.DataFrame):
 
     # Reset index of df
     subj_df = subj_df.reset_index(drop=True).reset_index()
@@ -46,7 +48,7 @@ def extract_metadata(subj_df):
     return subj_df, meta_df
 
 # Function to process subjects uploaded automatically
-def auto_subjects(subjects_df, auto_date):
+def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
     
     # Select automatically uploaded frames
     auto_subjects_df = subjects_df[(subjects_df["created_at"] > auto_date)]
@@ -60,7 +62,7 @@ def auto_subjects(subjects_df, auto_date):
     return auto_subjects_df
 
 # Function to process subjects uploaded manually
-def manual_subjects(subjects_df, manual_date, auto_date):
+def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str):
     
     # Select clips uploaded manually
     man_clips_df = (
@@ -90,8 +92,8 @@ def manual_subjects(subjects_df, manual_date, auto_date):
     
     return man_clips_df
     
-    # Function to get the movie_ids based on movie filenames
-def get_movies_id(df, db_path):
+# Function to get the movie_ids based on movie filenames
+def get_movies_id(df: pd.DataFrame, db_path: str):
 
     # Create connection to db
     conn = db_utils.create_connection(db_path)
@@ -122,7 +124,7 @@ def get_movies_id(df, db_path):
 
 
 # Function to process the metadata of clips that were uploaded manually
-def process_manual_clips(meta_df):
+def process_manual_clips(meta_df: pd.DataFrame):
 
     # Select the filename of the clips and remove extension type
     clip_filenames = meta_df["filename"].str.replace(".mp4", "", regex=True)
@@ -153,7 +155,7 @@ def process_manual_clips(meta_df):
 
 
 # Function to get the list of duplicated subjects
-def get_duplicatesdf(project):
+def get_duplicatesdf(project: project_utils.Project):
     
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder 
@@ -170,7 +172,7 @@ def get_duplicatesdf(project):
 
 
 # Function to select the first subject of those that are duplicated
-def clean_duplicated_subjects(subjects, project):
+def clean_duplicated_subjects(subjects: pd.DataFrame, project: project_utils.Project):
     
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
@@ -188,7 +190,17 @@ def clean_duplicated_subjects(subjects, project):
 
     
 
-def process_koster_subjects(subjects, db_path):
+def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
+    """
+    This function takes in a dataframe of subjects and a path to the database and returns a dataframe of
+    subjects with updated metadata
+    
+    :param subjects: the dataframe of subjects from the database
+    :type subjects: pd.DataFrame
+    :param db_path: the path to the database
+    :type db_path: str
+    :return: A dataframe with all the subjects that have been uploaded to the database.
+    """
     
     ## Set the date when the metadata of subjects uploaded matches/doesn't match schema.py requirements
 
@@ -216,7 +228,7 @@ def process_koster_subjects(subjects, db_path):
     return subjects
 
 # Function to combine classifications received on duplicated subjects
-def combine_annot_from_duplicates(annot_df, project):
+def combine_annot_from_duplicates(annot_df: pd.DataFrame, project: project_utils.Project):
 
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
@@ -236,7 +248,18 @@ def combine_annot_from_duplicates(annot_df, project):
     return annot_df
 
 
-def process_clips_koster(annotations, row_class_id, rows_list):
+def process_clips_koster(annotations, row_class_id: str, rows_list: list):
+    """
+    For each annotation, if the task is T4, then for each species annotated, flatten the relevant
+    answers and save the species of choice, class and subject id
+    
+    :param annotations: the list of annotations for a given classification
+    :param row_class_id: the classification id of the row
+    :param rows_list: list
+    :type rows_list: list
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
+    first time seen and how many individuals were seen.
+    """
     
     nothing_values = ["NOANIMALSPRESENT","ICANTRECOGNISEANYTHING","ISEENOTHING","NOTHINGHERE"]
     
@@ -272,12 +295,25 @@ def process_clips_koster(annotations, row_class_id, rows_list):
 
                 rows_list.append(choice_i)
                
-            
-            
     return rows_list
 
 
-def process_koster_movies_csv(movies_df):
+def process_koster_movies_csv(movies_df: pd.DataFrame):
+    """
+    It takes a dataframe of movies and returns a dataframe of movies with the following changes:
+    
+    - The filename is standardized
+    - The filename is unswedified
+    - The filename is renamed to Fpath
+    - The SamplingStart and SamplingEnd columns are renamed to sampling_start and sampling_end
+    
+    :param movies_df: the dataframe containing the movies
+    :return: A dataframe with the columns:
+        - filename
+        - Fpath
+        - sampling_start
+        - sampling_end
+    """
     # Standarise the filename
     movies_df["filename"] = movies_df["filename"].str.normalize("NFD")
 
@@ -295,11 +331,18 @@ def process_koster_movies_csv(movies_df):
 
         }
     )
-            
-    
+        
     return movies_df
 
 def bb_iou(boxA, boxB):
+    """
+    The function takes two bounding boxes, computes the area of intersection, and divides it by the area
+    of the union of the two boxes
+    
+    :param boxA: The first bounding box
+    :param boxB: The ground truth box
+    :return: The IOU value
+    """
 
     # Compute edges
     temp_boxA = boxA.copy()
@@ -337,7 +380,21 @@ def bb_iou(boxA, boxB):
     return 1 - iou
 
 
-def filter_bboxes(total_users, users, bboxes, obj, eps, iua):
+def filter_bboxes(total_users: int, users: list, bboxes: list, obj: float, eps: float, iua: float):
+    """
+    If at least half of the users who saw this frame decided that there was an object, then we cluster
+    the bounding boxes based on the IoU criterion. If at least 80% of users agree on the annotation,
+    then we accept the cluster assignment
+    
+    :param total_users: total number of users who saw this frame
+    :param users: list of user ids
+    :param bboxes: list of bounding boxes
+    :param obj: the minimum fraction of users who must have seen an object in order for it to be
+    considered
+    :param eps: The maximum distance between two samples for them to be considered as in the same
+    neighborhood
+    :param iua: the minimum percentage of users who must agree on a bounding box for it to be accepted
+    """
 
     # If at least half of those who saw this frame decided that there was an object
     user_count = pd.Series(users).nunique()

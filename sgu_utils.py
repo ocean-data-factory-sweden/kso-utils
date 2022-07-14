@@ -2,7 +2,14 @@
 import pandas as pd
 
 
-def process_sgu_photos_csv(db_initial_info):
+def process_sgu_photos_csv(db_initial_info: dict):
+    """
+    It takes the local csv files with photos and surveys information and returns a dataframe with the
+    photos information
+    
+    :param db_initial_info: a dictionary with the following keys:
+    :return: A dataframe with the photos information
+    """
     # Load the csv with photos and survey information
     photos_df = pd.read_csv(db_initial_info["local_photos_csv"])
     surveys_df = pd.read_csv(db_initial_info["local_surveys_csv"])

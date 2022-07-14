@@ -1,6 +1,7 @@
 # t4 utils
 # base imports
 import os
+import sqlite3
 import ffmpeg as ffmpeg_python
 import re
 import pandas as pd
@@ -28,6 +29,7 @@ import kso_utils.db_utils as db_utils
 import kso_utils.server_utils as s_utils
 import kso_utils.koster_utils as k_utils
 import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.project_utils as project_utils
 import kso_utils.t8_utils as t8
 
 # Logging
@@ -37,7 +39,7 @@ logger.setLevel(logging.DEBUG)
 out_df = pd.DataFrame()
 
 # Function to set up and collect project-specific information
-def setup_frame_info(project):
+def setup_frame_info(project: project_utils.Project):
     # Initiate db
     db_info_dict = t_utils.initiate_db(project)
     zoo_number = project.Zooniverse_number
@@ -76,7 +78,7 @@ def choose_folder():
     return fc
 
 #Function to clean label (no non-alpha characters)
-def clean_label(label_string):
+def clean_label(label_string: str):
     label_string = label_string.upper()
     label_string = label_string.replace(" ", "")
     pattern = r'[^A-Za-z0-9]+'
@@ -84,7 +86,7 @@ def clean_label(label_string):
     return cleaned_string
 
 # Function to match species selected to species id
-def get_species_ids(project, species_list: list):
+def get_species_ids(project: project_utils.Project, species_list: list):
     """
     # Get ids of species of interest
     """
@@ -100,7 +102,7 @@ def get_species_ids(project, species_list: list):
     )["id"].tolist()
     return species_ids
 
-def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn, project, n_frames_subject):
+def get_species_frames(agg_clips_df: pd.DataFrame, species_ids: list, server_dict: dict, conn: sqlite3.Connection, project: project_utils.Project, n_frames_subject: int):
     """
     # Function to identify up to n number of frames per classified clip
     # that contains species of interest after the first time seen
@@ -217,7 +219,7 @@ def get_species_frames(agg_clips_df, species_ids: list, server_dict: dict, conn,
     return frames_df
 
 # Function to gather information of frames already uploaded
-def check_frames_uploaded(frames_df: pd.DataFrame, project, species_ids, conn):
+def check_frames_uploaded(frames_df: pd.DataFrame, project: project_utils.Project, species_ids: list, conn: sqlite3.Connection):
     
     if project.Project_name == "Koster_Seafloor_Obs":
         # Get info of frames of the species of interest already uploaded
@@ -285,7 +287,7 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
 
 
 # Function to extract selected frames from videos
-def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: str):
+def extract_frames(project: project_utils.Project, df: pd.DataFrame, server_dict: dict, frames_folder: str):
     """
     Extract frames and save them in chosen folder.
     """
@@ -333,7 +335,7 @@ def extract_frames(project, df: pd.DataFrame, server_dict: dict, frames_folder: 
 
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
-               server_dict: dict, project, n_frames_subject=3, subsample_up_to=100):
+               server_dict: dict, project: project_utils.Project, n_frames_subject=3, subsample_up_to=100):
     
     ### Transform species names to species ids ##
 
@@ -422,9 +424,9 @@ def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
             # Extract the frames from the videos and store them in the temp location
             if project.server == "SNIC":
                 folder_name = chooser.selected
-                frames_folder = os.path.join(folder_name, "_".join(species_names_zoo), "_frames/")
+                frames_folder = os.path.join(folder_name, "_".join(species_names_zoo)+"_frames/")
             else:
-                frames_folder = os.path.join("_".join(species_names_zoo), "_frames/")
+                frames_folder = "_".join(species_names_zoo)+"_frames/"
             chooser.df = extract_frames(project, frame_df, server_dict, frames_folder)
                 
         # Register callback function
@@ -467,7 +469,14 @@ def select_modification():
     return select_modification_widget
 
 
-def check_frame_size(frame_paths):
+def check_frame_size(frame_paths: list):
+    """
+    It takes a list of file paths, gets the size of each file, and returns a dataframe with the file
+    path and size of each file
+    
+    :param frame_paths: a list of paths to the frames you want to check
+    :return: A dataframe with the file path and size of each frame.
+    """
     
     # Get list of files with size
     files_with_size = [(file_path, os.stat(file_path).st_size) 
@@ -522,7 +531,7 @@ def compare_frames(df):
     clip_path_widget.observe(on_change, names='value')
 
 # Display the frames using html
-def view_frames(df, frame_path):
+def view_frames(df: pd.DataFrame, frame_path: str):
     
     # Get path of the modified clip selected
     modified_frame_path = df[df["frame_path"]==frame_path].modif_frame_path.values[0]
@@ -539,20 +548,20 @@ def view_frames(df, frame_path):
 
 
 # Function modify the frames
-def modify_frames(frames_to_upload_df, species_i, modification_details, project):
+def modify_frames(frames_to_upload_df: pd.DataFrame, species_i: list, modification_details: dict, project: project_utils.Project):
 
     server = project.server
 
     # Specify the folder to host the modified clips
     if server == "SNIC":
         folder_name = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/frames/"
-        mod_frames_folder = os.path.join(folder_name, "modified_", "_".join(species_i), "_frames")
+        mod_frames_folder = os.path.join(folder_name, "modified_"+"_".join(species_i)+"_frames")
     else:
-        mod_frames_folder = os.path.join("modified_", "_".join(species_i), "_frames")
+        mod_frames_folder = "modified_"+"_".join(species_i)+"_frames"
     
-    # Specify the path of the modified clips
+    # Specify the path of the modified frames
     frames_to_upload_df["modif_frame_path"] = os.path.join(mod_frames_folder, 
-                                                          "modified", frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
+                                                          "modified"+frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
     
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):
@@ -609,7 +618,7 @@ def modify_frames(frames_to_upload_df, species_i, modification_details, project)
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
-def set_zoo_metadata(df, species_list, project, db_info_dict):
+def set_zoo_metadata(df, species_list: list, project: project_utils.Project, db_info_dict: dict):
     
     project_name = project.Project_name
     
@@ -650,7 +659,7 @@ def set_zoo_metadata(df, species_list, project, db_info_dict):
     
 
 # Function to upload frames to Zooniverse
-def upload_frames_to_zooniverse(upload_to_zoo, species_list, db_info_dict, project):
+def upload_frames_to_zooniverse(upload_to_zoo: dict, species_list: list, db_info_dict: dict, project: project_utils.Project):
     
     # Retireve zooniverse project name and number
     project_name = project.Project_name

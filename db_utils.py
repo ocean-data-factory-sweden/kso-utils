@@ -37,7 +37,7 @@ def init_db(db_path: str):
     else:
         return "Database creation failure"
 
-def create_connection(db_file):
+def create_connection(db_file: str):
     """create a database connection to the SQLite database
         specified by db_file
     :param db_file: database file
@@ -54,7 +54,7 @@ def create_connection(db_file):
     return conn
 
 
-def insert_many(conn, data, table, count):
+def insert_many(conn: sqlite3.Connection, data: list, table: str, count: int):
     """
     Insert multiple rows into table
     :param conn: the Connection object
@@ -71,7 +71,7 @@ def insert_many(conn, data, table, count):
     cur.executemany(f"INSERT INTO {table} VALUES {values}", data)
 
 
-def retrieve_query(conn, query):
+def retrieve_query(conn: sqlite3.Connection, query: str):
     """
     Execute SQL query and returns output
     :param conn: the Connection object
@@ -89,7 +89,7 @@ def retrieve_query(conn, query):
     return rows
 
 
-def execute_sql(conn, sql):
+def execute_sql(conn: sqlite3.Connection, sql: str):
     """Execute multiple SQL statements without return
     :param conn: Connection object
     :param sql: a string of SQL statements
@@ -102,7 +102,7 @@ def execute_sql(conn, sql):
         logging.error(e)
 
 
-def add_to_table(db_path, table_name, values, num_fields):
+def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
 
     conn = create_connection(db_path)
 
@@ -121,7 +121,7 @@ def add_to_table(db_path, table_name, values, num_fields):
     logging.info(f"Updated {table_name}")
 
 
-def test_table(df, table_name, keys=["id"]):
+def test_table(df: pd.DataFrame, table_name: str, keys: list =["id"]):
     try:
         # check that there are no id columns with a NULL value, which means that they were not matched
         assert len(df[df[keys].isnull().any(axis=1)]) == 0
@@ -134,7 +134,7 @@ def test_table(df, table_name, keys=["id"]):
         )
 
 
-def get_id(row, field_name, table_name, conn, conditions={"a": "=b"}):
+def get_id(row: int, field_name: str, table_name: str, conn: sqlite3.Connection, conditions: dict ={"a": "=b"}):
 
     # Get id from a table where a condition is met
 
@@ -154,7 +154,7 @@ def get_id(row, field_name, table_name, conn, conditions={"a": "=b"}):
     return id_value
 
 
-def find_duplicated_clips(conn):
+def find_duplicated_clips(conn: sqlite3.Connection):
 
     # Retrieve the information of all the clips uploaded
     subjects_df = pd.read_sql_query(
@@ -180,7 +180,7 @@ def find_duplicated_clips(conn):
 
 # ## Populate sites, movies and species
 
-def add_sites(db_initial_info, project_name, db_path):
+def add_sites(db_initial_info: dict, project_name: str, db_path: str):
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
     
@@ -205,7 +205,7 @@ def add_sites(db_initial_info, project_name, db_path):
     )
 
 
-def add_movies(db_initial_info, project_name, db_path):
+def add_movies(db_initial_info: dict, project_name: str, db_path: str):
 
     # Load the csv with movies information
     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
@@ -249,7 +249,7 @@ def add_movies(db_initial_info, project_name, db_path):
         db_path, "movies", [tuple(i) for i in movies_db.values], 10
     )
 
-def add_photos(db_initial_info, project_name, db_path):
+def add_photos(db_initial_info: dict, project_name: str, db_path: str):
 
     # Load the csv with photos information
     photos_df = pd.read_csv(db_initial_info["local_photos_csv"])
@@ -275,7 +275,7 @@ def add_photos(db_initial_info, project_name, db_path):
     )
 
 
-def add_species(db_initial_info, project_name, db_path):
+def add_species(db_initial_info: dict, project_name: str, db_path: str):
 
     # Load the csv with species information
     species_df = pd.read_csv(db_initial_info["local_species_csv"])

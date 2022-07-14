@@ -8,6 +8,7 @@ import logging
 
 # util imports
 import kso_utils.server_utils as server_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # Calculate length and fps of a movie
-def get_length(video_file, movie_folder):
+def get_length(video_file: str, movie_folder: str):
     
     files = os.listdir(movie_folder)
     
@@ -31,7 +32,15 @@ def get_length(video_file, movie_folder):
     return fps, length
 
 
-def check_fps_duration(db_info_dict, project):
+def check_fps_duration(db_info_dict: dict, project: project_utils.Project):
+    """
+    It checks if the fps and duration of the movies are missing from the movies csv file. If they are,
+    it retrieves them from the movies and updates the csv file
+    
+    :param db_info_dict: a dictionary with the following keys:
+    :param project: the project object
+    :return: the dataframe with the fps and duration information.
+    """
     
     movie_folder = project.movie_folder
     
@@ -100,7 +109,15 @@ def check_fps_duration(db_info_dict, project):
 
      
 
-def check_sampling_start_end(df, db_info_dict):
+def check_sampling_start_end(df: pd.DataFrame, db_info_dict: dict):
+    """
+    This function checks if the sampling start and end times are missing from any movie. If they are, it
+    sets the sampling start to 0 and the sampling end to the duration of the movie.
+    
+    :param df: the dataframe with the movies information
+    :param db_info_dict: a dictionary with the following keys:
+    :return: The dataframe with the sampling start and end times.
+    """
     # Load the csv with movies information
     movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
     
@@ -138,7 +155,6 @@ def check_sampling_start_end(df, db_info_dict):
 def get_movie_extensions():
     # Specify the formats of the movies to select
     movie_formats = tuple(['wmv', 'mpg', 'mov', 'avi', 'mp4', 'MOV', 'MP4'])
-    
     return movie_formats
 
 

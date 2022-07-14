@@ -26,7 +26,15 @@ out_df = pd.DataFrame()
 ############### SURVEY FUNCTIONS ###################
 ####################################################
 
-def select_survey(db_info_dict):
+def select_survey(db_info_dict: dict):
+    """
+    This function allows the user to select an existing survey from a dropdown menu or create a new
+    survey by filling out a series of widgets
+    
+    :param db_info_dict: a dictionary with the following keys:
+    :type db_info_dict: dict
+    :return: A widget with a dropdown menu with two options: 'Existing' and 'New survey'.
+    """
     # Load the csv with surveys information
     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
     
@@ -146,11 +154,15 @@ def select_survey(db_info_dict):
                    )
 
     display(w)
-
     return w
 
 
 def record_encoder():
+    """
+    > This function creates a widget that asks for the name of the person encoding the survey
+    information
+    :return: The name of the person encoding the survey information
+    """
     # Widget to record the encoder of the survey information
     EncoderName_widget = widgets.Text(
         placeholder='First and last name',
@@ -160,11 +172,14 @@ def record_encoder():
         style = {'description_width': 'initial'}
     )
     display(EncoderName_widget)
-    
     return EncoderName_widget
     
 
 def select_SurveyStartDate():
+    """
+    > This function creates a widget that allows the user to select a date
+    :return: A widget that allows the user to select a date.
+    """
     # Widget to record the start date of the survey
     SurveyStartDate_widget = widgets.DatePicker(
         description='Offical date when survey started as a research event',
@@ -173,11 +188,14 @@ def select_SurveyStartDate():
         style = {'description_width': 'initial'}
     )
     display(SurveyStartDate_widget)
-    
     return SurveyStartDate_widget
    
     
 def write_SurveyName():
+    """
+    > This function creates a widget that allows the user to enter a name for the survey
+    :return: A widget object
+    """
     # Widget to record the name of the survey
     SurveyName_widget = widgets.Text(
         placeholder='Baited Underwater Video Taputeranga Apr 2015',
@@ -187,10 +205,17 @@ def write_SurveyName():
         style = {'description_width': 'initial'}
     )
     display(SurveyName_widget)
-    
     return SurveyName_widget
 
-def select_OfficeName(OfficeName_options):
+def select_OfficeName(OfficeName_options: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the name of the DOC Office
+    responsible for the survey
+    
+    :param OfficeName_options: a list of the names of the DOC offices that are responsible for the
+    survey
+    :return: The widget is being returned.
+    """
     # Widget to record the name of the linked DOC Office 
     OfficeName_widget = widgets.Dropdown(
         options=OfficeName_options,
@@ -200,11 +225,14 @@ def select_OfficeName(OfficeName_options):
         style = {'description_width': 'initial'}
     )
     display(OfficeName_widget)
-    
     return OfficeName_widget
 
 
 def write_ContractorName():
+    """
+    > This function creates a widget that allows the user to enter the name of the contractor
+    :return: The widget is being returned.
+    """
     # Widget to record the name of the contractor
     ContractorName_widget = widgets.Text(
         placeholder='No contractor',
@@ -214,11 +242,14 @@ def write_ContractorName():
         style = {'description_width': 'initial'}
     )
     display(ContractorName_widget)
-    
     return ContractorName_widget
       
     
 def write_ContractNumber():
+    """
+    > This function creates a widget that allows the user to enter the contract number for the survey
+    :return: The widget is being returned.
+    """
     # Widget to record the number of the contractor
     ContractNumber_widget = widgets.Text(
         description='Contract number for this survey:',
@@ -227,10 +258,14 @@ def write_ContractNumber():
         style = {'description_width': 'initial'}
     )
     display(ContractNumber_widget)
-    
     return ContractNumber_widget
             
 def write_LinkToContract():
+    """
+    > This function creates a widget that allows the user to enter a hyperlink to the contract related
+    to the survey
+    :return: The widget
+    """
     # Widget to record the link to the contract
     LinkToContract_widget = widgets.Text(
         description='Hyperlink to the DOCCM for the contract related to this survey:',
@@ -239,11 +274,15 @@ def write_LinkToContract():
         style = {'description_width': 'initial'}
     )
     display(LinkToContract_widget)
-    
     return LinkToContract_widget
 
 
 def write_SurveyLeaderName():
+    """
+    > This function creates a widget that allows the user to enter the name of the person in charge of
+    the survey
+    :return: The widget is being returned.
+    """
     # Widget to record the name of the survey leader
     SurveyLeaderName_widget = widgets.Text(
         placeholder='First and last name',
@@ -253,11 +292,18 @@ def write_SurveyLeaderName():
         style = {'description_width': 'initial'}
     )
     display(SurveyLeaderName_widget)
-    
     return SurveyLeaderName_widget
 
 
-def select_LinkToMarineReserve(reserves_available):
+def select_LinkToMarineReserve(reserves_available: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the name of the Marine
+    Reserve that the survey is linked to
+    
+    :param reserves_available: a list of the names of the Marine Reserves that are available to be
+    linked to the survey
+    :return: The name of the Marine Reserve linked to the survey
+    """
     # Widget to record the name of the linked Marine Reserve
     LinkToMarineReserve_widget = widgets.Dropdown(
         options=reserves_available,
@@ -267,10 +313,14 @@ def select_LinkToMarineReserve(reserves_available):
         style = {'description_width': 'initial'}
     )
     display(LinkToMarineReserve_widget)
-    
     return LinkToMarineReserve_widget
 
 def select_FishMultiSpecies():
+    """
+    > This function creates a widget that allows the user to select whether the survey is a single
+    species survey or not
+    :return: A widget that can be used to select a single species or multiple species
+    """
     # Widget to record if survey is single species
     def FishMultiSpecies_to_true_false(FishMultiSpecies_value):
         if FishMultiSpecies_value == 'Yes':
@@ -288,11 +338,17 @@ def select_FishMultiSpecies():
                     )
                    )
     display(w)
-
     return w
 
 
-def select_StratifiedBy(StratifiedBy_choices):
+def select_StratifiedBy(StratifiedBy_choices: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the stratified factors for
+    the sampling design
+    
+    :param StratifiedBy_choices: a list of choices for the dropdown menu
+    :return: A widget object
+    """
     # Widget to record if survey was stratified by any factor
     StratifiedBy_widget = widgets.Dropdown(
         options=StratifiedBy_choices,
@@ -302,11 +358,15 @@ def select_StratifiedBy(StratifiedBy_choices):
         style = {'description_width': 'initial'}
     )
     display(StratifiedBy_widget)
-    
     return StratifiedBy_widget
 
 
 def select_IsLongTermMonitoring():
+    """
+    > This function creates a widget that allows the user to select whether the survey is part of a
+    long-term monitoring
+    :return: A widget object
+    """
     # Widget to record if survey is part of long term monitoring
     def IsLongTermMonitoring_to_true_false(IsLongTermMonitoring_value):
         if IsLongTermMonitoring_value == 'No':
@@ -324,11 +384,17 @@ def select_IsLongTermMonitoring():
                     )
                    )
     display(w)
-
     return w
 
 
-def select_SiteSelectionDesign(site_selection_options):
+def select_SiteSelectionDesign(site_selection_options: list):
+    """
+    This function creates a dropdown widget that allows the user to select the site selection design of
+    the survey
+    
+    :param site_selection_options: a list of strings that are the options for the dropdown menu
+    :return: A widget
+    """
     # Widget to record the site selection of the survey
     SiteSelectionDesign_widget = widgets.Dropdown(
         options=site_selection_options,
@@ -338,11 +404,18 @@ def select_SiteSelectionDesign(site_selection_options):
         style = {'description_width': 'initial'}
     )
     display(SiteSelectionDesign_widget)
-    
     return SiteSelectionDesign_widget
 
 
-def select_UnitSelectionDesign(unit_selection_options):
+def select_UnitSelectionDesign(unit_selection_options: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the design for site
+    selection
+    
+    :param unit_selection_options: list
+    :type unit_selection_options: list
+    :return: A widget that allows the user to select the unit selection design of the survey.
+    """
     # Widget to record the unit selection of the survey
     UnitSelectionDesign_widget = widgets.Dropdown(
         options=unit_selection_options,
@@ -352,11 +425,17 @@ def select_UnitSelectionDesign(unit_selection_options):
         style = {'description_width': 'initial'}
     )
     display(UnitSelectionDesign_widget)
-    
     return UnitSelectionDesign_widget
 
 
-def select_RightsHolder(RightsHolder_options):
+def select_RightsHolder(RightsHolder_options: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the type of right holder of
+    the survey
+    
+    :param RightsHolder_options: a list of options for the dropdown menu
+    :return: A widget
+    """
     # Widget to record the type of right holder of the survey
     RightsHolder_widget = widgets.Dropdown(
         options=RightsHolder_options,
@@ -366,11 +445,15 @@ def select_RightsHolder(RightsHolder_options):
         style = {'description_width': 'initial'}
     )
     display(RightsHolder_widget)
-    
     return RightsHolder_widget
 
 
 def select_AccessRights():
+    """
+    > This function creates a widget that asks the user to enter information about who can access the
+    resource
+    :return: A widget object
+    """
     # Widget to record information about who can access the resource
     AccessRights_widget = widgets.Text(
         placeholder='',
@@ -380,11 +463,15 @@ def select_AccessRights():
         style = {'description_width': 'initial'}
     )
     display(AccessRights_widget)
-    
     return AccessRights_widget
 
 
 def write_SurveyVerbatim():
+    """
+    > This function creates a widget that allows the user to enter a description of the survey design
+    and objectives
+    :return: A widget
+    """
     # Widget to record description of the survey design and objectives
     SurveyVerbatim_widget = widgets.Textarea(
         placeholder='',
@@ -394,11 +481,18 @@ def write_SurveyVerbatim():
         style = {'description_width': 'initial'}
     )
     display(SurveyVerbatim_widget)
-    
     return SurveyVerbatim_widget
 
 
-def select_BUVType(BUVType_choices):
+def select_BUVType(BUVType_choices: list):
+    """
+    > This function creates a dropdown widget that allows the user to select the type of BUV used for
+    the survey
+    
+    :param BUVType_choices: list
+    :type BUVType_choices: list
+    :return: A widget
+    """
     # Widget to record the type of BUV
     BUVType_widget = widgets.Dropdown(
         options=BUVType_choices,
@@ -408,11 +502,15 @@ def select_BUVType(BUVType_choices):
         style = {'description_width': 'initial'}
     )
     display(BUVType_widget)
-    
     return BUVType_widget
 
 
 def write_LinkToPicture():
+    """
+    > This function creates a text box for the user to enter the link to the DOCCM folder for the survey
+    photos
+    :return: The widget is being returned.
+    """
     # Widget to record the link to the pictures
     LinkToPicture_widget = widgets.Text(
         description='Hyperlink to the DOCCM folder for this survey photos:',
@@ -421,11 +519,15 @@ def write_LinkToPicture():
         style = {'description_width': 'initial'}
     )
     display(LinkToPicture_widget)
-    
     return LinkToPicture_widget
 
 
 def write_Vessel():
+    """
+    This function creates a widget that allows the user to enter the name of the vessel that deployed
+    the unit
+    :return: The name of the vessel used to deploy the unit.
+    """
     # Widget to record the name of the vessel
     Vessel_widget = widgets.Text(
         description='Vessel used to deploy the unit:',
@@ -434,10 +536,14 @@ def write_Vessel():
         style = {'description_width': 'initial'}
     )
     display(Vessel_widget)
-    
     return Vessel_widget
 
 def write_LinkToFieldSheets():
+    """
+    **write_LinkToFieldSheets()**: This function creates a text box for the user to enter a hyperlink to
+    the DOCCM for the field sheets used to gather the survey information
+    :return: The text box widget.
+    """
     LinkToFieldSheets = widgets.Text(
         description='Hyperlink to the DOCCM for the field sheets used to gather the survey information:',
         disabled=False,
@@ -445,11 +551,15 @@ def write_LinkToFieldSheets():
         style = {'description_width': 'initial'}
     )    
     display(LinkToFieldSheets)
-    
     return LinkToFieldSheets
 
 
 def write_LinkReport01():
+    """
+    > This function creates a text box for the user to enter a hyperlink to the first (of up to four)
+    DOCCM report related to these data
+    :return: The text box.
+    """
     LinkReport01 = widgets.Text(
         description='Hyperlink to the first (of up to four) DOCCM report related to these data:',
         disabled=False,
@@ -457,10 +567,14 @@ def write_LinkReport01():
         style = {'description_width': 'initial'}
     )    
     display(LinkReport01)
-    
     return LinkReport01
 
 def write_LinkReport02():
+    """
+    **write_LinkReport02()**: This function creates a text box for the user to enter a hyperlink to the
+    second DOCCM report related to these data
+    :return: The text box widget.
+    """
     LinkReport02 = widgets.Text(
         description='Hyperlink to the second DOCCM report related to these data:',
         disabled=False,
@@ -468,10 +582,14 @@ def write_LinkReport02():
         style = {'description_width': 'initial'}
     )    
     display(LinkReport02)
-    
     return LinkReport02
 
 def write_LinkReport03():
+    """
+    **write_LinkReport03()**: This function creates a text box for the user to enter a hyperlink to the
+    third DOCCM report related to these data
+    :return: The text box widget.
+    """
     LinkReport03 = widgets.Text(
         description='Hyperlink to the third DOCCM report related to these data:',
         disabled=False,
@@ -479,10 +597,14 @@ def write_LinkReport03():
         style = {'description_width': 'initial'}
     )    
     display(LinkReport03)
-    
     return LinkReport03
 
 def write_LinkReport04():
+    """
+    **write_LinkReport04()**: This function creates a text box for the user to enter a hyperlink to the
+    fourth DOCCM report related to these data
+    :return: The text box widget.
+    """
     LinkReport04 = widgets.Text(
         description='Hyperlink to the fourth DOCCM report related to these data:',
         disabled=False,
@@ -490,10 +612,14 @@ def write_LinkReport04():
         style = {'description_width': 'initial'}
     )    
     display(LinkReport04)
-    
     return LinkReport04
 
 def write_LinkToOriginalData():
+    """
+    > This function creates a text box that allows the user to enter a hyperlink to the DOCCM for the
+    spreadsheet where these data were intially encoded
+    :return: A text box with a description.
+    """
     LinkToOriginalData = widgets.Text(
         description='Hyperlink to the DOCCM for the spreadsheet where these data were intially encoded:',
         disabled=False,
@@ -501,11 +627,18 @@ def write_LinkToOriginalData():
         style = {'description_width': 'initial'}
     )    
     display(LinkToOriginalData)
-    
     return LinkToOriginalData
 
 # Confirm the details of the survey
-def confirm_survey(survey_i, db_info_dict):
+def confirm_survey(survey_i, db_info_dict: dict):
+    """
+    It takes the survey information and checks if it's a new survey or an existing one. If it's a new
+    survey, it saves the information in the survey csv file. If it's an existing survey, it prints the
+    information for the pre-existing survey
+    
+    :param survey_i: the survey widget
+    :param db_info_dict: a dictionary with the following keys:
+    """
 
     correct_button = widgets.Button(
         description = 'Yes, details are correct',
@@ -528,7 +661,7 @@ def confirm_survey(survey_i, db_info_dict):
         new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
         new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
 
-        # Load the csv with with sites and survey choices
+        # Load the csv with sites and survey choices
         choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
                 
         # Get prepopulated fields for the survey
@@ -617,6 +750,13 @@ def confirm_survey(survey_i, db_info_dict):
 ####################################################
 
 def get_survey_name(survey_i):
+    """
+    If the survey is new, save the responses for the new survey as a dataframe. If the survey is
+    existing, return the name of the survey
+    
+    :param survey_i: the survey object
+    :return: The name of the survey
+    """
     # If new survey, review details and save changes in survey csv server
     if isinstance(survey_i.result, dict):
         # Save the responses for the new survey as a dataframe
@@ -631,7 +771,15 @@ def get_survey_name(survey_i):
     return survey_name
     
 
-def select_deployment(project, db_info_dict, survey_i):
+def select_deployment(project, db_info_dict: dict, survey_i):
+    """
+    This function allows the user to select a deployment from a survey of interest
+    
+    :param project: the name of the project
+    :param db_info_dict: a dictionary with the following keys:
+    :type db_info_dict: dict
+    :param survey_i: the index of the survey you want to download
+    """
     # Load the csv with with sites and survey choices
     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
 
@@ -676,10 +824,16 @@ def select_deployment(project, db_info_dict, survey_i):
         style = {'description_width': 'initial'}
     )
     display(deployment_widget)
-
     return deployment_widget, survey_row, survey_server_name 
 
-def select_eventdate(survey_row):
+def select_eventdate(survey_row: pd.DataFrame):
+    """
+    > This function creates a date picker widget that allows the user to select the date of the survey.
+    The default date is the beginning of the survey
+    
+    :param survey_row: a dataframe containing survey information
+    :return: A widget object
+    """
     # Set the beginning of the survey as default date
     default_date = pd.Timestamp(survey_row["SurveyStartDate"].values[0]).to_pydatetime()
     
@@ -692,11 +846,21 @@ def select_eventdate(survey_row):
         style = {'description_width': 'initial'}
     )
     display(date_widget)
-    
     return date_widget
 
 
-def check_deployment(deployment_selected, deployment_date, survey_server_name, db_info_dict, survey_i):
+def check_deployment(deployment_selected: widgets.Widget, deployment_date: widgets.Widget, survey_server_name: str, db_info_dict: dict, survey_i):
+    """
+    This function checks if the deployment selected by the user is already in the database. If it is, it
+    will raise an error. If it is not, it will return the deployment filenames
+    
+    :param deployment_selected: a list of the deployment names selected by the user
+    :param deployment_date: the date of the deployment
+    :param survey_server_name: The name of the survey in the server
+    :param db_info_dict: a dictionary containing the following keys:
+    :param survey_i: the index of the survey you want to upload to
+    :return: A list of deployment filenames
+    """
     # Ensure at least one deployment has been selected
     if not deployment_selected.value:
         logging.error("Please select a deployment.")
@@ -753,7 +917,17 @@ def check_deployment(deployment_selected, deployment_date, survey_server_name, d
 
 
 
-def update_new_deployments(deployment_filenames, db_info_dict, survey_server_name, deployment_date):
+def update_new_deployments(deployment_filenames: list, db_info_dict: dict, survey_server_name: str, deployment_date: widgets.Widget):
+    """
+    It takes a list of filenames, a dictionary with the database information, the name of the server,
+    and the date of the deployment, and it returns a list of the movies in the server
+    
+    :param deployment_filenames: a list of the filenames of the videos you want to concatenate
+    :param db_info_dict: a dictionary with the following keys:
+    :param survey_server_name: the name of the folder in the server where the survey is stored
+    :param deployment_date: the date of the deployment
+    :return: A list of the movies in the server
+    """
     for deployment_i in deployment_filenames:      
         # Save eventdate as str
         EventDate_str = deployment_date.value.strftime("%d_%m_%Y")
@@ -811,7 +985,15 @@ def update_new_deployments(deployment_filenames, db_info_dict, survey_server_nam
         return movie_files_server
         
 
-def record_deployment_info(deployment_filenames, db_info_dict):
+def record_deployment_info(deployment_filenames: list, db_info_dict: dict):
+    """
+    This function takes in a list of deployment filenames and a dictionary of database information, and
+    returns a dictionary of deployment information.
+    
+    :param deployment_filenames: a list of the filenames of the movies you want to add to the database
+    :param db_info_dict: a dictionary with the following keys:
+    :return: A dictionary with the deployment info
+    """
 
     for deployment_i in deployment_filenames:
         # Estimate the fps and length info
@@ -891,7 +1073,7 @@ def record_deployment_info(deployment_filenames, db_info_dict):
         return deployment_info 
 
 
-def select_SamplingStart(duration_i):
+def select_SamplingStart(duration_i: int):
     # Select the start of the survey 
     surv_start = interactive(to_hhmmss, 
                              seconds=widgets.IntSlider(
@@ -905,11 +1087,10 @@ def select_SamplingStart(duration_i):
                              )
                             )
     display(surv_start)    
-    
     return surv_start
  
     
-def select_SamplingEnd(duration_i):
+def select_SamplingEnd(duration_i: int):
 #     # Set default to 30 mins or max duration
 #     start_plus_30 = surv_start_i+(30*60)
     
@@ -931,11 +1112,15 @@ def select_SamplingEnd(duration_i):
                            )
                           )
     display(surv_end)  
-    
     return surv_end
 
 
 def select_IsBadDeployment():
+    """
+    > This function creates a dropdown widget that allows the user to select whether or not the
+    deployment is bad
+    :return: A widget object
+    """
     
     def deployment_to_true_false(deploy_value):
         if deploy_value == 'No, it is a great video':
@@ -954,11 +1139,14 @@ def select_IsBadDeployment():
                     )
                    )
     display(w)
-
     return w
 
 
 def write_ReplicateWithinSite():
+    """
+    This function creates a widget that allows the user to select the depth of the deployment
+    :return: The value of the widget.
+    """
     # Select the depth of the deployment 
     ReplicateWithinSite_widget = widgets.BoundedIntText(
                 value=0,
@@ -971,17 +1159,24 @@ def write_ReplicateWithinSite():
                 style = {'description_width': 'initial'}
             )
     display(ReplicateWithinSite_widget)
-
     return ReplicateWithinSite_widget
 
 
 # Select the person who recorded the deployment
-def select_RecordedBy(exisiting_recorders):
+def select_RecordedBy(existing_recorders: list):
+    """
+    This function takes a list of existing recorders and returns a widget that allows the user to select
+    an existing recorder or enter a new one
+    
+    :param existing_recorders: a list of existing recorders
+    :return: A widget with a dropdown menu that allows the user to select between two options:
+    'Existing' and 'New author'.
+    """
     
     def f(Existing_or_new):
         if Existing_or_new == 'Existing':
             RecordedBy_widget = widgets.Dropdown(
-                options = exisiting_recorders,
+                options = existing_recorders,
                 description = 'Existing recorder:',
                 disabled = False,
                 layout=Layout(width='50%'),
@@ -998,7 +1193,6 @@ def select_RecordedBy(exisiting_recorders):
             )
 
         display(RecordedBy_widget)
-
         return(RecordedBy_widget)
 
     w = interactive(f,
@@ -1011,7 +1205,6 @@ def select_RecordedBy(exisiting_recorders):
                     )
                    )
     display(w)
-
     return w
 
 
@@ -1025,7 +1218,6 @@ def select_DepthStrata():
                 style = {'description_width': 'initial'}
             )    
     display(deployment_DepthStrata)
-
     return deployment_DepthStrata
 
     
@@ -1043,11 +1235,17 @@ def select_Depth():
                 style = {'description_width': 'initial'}
             )    
     display(deployment_depth)
-
     return deployment_depth
 
 
-def select_UnderwaterVisibility(visibility_options):    
+def select_UnderwaterVisibility(visibility_options: list):    
+    """
+    > This function creates a dropdown menu with the options of the visibility of the water during the
+    video deployment
+    
+    :param visibility_options: a list of options for the dropdown menu
+    :return: The dropdown menu with the options for the water visibility of the video deployment.
+    """
     UnderwaterVisibility = widgets.Dropdown(
                         options = visibility_options,
                         description = 'Water visibility of the video deployment:',
@@ -1056,7 +1254,6 @@ def select_UnderwaterVisibility(visibility_options):
                         style = {'description_width': 'initial'}
                     )    
     display(UnderwaterVisibility)
-    
     return UnderwaterVisibility
 
 
@@ -1069,7 +1266,6 @@ def deployment_TimeIn():
         style = {'description_width': 'initial'}
     )   
     display(TimeIn_widget)
-    
     return TimeIn_widget  
 
 
@@ -1082,7 +1278,6 @@ def deployment_TimeOut():
         style = {'description_width': 'initial'}
     )
     display(TimeOut_widget)
-    
     return TimeOut_widget
 
 
@@ -1097,7 +1292,6 @@ def write_NotesDeployment():
         style = {'description_width': 'initial'}
     )
     display(comment_widget)
-    
     return comment_widget
 
 
@@ -1114,7 +1308,6 @@ def select_DeploymentDurationMinutes():
                 style = {'description_width': 'initial'}
             )    
     display(DeploymentDurationMinutes)
-
     return DeploymentDurationMinutes
 
 
@@ -1128,7 +1321,6 @@ def write_Habitat():
         style = {'description_width': 'initial'}
     )
     display(Habitat_widget)
-
     return Habitat_widget
 
 
@@ -1142,7 +1334,6 @@ def write_NZMHCS_Abiotic():
         style = {'description_width': 'initial'}
     )
     display(NZMHCS_Abiotic_widget)
-
     return NZMHCS_Abiotic_widget
 
 
@@ -1156,12 +1347,11 @@ def write_NZMHCS_Biotic():
         style = {'description_width': 'initial'}
     )
     display(NZMHCS_Biotic_widget)
-
     return NZMHCS_Biotic_widget
 
 
 # Widget to record the level of the tide
-def select_TideLevel(TideLevel_choices):
+def select_TideLevel(TideLevel_choices: list):
     TideLevel_widget = widgets.Dropdown(
         options=TideLevel_choices,
         description='Tidal level at the time of sampling:',
@@ -1170,7 +1360,6 @@ def select_TideLevel(TideLevel_choices):
         style = {'description_width': 'initial'}
     )
     display(TideLevel_widget)
-    
     return TideLevel_widget
 
 
@@ -1183,11 +1372,10 @@ def write_Weather():
         style = {'description_width': 'initial'}
     )
     display(Weather_widget)
-    
     return Weather_widget
 
 
-def select_CameraModel(CameraModel_choices):
+def select_CameraModel(CameraModel_choices: list):
     # Widget to record the type of camera
     CameraModel_widget = widgets.Dropdown(
         options=CameraModel_choices,
@@ -1197,7 +1385,6 @@ def select_CameraModel(CameraModel_choices):
         style = {'description_width': 'initial'}
     )
     display(CameraModel_widget)
-
     return CameraModel_widget
 
 
@@ -1211,7 +1398,6 @@ def write_LensModel():
         style = {'description_width': 'initial'}
     )
     display(LensModel_widget)
-
     return LensModel_widget
 
 
@@ -1225,7 +1411,6 @@ def write_BaitSpecies():
         style = {'description_width': 'initial'}
     )
     display(BaitSpecies_widget)
-
     return BaitSpecies_widget
 
         
@@ -1242,17 +1427,29 @@ def select_BaitAmount():
         style = {'description_width': 'initial'}
     )    
     display(BaitAmount_widget)
-
     return BaitAmount_widget
 
         
 # Display in hours, minutes and seconds
 def to_hhmmss(seconds):
     print("Time selected:", datetime.timedelta(seconds=seconds))
-    
     return seconds
     
-def confirm_deployment_details(deployment_names, survey_server_name, db_info_dict, survey_i, deployment_info, movie_files_server, deployment_date):
+def confirm_deployment_details(deployment_names: list, survey_server_name: str, 
+                               db_info_dict: dict, survey_i, deployment_info: list, movie_files_server: str, deployment_date: widgets.Widget):
+    """
+    This function takes the deployment information and the survey information and returns a dataframe
+    with the deployment information
+    
+    :param deployment_names: list of deployment names
+    :param survey_server_name: The name of the folder in the server where the survey is located
+    :param db_info_dict: a dictionary with the following keys:
+    :param survey_i: the survey name
+    :param deployment_info: a list of dictionaries with the deployment information
+    :param movie_files_server: the path to the folder with the movie files in the server
+    :param deployment_date: The date of the deployment
+    :return: The new_movie_row is a dataframe with the information of the new deployment.
+    """
     
     for deployment_i in deployment_names:
         
@@ -1349,7 +1546,15 @@ def confirm_deployment_details(deployment_names, survey_server_name, db_info_dic
         return new_movie_row
 
         
-def upload_concat_movie(db_info_dict, new_deployment_row):
+def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
+    """
+    It uploads the concatenated video to the server and updates the movies csv file with the new
+    information
+    
+    :param db_info_dict: a dictionary with the following keys:
+    :param new_deployment_row: new deployment dataframe with the information of the new
+    deployment
+    """
     
     # Save to new deployment row df
     new_deployment_row["LinkToVideoFile"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+new_deployment_row["prefix_conc"][0]
@@ -1391,7 +1596,6 @@ def upload_concat_movie(db_info_dict, new_deployment_row):
                                        filename=str(db_info_dict["local_movies_csv"]))
 
         # Remove temporary movie
-
         print("Movies csv file succesfully updated in the server.")
     
             

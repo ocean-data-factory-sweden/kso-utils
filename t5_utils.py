@@ -13,6 +13,21 @@ import ipywidgets as widgets
 import kso_utils.db_utils as db_utils
 
 def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: str, password: str):
+    """
+    It takes the model name, the artifact directory, the project name, the user and the password as
+    arguments and then downloads the latest model from the project and uploads it to the server
+    
+    :param model_name: the name of the model you want to transfer
+    :type model_name: str
+    :param artifact_dir: the directory where the model is stored
+    :type artifact_dir: str
+    :param project_name: The name of the project you want to transfer the model from
+    :type project_name: str
+    :param user: the username of the remote server
+    :type user: str
+    :param password: the password for the user you're using to connect to the server
+    :type password: str
+    """
     #api = wandb.Api()
     #collection = [
     #    coll for coll in api.artifact_type(type_name='model', project=project_name).collections()
@@ -37,6 +52,14 @@ def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: 
 
 
 def choose_classes(db_path: str = "koster_lab.db"):
+    """
+    It creates a dropdown menu of all the species in the database, and returns the species that you
+    select
+    
+    :param db_path: The path to the database, defaults to koster_lab.db
+    :type db_path: str (optional)
+    :return: A widget object
+    """
     conn = db_utils.create_connection(db_path)
     species_list = pd.read_sql_query("SELECT label from species", conn)["label"].tolist()
     w = widgets.SelectMultiple(
@@ -50,6 +73,10 @@ def choose_classes(db_path: str = "koster_lab.db"):
     return w
 
 def choose_train_params():
+    """
+    It creates three sliders, one for batch size, one for epochs, and one for confidence threshold
+    :return: the values of the sliders.
+    """
     v = widgets.FloatLogSlider(
         value=3,
         base=2,
@@ -95,6 +122,11 @@ def choose_train_params():
 
 
 def choose_test_prop():
+    """
+    > The function `choose_test_prop()` creates a slider widget that allows the user to choose the
+    proportion of the data to be used for testing
+    :return: A widget object
+    """
         
     w = widgets.FloatSlider(
         value=0.2,

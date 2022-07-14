@@ -25,6 +25,7 @@ from panoptes_client import (
 
 # util imports
 import kso_utils.db_utils as db_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
@@ -37,7 +38,17 @@ logger.setLevel(logging.DEBUG)
 ############################################################
 
 
-def check_movie_uploaded(movie_i, db_info_dict):
+def check_movie_uploaded(movie_i: str, db_info_dict: dict):
+    """
+    This function takes in a movie name and a dictionary containing the path to the database and returns
+    a boolean value indicating whether the movie has already been uploaded to Zooniverse
+    
+    :param movie_i: the name of the movie you want to check
+    :type movie_i: str
+    :param db_info_dict: a dictionary containing the path to the database and the path to the folder
+    containing the videos
+    :type db_info_dict: dict
+    """
 
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
@@ -60,6 +71,10 @@ def check_movie_uploaded(movie_i, db_info_dict):
         logging.info(movie_i, "has not been uploaded to Zooniverse yet")
         
 def select_clip_length():
+    """
+    > This function creates a dropdown widget that allows the user to select the length of the clips
+    :return: The widget is being returned.
+    """
     # Widget to record the length of the clips
     ClipLength_widget = widgets.Dropdown(
         options=[10,5],
@@ -73,8 +88,19 @@ def select_clip_length():
     return ClipLength_widget
 
 
-def select_random_clips(movie_i, db_info_dict):
-  # Create connection to db
+def select_random_clips(movie_i: str, db_info_dict: dict):
+    """
+    > The function `select_random_clips` takes in a movie name and a dictionary containing information
+    about the database, and returns a dictionary containing the starting points of the clips and the
+    length of the clips.
+    
+    :param movie_i: the name of the movie of interest
+    :type movie_i: str
+    :param db_info_dict: a dictionary containing the path to the database and the name of the database
+    :type db_info_dict: dict
+    :return: A dictionary with the starting points of the clips and the length of the clips.
+    """
+    # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
 
     # Query info about the movie of interest
@@ -121,7 +147,15 @@ def select_random_clips(movie_i, db_info_dict):
 
 
 # Function to extract the videos 
-def extract_example_clips(output_clip_path, start_time_i, clip_length, movie_path):
+def extract_example_clips(output_clip_path: str, start_time_i: int, clip_length: int, movie_path: str):
+    """
+    > Extracts a clip from a movie file, and saves it to a new file
+    
+    :param output_clip_path: The path to the output clip
+    :param start_time_i: The start time of the clip in seconds
+    :param clip_length: The length of the clip in seconds
+    :param movie_path: the path to the movie file
+    """
     
     # Extract the clip
     if not os.path.exists(output_clip_path):
@@ -136,7 +170,22 @@ def extract_example_clips(output_clip_path, start_time_i, clip_length, movie_pat
 
         os.chmod(output_clip_path, 0o777)
     
-def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_selection, pool_size = 4):
+def create_example_clips(movie_i: str, movie_path: str, db_info_dict: dict, project: project_utils.Project, clip_selection, pool_size = 4):
+    """
+    This function takes a movie and extracts clips from it, based on the start time and length of the
+    clips
+    
+    :param movie_i: str, the name of the movie
+    :type movie_i: str
+    :param movie_path: the path to the movie
+    :type movie_path: str
+    :param db_info_dict: a dictionary containing the information of the database
+    :type db_info_dict: dict
+    :param project: the project object
+    :param clip_selection: a dictionary with the following keys:
+    :param pool_size: The number of parallel processes to run, defaults to 4 (optional)
+    :return: The path of the clips
+    """
     
     # Specify the starting seconds and length of the example clips
     clips_start_time = clip_selection.result["clip_start_time"]
@@ -146,10 +195,11 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     server = project.server
     
     # Specify the temp folder to host the clips
+    output_clip_folder = movie_i+"_clips"
     if server == "SNIC":
-        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie_i + "_clips"
+        clips_folder = os.path.join("/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/", output_clip_folder)
     else:
-        clips_folder = movie_i + "_clips"
+        clips_folder = output_clip_folder
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
@@ -167,7 +217,7 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     for start_time_i in clips_start_time:
         # Create the filename and path of the clip
         output_clip_name = movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
-        output_clip_path = clips_folder + os.sep + output_clip_name
+        output_clip_path = os.path.join(clips_folder, output_clip_name)
       
         # Add the path of the clip to the list
         example_clips = example_clips + [output_clip_path]
@@ -178,21 +228,25 @@ def create_example_clips(movie_i, movie_path, db_info_dict, project, clip_select
     pool.close()
     pool.join()
     
-    
     logging.info("Clips extracted succesfully")
     return example_clips    
 
 
-def check_clip_size(clips_list):
+def check_clip_size(clips_list: list):
+    """
+    > This function takes a list of file paths and returns a dataframe with the file path and size of
+    each file. If the size is too large, we suggest compressing them as a first step. 
+    
+    :param clips_list: list of file paths to the clips you want to check
+    :type clips_list: list
+    :return: A dataframe with the file path and size of each clip
+    """
     
     # Get list of files with size
-    files_with_size = [ (file_path, os.stat(file_path).st_size) 
+    files_with_size = [ (file_path, os.path.getsize(file_path)/float(1<<20)) 
                         for file_path in clips_list]
 
-    df = pd.DataFrame(files_with_size, columns=["File_path","Size"])
-
-    #Change bytes to MB
-    df['Size'] = df['Size']/1000000
+    df = pd.DataFrame(files_with_size, columns=["File_path", "Size"])
     
     if df['Size'].ge(8).any():
         logging.info("Clips are too large (over 8 MB) to be uploaded to Zooniverse. Compress them!")
@@ -243,6 +297,10 @@ class clip_modification_widget(widgets.VBox):
 
 
 def select_modification():
+    """
+    This function creates a dropdown widget that allows the user to select a clip modification
+    :return: A widget that allows the user to select a clip modification.
+    """
     # Widget to select the clip modification
 
     clip_modifications = {"Color_correction": {"filter":
@@ -278,6 +336,12 @@ def select_modification():
 
 
 def gpu_select():
+    """
+    If the user selects "No GPU", then the function will return a boolean value of False. If the user
+    selects "Colab GPU", then the function will install the GPU requirements and return a boolean value
+    of True. If the user selects "Other GPU", then the function will return a boolean value of True
+    :return: The gpu_available variable is being returned.
+    """
     
     def gpu_output(gpu_option):
         if gpu_option == "No GPU":
@@ -325,11 +389,19 @@ def gpu_select():
     
                                    
     display(gpu_output_interact)
-    
     return gpu_output_interact
 
 
-def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
+def modify_clips(clip_i: str, modification_details: dict, output_clip_path: str, gpu_available: bool):
+    """
+    > This function takes in a clip, a dictionary of modification details, and an output path, and then
+    modifies the clip using the details provided
+    
+    :param clip_i: the path to the clip to be modified
+    :param modification_details: a dictionary of the modifications to be made to the clip
+    :param output_clip_path: The path to the output clip
+    :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
+    """
     if gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep='_')
@@ -374,16 +446,32 @@ def modify_clips(clip_i, modification_details, output_clip_path, gpu_available):
     logging.info("Clip", clip_i, "modified successfully")
         
     
-def create_modified_clips(clips_list, movie_i, modification_details, project, gpu_available, pool_size = 4):
+def create_modified_clips(clips_list: list, movie_i: str, modification_details: dict, project: project_utils.Project, gpu_available: bool, pool_size: int = 4):
+    """
+    This function takes a list of clips, a movie name, a dictionary of modifications, a project, and a
+    GPU availability flag, and returns a list of modified clips
+    
+    :param clips_list: a list of the paths to the clips you want to modify
+    :param movie_i: the path to the movie you want to extract clips from
+    :param modification_details: a dictionary with the modifications to be applied to the clips. The
+    keys are the names of the modifications and the values are the parameters of the modifications
+    :param project: the project object
+    :param gpu_available: True if you have a GPU available, False if you don't
+    :param pool_size: the number of parallel processes to run, defaults to 4 (optional)
+    :return: The modified clips
+    """
 
     # Get project-specific server info
     server = project.server
 
     # Specify the folder to host the modified clips
+    
+    mod_clip_folder = "modified_"+movie_i+"_clips"
+
     if server == "SNIC":
-        mod_clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/"+"modified_" + movie_i + "_clips"
+        mod_clips_folder = os.path.join("/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir", mod_clip_folder)
     else:
-        mod_clips_folder = "modified_" + movie_i +"_clips"
+        mod_clips_folder = mod_clip_folder
     
     # Remove existing modified clips
     if os.path.exists(mod_clips_folder):
@@ -406,7 +494,7 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
         for clip_i in clips_list:
             # Create the filename and path of the modified clip
             output_clip_name = "modified_" + os.path.basename(clip_i)
-            output_clip_path = mod_clips_folder + os.sep + output_clip_name
+            output_clip_path = os.path.join(mod_clips_folder, output_clip_name)
 
             # Add the path of the clip to the list
             modified_clips = modified_clips + [output_clip_path]
@@ -422,7 +510,15 @@ def create_modified_clips(clips_list, movie_i, modification_details, project, gp
     
     
 # Display the clips side-by-side
-def view_clips(example_clips, modified_clip_path):
+def view_clips(example_clips: list, modified_clip_path: str):
+    """
+    > This function takes in a list of example clips and a path to a modified clip, and returns a widget
+    that displays the original and modified clips side-by-side
+    
+    :param example_clips: a list of paths to the original clips
+    :param modified_clip_path: The path to the modified clip you want to view
+    :return: A widget that displays the original and modified videos side-by-side.
+    """
     
     # Get the path of the modified clip selected
     example_clip_name = os.path.basename(modified_clip_path).replace("modified_", "")
@@ -447,7 +543,14 @@ def view_clips(example_clips, modified_clip_path):
 
     return wid
 
-def compare_clips(example_clips, modified_clips):
+def compare_clips(example_clips: list, modified_clips: list):
+    """
+    > This function allows you to select a clip from the modified clips and displays the original and
+    modified clips side by side
+    
+    :param example_clips: The original clips
+    :param modified_clips: The list of clips that you want to compare to the original clips
+    """
 
     # Add "no movie" option to prevent conflicts
     modified_clips = np.append(modified_clips,"0 No movie")
@@ -483,7 +586,14 @@ def compare_clips(example_clips, modified_clips):
 ######## Create the clips to upload to Zooniverse ##########
 ############################################################
 
-def select_clip_n_len(movie_i, db_info_dict):
+def select_clip_n_len(movie_i: str, db_info_dict: dict):
+    """
+    This function allows the user to select the length of the clips to upload to the database
+    
+    :param movie_i: the name of the movie you want to upload
+    :param db_info_dict: a dictionary containing the path to the database and the name of the database
+    :return: The number of clips to upload
+    """
     
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
@@ -518,10 +628,16 @@ def select_clip_n_len(movie_i, db_info_dict):
 
                                    
     display(clip_length_number)
-    
     return clip_length_number        
 
-def review_clip_selection(clip_selection, movie_i, clip_modification):
+def review_clip_selection(clip_selection, movie_i: str, clip_modification):
+    """
+    > This function reviews the clips that will be created from the movie selected
+    
+    :param clip_selection: the object that contains the results of the clip selection
+    :param movie_i: the movie you want to create clips from
+    :param clip_modification: The modification that will be applied to the clips
+    """
     start_trim = clip_selection.kwargs['clips_range'][0]
     end_trim = clip_selection.kwargs['clips_range'][1]
 
@@ -534,7 +650,16 @@ def review_clip_selection(clip_selection, movie_i, clip_modification):
 
 
 # Func to expand seconds
-def expand_list(df, list_column, new_column):
+def expand_list(df: pd.DataFrame, list_column: str, new_column: str):
+    """
+    We take a dataframe with a column that contains lists, and we expand that column into a new
+    dataframe with a new column that contains the items in the list
+    
+    :param df: the dataframe you want to expand
+    :param list_column: the column that contains the list
+    :param new_column: the name of the new column that will be created
+    :return: A dataframe with the list column expanded into a new column.
+    """
     lens_of_lists = df[list_column].apply(len)
     origin_rows = range(df.shape[0])
     destination_rows = np.repeat(origin_rows, lens_of_lists)
@@ -545,7 +670,25 @@ def expand_list(df, list_column, new_column):
     return expanded_df
 
 # Function to extract the videos 
-def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modification_details, gpu_available): 
+def extract_clips(movie_path: str, clip_length: int, upl_second_i: int, output_clip_path: str, modification_details: dict, gpu_available: bool): 
+    """
+    This function takes in a movie path, a clip length, a starting second index, an output clip path, a
+    dictionary of modification details, and a boolean indicating whether a GPU is available. It then
+    extracts a clip from the movie, and applies the modifications specified in the dictionary. 
+    
+    The function is written in such a way that it can be used to extract clips from a movie, and apply
+    modifications to the clips. 
+    
+    :param movie_path: The path to the movie file
+    :param clip_length: The length of the clip in seconds
+    :param upl_second_i: The second in the video to start the clip
+    :param output_clip_path: The path to the output clip
+    :param modification_details: a dictionary of dictionaries, where each dictionary contains the
+    details of a modification to be made to the video. The keys of the dictionary are the names of the
+    modifications, and the values are dictionaries containing the details of the modification. The
+    details of the modification are:
+    :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
+    """
     if gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep='_')
@@ -591,12 +734,25 @@ def extract_clips(movie_path, clip_length, upl_second_i, output_clip_path, modif
                 logging.info('stderr:', e.stderr.decode('utf8'))
                 raise e
     
-                
-                
         logging.info("Clips extracted successfully")
                 
     
-def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_selection, project, modification_details, gpu_available, pool_size = 4):
+def create_clips(available_movies_df: pd.DataFrame, movie_i: str, movie_path: str, db_info_dict: dict, clip_selection, project: project_utils.Project, modification_details: dict, gpu_available: bool, pool_size: int = 4):
+    """
+    This function takes a movie and extracts clips from it
+    
+    :param available_movies_df: the dataframe with the movies that are available for the project
+    :param movie_i: the name of the movie you want to extract clips from
+    :param movie_path: the path to the movie you want to extract clips from
+    :param db_info_dict: a dictionary with the database information
+    :param clip_selection: a ClipSelection object
+    :param project: the project object
+    :param modification_details: a dictionary with the following keys:
+    :param gpu_available: True or False, depending on whether you have a GPU available to use
+    :param pool_size: the number of threads to use to extract the clips, defaults to 4 (optional)
+    :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and
+    clip_modification_details
+    """
         
     # Filter the df for the movie of interest
     movie_i_df = available_movies_df[available_movies_df['filename']==movie_i].reset_index(drop=True)
@@ -625,16 +781,17 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     server = project.server
     
     # Specify the temp folder to host the clips
+    temp_clip_folder = movie_i + "_zooniverseclips"
     if server == "SNIC":
-        clips_folder = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie_i + "_zooniverseclips"
+        clips_folder = os.path.join("/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/", temp_clip_folder)
     else:
-        clips_folder = movie_i+"_zooniverseclips"
+        clips_folder = temp_clip_folder
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
 
     # Set the path of the clips
-    potential_start_df["clip_path"] = clips_folder + os.sep + potential_start_df["clip_filename"]
+    potential_start_df["clip_path"] = os.path.join(clips_folder, potential_start_df["clip_filename"])
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
@@ -666,7 +823,15 @@ def create_clips(available_movies_df, movie_i, movie_path, db_info_dict, clip_se
     return potential_start_df      
 
 
-def set_zoo_metadata(df, project, db_info_dict):
+def set_zoo_metadata(df: pd.DataFrame, project: project_utils.Project, db_info_dict: dict):
+    """
+    It takes a dataframe with clips, and adds metadata about the site and project to it
+    
+    :param df: the dataframe with the clips to upload
+    :param project: the project object
+    :param db_info_dict: a dictionary with the following keys:
+    :return: upload_to_zoo, sitename, created_on
+    """
     
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
@@ -780,14 +945,22 @@ def set_zoo_metadata(df, project, db_info_dict):
         
     return upload_to_zoo, sitename, created_on
 
-def upload_clips_to_zooniverse(upload_to_zoo, sitename, created_on, project):
+def upload_clips_to_zooniverse(upload_to_zoo: pd.DataFrame, sitename: str, created_on: str, project: project_utils.Project):
+    """
+    It takes a dataframe of clips and metadata, creates a new subject set, and uploads the clips to
+    Zooniverse
+    
+    :param upload_to_zoo: the dataframe of clips to upload
+    :param sitename: the name of the site you're uploading clips from
+    :param created_on: the date the clips were created
+    :param project: the project ID of the project you want to upload to
+    """
     
     # Estimate the number of clips
     n_clips = upload_to_zoo.shape[0]
     
     # Create a new subject set to host the clips
     subject_set = SubjectSet()
-
     subject_set_name = "clips_" + sitename + "_" + str(int(n_clips)) + "_" + created_on
     subject_set.links.project = project
     subject_set.display_name = subject_set_name

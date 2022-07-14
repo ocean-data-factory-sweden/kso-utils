@@ -1,4 +1,6 @@
-##ZOOniverse utils
+## Zooniverse utils
+
+# base imports
 import io
 import getpass
 import pandas as pd
@@ -9,14 +11,15 @@ from panoptes_client import (
     Project,
     Panoptes,
 )
-
 from ast import literal_eval
+
+# util imports
 from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
-
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,7 +28,6 @@ logger.setLevel(logging.DEBUG)
 def zoo_credentials():
     zoo_user = getpass.getpass('Enter your Zooniverse user')
     zoo_pass = getpass.getpass('Enter your Zooniverse password')
-    
     return zoo_user, zoo_pass
 
 
@@ -34,7 +36,16 @@ class AuthenticationError(Exception):
 
 
 # Function to authenticate to Zooniverse
-def auth_session(username, password, project_n):
+def auth_session(username: str, password: str, project_n: int):
+    """
+    It connects to the Zooniverse with your username and password, and then returns the project number
+    you specify
+    
+    :param username: Your Zooniverse username
+    :param password: your Zooniverse password
+    :param project_n: The project number of the project you want to download data from
+    :return: The project number of the koster lab
+    """
 
     # Connect to Zooniverse with your username and password
     auth = Panoptes.connect(username=username, password=password)
@@ -50,7 +61,17 @@ def auth_session(username, password, project_n):
         logging.error(e)
 
 # Function to retrieve information from Zooniverse
-def retrieve_zoo_info(project, zoo_project, zoo_info: str):
+def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_info: str):
+    """
+    This function retrieves the information of interest from Zooniverse and saves it as a pandas data
+    frame
+    
+    :param project: the project object
+    :param zoo_project: the Zooniverse project object
+    :param zoo_info: a list of the info you want to retrieve from Zooniverse
+    :type zoo_info: str
+    :return: A dictionary of dataframes.
+    """
     if hasattr(project, "info_df"):
         if project.info_df is not None:
             logging.info("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
@@ -97,7 +118,15 @@ def retrieve_zoo_info(project, zoo_project, zoo_info: str):
 
 
 # Function to extract metadata from subjects
-def extract_metadata(subj_df):
+def extract_metadata(subj_df: pd.DataFrame):
+    """
+    > The function takes a dataframe with a column called `metadata` that contains a JSON string. It
+    then flattens the JSON string into a dataframe and returns the original dataframe with the
+    `metadata` column removed and the flattened dataframe
+    
+    :param subj_df: The dataframe containing the subject data
+    :return: A tuple of two dataframes.
+    """
 
     # Reset index of df
     subj_df = subj_df.reset_index(drop=True).reset_index()
@@ -116,7 +145,7 @@ def extract_metadata(subj_df):
     return subj_df, meta_df
 
 
-def populate_subjects(subjects, project, db_path):
+def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db_path: str):
     '''
     Populate the subjects table with the subject metadata
     
@@ -202,7 +231,15 @@ def populate_subjects(subjects, project, db_path):
           "clip subjects have been updated")
 
 # Relevant for ML and upload frames tutorials
-def populate_agg_annotations(annotations, subj_type, project):
+def populate_agg_annotations(annotations: pd.DataFrame, subj_type: str, project: project_utils.Project):
+    """
+    It takes in a list of annotations, the subject type, and the project, and adds the annotations to
+    the database
+    
+    :param annotations: a dataframe containing the annotations
+    :param subj_type: "clip" or "frame"
+    :param project: the project object
+    """
 
     # Get the project-specific name of the database
     db_path = project.db_path

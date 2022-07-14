@@ -13,6 +13,7 @@ import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 from kso_utils.spyfish_utils import process_clips_spyfish
 import kso_utils.tutorials_utils as tutorials_utils
+import kso_utils.project_utils as project_utils
 
 # widget imports
 from IPython.display import HTML, display, clear_output
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 #### Set up ####
-def setup_initial_info(project):
+def setup_initial_info(project: project_utils.Project):
     
     ### Populate SQL database with sites, movies and species and connect to Zoo
     # Initiate db
@@ -48,6 +49,14 @@ def setup_initial_info(project):
 
 
 def choose_agg_parameters(subject_type: str):
+    """
+    > This function creates a set of sliders that allow you to set the parameters for the aggregation
+    algorithm
+    
+    :param subject_type: The type of subject you are aggregating. This can be either "frame" or "video"
+    :type subject_type: str
+    :return: the values of the sliders.
+    """
     agg_users = widgets.FloatSlider(
         value=0.8,
         min=0,
@@ -139,7 +148,14 @@ def choose_agg_parameters(subject_type: str):
         return agg_users, min_users
 
 
-def choose_workflows(workflows_df):
+def choose_workflows(workflows_df: pd.DataFrame):
+    """
+    It creates a dropdown menu for the user to choose a workflow name, a dropdown menu for the user to
+    choose a subject type, and a dropdown menu for the user to choose a workflow version
+    
+    :param workflows_df: a dataframe containing the workflows you want to choose from
+    :type workflows_df: pd.DataFrame
+    """
 
     layout = widgets.Layout(width="auto", height="40px")  # set width and height
 
@@ -187,7 +203,7 @@ def choose_workflows(workflows_df):
 
 class WidgetMaker(widgets.VBox):
 
-    def __init__(self, workflows_df):
+    def __init__(self, workflows_df: pd.DataFrame):
         '''
         The function creates a widget that allows the user to select which workflows to run
         
@@ -227,7 +243,14 @@ class WidgetMaker(widgets.VBox):
         }
 
 
-def choose_w_version(workflows_df, workflow_id):
+def choose_w_version(workflows_df: pd.DataFrame, workflow_id: str):
+    """
+    It takes a workflow ID and returns a dropdown widget with the available versions of the workflow
+    
+    :param workflows_df: a dataframe containing the workflows available in the Galaxy instance
+    :param workflow_id: The name of the workflow you want to run
+    :return: A tuple containing the widget and the list of versions available.
+    """
 
     # Estimate the versions of the workflow available
     versions_available = workflows_df[workflows_df.display_name==workflow_id].version.unique().tolist()
@@ -253,16 +276,32 @@ def choose_w_version(workflows_df, workflow_id):
     return w_version, list(map(float, versions_available))
 
 
-def get_workflow_ids(workflows_df, workflow_names):
+def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
     # The function that takes a list of workflow names and returns a list of workflow
     # ids.
     return [workflows_df[workflows_df.display_name==wf_name].workflow_id.unique()[0] for 
             wf_name in workflow_names]
 
 
-def get_classifications(
-    workflow_dict: dict, workflows_df: pd.DataFrame, subj_type, class_df, db_path, project
-):
+def get_classifications(workflow_dict: dict, workflows_df: pd.DataFrame,
+                        subj_type: str, class_df: pd.DataFrame, db_path: str, project: project_utils.Project):
+    """
+    It takes in a dictionary of workflows, a dataframe of workflows, the type of subject (frame or
+    clip), a dataframe of classifications, the path to the database, and the project name. It returns a
+    dataframe of classifications
+    
+    :param workflow_dict: a dictionary of the workflows you want to retrieve classifications for. The
+    keys are the workflow names, and the values are the workflow IDs, workflow versions, and the minimum
+    number of classifications per subject
+    :type workflow_dict: dict
+    :param workflows_df: the dataframe of workflows from the Zooniverse project
+    :type workflows_df: pd.DataFrame
+    :param subj_type: "frame" or "clip"
+    :param class_df: the dataframe of classifications from the database
+    :param db_path: the path to the database file
+    :param project: the name of the project on Zooniverse
+    :return: A dataframe with the classifications for the specified project and workflow.
+    """
     
     names, workflow_versions = [], []
     for i in range(0, len(workflow_dict), 3):
@@ -330,7 +369,19 @@ def get_classifications(
     return classes_df
 
 
-def aggregrate_labels(raw_class_df, agg_users, min_users):
+def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: int):
+    """
+    > This function takes a dataframe of classifications and returns a dataframe of classifications that
+    have been filtered by the number of users that classified each subject and the proportion of users
+    that agreed on their annotations
+    
+    :param raw_class_df: the dataframe of all the classifications
+    :param agg_users: the proportion of users that must agree on a classification for it to be included
+    in the final dataset
+    :param min_users: The minimum number of users that must have classified a subject for it to be
+    included in the final dataset
+    :return: a dataframe with the aggregated labels.
+    """
     # Calculate the number of users that classified each subject
     raw_class_df["n_users"] = raw_class_df.groupby("subject_ids")[
         "classification_id"
@@ -353,7 +404,16 @@ def aggregrate_labels(raw_class_df, agg_users, min_users):
     return agg_class_df
 
 
-def aggregrate_classifications(df, subj_type, project, agg_params):
+def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: project_utils.Project, agg_params):
+    """
+    We take the raw classifications and process them to get the aggregated labels
+    
+    :param df: the raw classifications dataframe
+    :param subj_type: the type of subject, either "frame" or "clip"
+    :param project: the project object
+    :param agg_params: list of parameters for the aggregation
+    :return: the aggregated classifications and the raw classifications.
+    """
 
     logging.info("Aggregrating the classifications")
     
@@ -511,7 +571,16 @@ def aggregrate_classifications(df, subj_type, project, agg_params):
     return agg_class_df, raw_class_df
 
 
-def process_clips(df: pd.DataFrame, project):
+def process_clips(df: pd.DataFrame, project: project_utils.Project):
+    """
+    This function takes a dataframe of classifications and returns a dataframe of annotations
+    
+    :param df: the dataframe of classifications
+    :type df: pd.DataFrame
+    :param project: the name of the project you want to download data from
+    :return: A dataframe with the classification_id, label, how_many, first_seen, https_location,
+    subject_type, and subject_ids.
+    """
 
     # Create an empty list
     rows_list = []
@@ -561,16 +630,33 @@ def process_clips(df: pd.DataFrame, project):
     
     return pd.DataFrame(annot_df)
 
-def launch_table(agg_class_df, subject_type):
+def launch_table(agg_class_df: pd.DataFrame, subject_type: str):
+    """
+    It takes in a dataframe of aggregated classifications and a subject type, and returns a dataframe
+    with the columns "subject_ids", "label", "how_many", and "first_seen"
+    
+    :param agg_class_df: the dataframe that you want to launch
+    :param subject_type: "clip" or "subject"
+    """
     if subject_type == "clip":
-        a = agg_class_df[["subject_ids","label","how_many","first_seen"]]
+        a = agg_class_df[["subject_ids", "label", "how_many", "first_seen"]]
     else:
         a = agg_class_df
     
     return(a)
 
 
-def process_frames(df: pd.DataFrame, project_name):
+def process_frames(df: pd.DataFrame, project_name: str):
+    """
+    It takes a dataframe of classifications and returns a dataframe of annotations
+    
+    :param df: the dataframe containing the classifications
+    :type df: pd.DataFrame
+    :param project_name: The name of the project you want to download data from
+    :return: A dataframe with the following columns:
+        classification_id, x, y, w, h, label, https_location, filename, subject_type, subject_ids,
+    frame_number, user_name, movie_id
+    """
 
     # Create an empty list
     rows_list = []
@@ -648,7 +734,15 @@ def process_frames(df: pd.DataFrame, project_name):
 
 
 
-def get_image_with_annotations(im, class_df_subject):
+def get_image_with_annotations(im: PILImage.Image, class_df_subject: pd.DataFrame):
+    """
+    > The function takes an image and a dataframe of annotations and returns the image with the
+    annotations drawn on it
+    
+    :param im: the image object of type PILImage
+    :param class_df_subject: a dataframe containing the annotations for a single subject
+    :return: The image with the annotations
+    """
     # Calculate image size
     dw, dh = im._size
 
@@ -673,6 +767,17 @@ def get_image_with_annotations(im, class_df_subject):
 
 
 def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
+    """
+    It takes a subject id, a dataframe containing the annotations for that subject, and the type of
+    subject (clip or frame) and returns an HTML object that can be displayed in a notebook
+    
+    :param subject_id: The subject ID of the subject you want to view
+    :type subject_id: int
+    :param class_df: The dataframe containing the annotations for the class of interest
+    :type class_df: pd.DataFrame
+    :param subject_type: The type of subject you want to view. This can be either "clip" or "frame"
+    :type subject_type: str
+    """
     if subject_id in class_df.subject_ids.tolist():
         # Select the subject of interest
         class_df_subject = class_df[class_df.subject_ids == subject_id].reset_index(drop=True)
@@ -736,6 +841,16 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
 
 
 def launch_viewer(class_df: pd.DataFrame, subject_type: str):
+    """
+    > This function takes a dataframe of classifications and a subject type (frame or video) and
+    displays a dropdown menu of subjects of that type. When a subject is selected, it displays the
+    subject and the classifications for that subject
+    
+    :param class_df: The dataframe containing the classifications
+    :type class_df: pd.DataFrame
+    :param subject_type: The type of subject you want to view. This can be either "frame" or "video"
+    :type subject_type: str
+    """
 
     # If subject is frame assign a color to each label
     if subject_type == "frame":
@@ -773,7 +888,15 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
     subject_widget.observe(on_change, names='value')
 
 
-def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type):
+def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: str):
+    """
+    > This function takes a dataframe of classifications and a subject type (clip or frame) and displays
+    the classifications for a given subject
+    
+    :param class_df: the dataframe of classifications
+    :type class_df: pd.DataFrame
+    :param subject_type: "clip" or "frame"
+    """
 
     # Select the subject
     subject_widget = widgets.Combobox(

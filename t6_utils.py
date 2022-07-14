@@ -23,7 +23,17 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def generate_csv_report(evaluation_path):
+def generate_csv_report(evaluation_path: str):
+    """
+    > We read the labels from the `labels` folder, and create a dictionary with the filename as the key,
+    and the list of labels as the value. We then convert this dictionary to a dataframe, and write it to
+    a csv file
+    
+    :param evaluation_path: The path to the evaluation folder
+    :type evaluation_path: str
+    :return: A dataframe with the following columns:
+        filename, class_id, frame_no, x, y, w, h, conf
+    """
     labels = os.listdir(Path(evaluation_path, "labels"))
     data_dict = {}
     for f in labels:
@@ -48,7 +58,17 @@ def generate_csv_report(evaluation_path):
     logging.info("Report created at {}".format(csv_out))
     return detect_df
 
-def generate_tracking_report(tracker_dir, eval_dir):
+def generate_tracking_report(tracker_dir: str, eval_dir: str):
+    """
+    > It takes the tracking output from the tracker and creates a csv file that can be used for
+    evaluation
+    
+    :param tracker_dir: The directory where the tracking results are stored
+    :type tracker_dir: str
+    :param eval_dir: The directory where the evaluation results will be stored
+    :type eval_dir: str
+    :return: A dataframe with the following columns: filename, class_id, frame_no, tracker_id
+    """
     data_dict = {}
     for track_file in os.listdir(tracker_dir):
         if track_file.endswith(".txt"):
@@ -73,8 +93,8 @@ def generate_tracking_report(tracker_dir, eval_dir):
     logging.info("Report created at {}".format(csv_out))
     return detect_df
 
-def generate_counts(eval_dir, tracker_dir, model_dir):
-    model = torch.load(model_dir+"/best.pt")
+def generate_counts(eval_dir: str, tracker_dir: str, model_dir: str):
+    model = torch.load(os.path.join(model_dir, "best.pt"))
     names = {i: model["model"].names[i] for i in range(len(model["model"].names))}
     class_df = generate_csv_report(eval_dir)
     tracker_df = generate_tracking_report(tracker_dir, eval_dir)
@@ -85,14 +105,28 @@ def generate_counts(eval_dir, tracker_dir, model_dir):
     print("--------------------------------")
     print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
 
-def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_size=720):
+def track_objects(source_dir: str, artifact_dir: str, tracker_folder: str, conf_thres: float = 0.5, img_size: int = 720):
+    """
+    This function takes in the source directory of the video, the artifact directory, the tracker
+    folder, the confidence threshold, and the image size. It then copies the best model from the
+    artifact directory to the tracker folder, and runs the tracking script. It then returns the latest
+    tracker folder
+    
+    :param source_dir: The directory where the images are stored
+    :param artifact_dir: The directory where the model is saved
+    :param tracker_folder: The folder where the Yolov5_DeepSort_OSNet repo is located
+    :param conf_thres: The confidence threshold for the YOLOv5 model
+    :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720
+    (optional)
+    :return: The latest tracker folder
+    """
     # Enter the correct folder
     if os.path.exists(tracker_folder):
         cwd = os.getcwd()
         os.chdir(tracker_folder)
     else:
         logging.error("The tracker folder does not exist. Please try again")
-    shutil.copyfile(artifact_dir+"/best.pt", "best.pt")
+    shutil.copyfile(os.path.join(artifact_dir, "best.pt"), "best.pt")
     best_model = "best.pt"
     try:
         subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
@@ -105,19 +139,36 @@ def track_objects(source_dir, artifact_dir, tracker_folder, conf_thres=0.5, img_
     # Go up one directory
     if "Yolov5_DeepSort_OSNet" in os.getcwd():
         os.chdir(cwd)
-    tracker_root = tracker_folder+"/runs/track/"
-    latest_tracker = tracker_root + sorted(os.listdir(tracker_root))[-1] + "/tracks"
+    tracker_root = os.path.join(tracker_folder, "runs", "track")
+    latest_tracker = os.path.join(tracker_root, sorted(os.listdir(tracker_root))[-1], "tracks")
     logging.info("Tracking completed succesfully")
     return latest_tracker
 
-def get_data_viewer(data_path):
+def get_data_viewer(data_path: str):
+    """
+    It takes a path to a directory of images, and returns a function that displays the images in that
+    directory
+    
+    :param data_path: the path to the data folder
+    :type data_path: str
+    :return: A function that takes in a parameter k and returns a widget that displays the image at
+    index k in the list of images.
+    """
     imgs = list(filter(lambda fn:fn.lower().endswith('.jpg'), os.listdir(data_path)))
     def loadimg(k):
         display(draw_box(os.path.join(data_path,imgs[k])))
     return widgets.interact(loadimg ,k=(0,len(imgs)-1))
 
 
-def draw_box(path):
+def draw_box(path: str):
+    """
+    It takes a path to an image, opens it, opens the corresponding label file, and draws a box around
+    each object in the image
+    
+    :param path: the path to the image
+    :type path: str
+    :return: The image with the bounding boxes drawn on it.
+    """
     im = PILImage.open(path)
     d = { line.split()[0] : line.split()[1:] for line in open(
         path.replace("images", "labels").replace(".jpg", ".txt")) }
@@ -131,7 +182,17 @@ def draw_box(path):
     return im
 
 
-def get_dataset(project_name, model):
+def get_dataset(project_name: str, model: str):
+    """
+    It takes in a project name and a model name, and returns the paths to the train and val datasets
+    
+    :param project_name: The name of the project you want to download the dataset from
+    :type project_name: str
+    :param model: The model you want to use
+    :type model: str
+    :return: The return value is a list of two directories, one for the training data and one for the
+    validation data.
+    """
     api = wandb.Api()
     run_id = model.split("_")[1]
     run = api.run(f'koster/{project_name.lower()}/runs/{run_id}')
@@ -149,7 +210,18 @@ def get_dataset(project_name, model):
     return dirs
 
 
-def get_model(model_name, project_name, download_path):
+def get_model(model_name: str, project_name: str, download_path: str):
+    """
+    It downloads the latest model checkpoint from the specified project and model name
+    
+    :param model_name: The name of the model you want to download
+    :type model_name: str
+    :param project_name: The name of the project you want to download the model from
+    :type project_name: str
+    :param download_path: The path to download the model to
+    :type download_path: str
+    :return: The path to the downloaded model checkpoint.
+    """
     api = wandb.Api()
     collections = [
         coll for coll in api.artifact_type(type_name='model', project=f'koster/{project_name.lower()}').collections()
@@ -167,11 +239,18 @@ def get_model(model_name, project_name, download_path):
 
 
 # Function to compare original to modified frames
-def choose_model(project_name):
+def choose_model(project_name: str):
+    """
+    It takes a project name and returns a dropdown widget that displays the metrics of the model
+    selected
+    
+    :param project_name: The name of the project you want to load the model from
+    :return: The model_widget is being returned.
+    """
     model_dict = {}
     model_info = {}
     api = wandb.Api()
-    # weird error fix
+    # weird error fix (initialize api another time)
     api.runs(path=f'koster/{project_name.lower()}')
     for edge, obj in zip(api.runs(path=f'koster/{project_name.lower()}').last_response["project"]["runs"]["edges"],
                     api.runs(path=f'koster/{project_name.lower()}').objects):
@@ -200,7 +279,6 @@ def choose_model(project_name):
                 print("Choose another file")
             else:
                 print({k:v for k,v in model_info[change["new"]].items() if "metrics" in k})
-                #display(a)
                    
     model_widget.observe(on_change, names='value')
     
@@ -208,10 +286,17 @@ def choose_model(project_name):
 
 
 # Function to compare original to modified frames
-def choose_files(path):
+def choose_files(path: str):
+    """
+    It creates a dropdown menu of all the files in the specified directory, and displays the selected
+    file
+    
+    :param path: the path to the folder containing the clips
+    :type path: str
+    """
     
     # Add "no movie" option to prevent conflicts
-    files = np.append([path+i for i in os.listdir(path)],"No file")
+    files = np.append([path+i for i in os.listdir(path)], "No file")
     
     clip_path_widget = widgets.Dropdown(
                     options=tuple(np.sort(files)),
@@ -238,7 +323,13 @@ def choose_files(path):
     clip_path_widget.observe(on_change, names='value')
 
 # Display the frames using html
-def view_file(path):
+def view_file(path: str):
+    """
+    It takes a path to a file, opens it, and returns a widget that can be displayed in the notebook
+    
+    :param path: The path to the file you want to view
+    :return: A widget that displays the image or video.
+    """
     # Get path of the modified clip selected
     extension = os.path.splitext(path)[1]
     file = open(path, "rb").read()
