@@ -55,7 +55,7 @@ def auth_session(username: str, password: str, project_n: int):
 
     # Specify the project number of the koster lab
     try:
-        project = Project(project_n)
+        project = Project(int(float(project_n)))
         return project
     except Exception as e:
         logging.error(e)
