@@ -368,6 +368,7 @@ def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: i
 
     # Select classifications with at least n different user classifications
     raw_class_df = raw_class_df[raw_class_df.n_users >= min_users].reset_index(drop=True)
+    
 
     # Calculate the proportion of unique classifications (it can have multiple annotations) per subject
     raw_class_df["class_n"] = raw_class_df.groupby(["subject_ids", "label"])[
@@ -379,7 +380,7 @@ def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: i
     
     # Select annotations based on agreement threshold
     agg_class_df = raw_class_df[raw_class_df.class_prop >= agg_users].reset_index(drop=True)
-    
+
     # Calculate the proportion of unique classifications aggregated per subject
     agg_class_df["class_n_agg"] = agg_class_df.groupby(["subject_ids"])[
         "label"
@@ -409,6 +410,11 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
             agg_users, min_users, agg_obj, agg_iou, agg_iua = [i.value for i in agg_params]
         else:
             agg_users, min_users, agg_obj, agg_iou, agg_iua = agg_params
+        
+        
+        # Report selected parameters
+        logging.info("Aggregation parameters are: Agg. threshold", agg_users, ", Min. users", min_users, ", Obj threshold", agg_obj, ", IOU",agg_iou, ", Int. agg.", agg_iua)
+        print("Aggregation parameters are: Agg. threshold", agg_users, ", Min. users", min_users, ", Obj threshold", agg_obj, ", IOU",agg_iou, ", Int. agg.", agg_iua)
         
         # Process the raw classifications
         raw_class_df = process_frames(df, project.Project_name)
