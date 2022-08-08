@@ -725,7 +725,7 @@ def process_frames(df: pd.DataFrame, project_name: str):
 
 
 
-def get_image_with_annotations(im: PILImage.Image, class_df_subject: pd.DataFrame):
+def draw_annotations_in_frame(im: PILImage.Image, class_df_subject: pd.DataFrame):
     """
     > The function takes an image and a dataframe of annotations and returns the image with the
     annotations drawn on it
@@ -752,7 +752,7 @@ def get_image_with_annotations(im: PILImage.Image, class_df_subject: pd.DataFram
                                int((vals[0]+vals[2]/2)*dw), int((vals[1]+vals[3]/2)*dh)])
 
         # Draw annotation
-        img1.rectangle(vals_adjusted, outline=row.colour, width=2)
+        img1.rectangle(vals, outline=row.colour, width=2)
         
     return im
 
@@ -802,10 +802,10 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
         response = requests.get(subject_location)
         im = PILImage.open(BytesIO(response.content))
 
-        # if label is empty don't draw any rectangles
+        # if label is not empty draw rectangles
         if class_df_subject.label.unique()[0]!="empty":
             # Create a temporary image with the annotations drawn on it
-            im = get_image_with_annotations(im, class_df_subject)
+            im = draw_annotations_in_frame(im, class_df_subject)
         
         # Remove previous temp image if exist
         temp_image_path = "temp.jpg"
@@ -845,14 +845,14 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
 
     # If subject is frame assign a color to each label
     if subject_type == "frame":
-        # Generate a list of random colors
-        random_color_list = []
-        for i in range(class_df.label.nunique()):
-            random_color_list = random_color_list + ["#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)])]
-    
         # Create a list of unique labels
         list_labels = class_df.label.unique().tolist()
         
+        # Generate a list of random colors for each label
+        random_color_list = []
+        for index,item in enumerate(list_labels):
+          random_color_list = random_color_list + ["#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)])]
+
         # Add a column with the color for each label
         class_df["colour"] = class_df.apply(lambda row: random_color_list[list_labels.index(row.label)], axis=1) 
     
