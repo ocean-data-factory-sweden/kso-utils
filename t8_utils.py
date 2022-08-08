@@ -27,27 +27,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 #### Set up ####
-def setup_initial_info(project: project_utils.Project):
-    
-    ### Populate SQL database with sites, movies and species and connect to Zoo
-    # Initiate db
-    db_info_dict = tutorials_utils.initiate_db(project)
-    
-    # Connect to Zooniverse project
-    zoo_project = tutorials_utils.connect_zoo_project(project)
-    
-    # Specify the Zooniverse information required throughout the tutorial
-    zoo_info = ["subjects", "workflows", "classifications"]
-
-    zoo_info_dict = tutorials_utils.retrieve__populate_zoo_info(project = project, 
-                                                               db_info_dict = db_info_dict,
-                                                               zoo_project = zoo_project,
-                                                               zoo_info = zoo_info)
-    
-    return db_info_dict, zoo_project, zoo_info_dict
-
-
-
 def choose_agg_parameters(subject_type: str):
     """
     > This function creates a set of sliders that allow you to set the parameters for the aggregation
@@ -390,16 +369,21 @@ def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: i
     # Select classifications with at least n different user classifications
     raw_class_df = raw_class_df[raw_class_df.n_users >= min_users].reset_index(drop=True)
 
-    # Calculate the proportion of unique classification (it can have multiple annotations) per subject
+    # Calculate the proportion of unique classifications (it can have multiple annotations) per subject
     raw_class_df["class_n"] = raw_class_df.groupby(["subject_ids", "label"])[
         "classification_id"
-    ].transform("count")
+    ].transform("nunique")
     
     # Calculate the proportion of users that agreed on their annotations
     raw_class_df["class_prop"] = raw_class_df.class_n / raw_class_df.n_users
     
     # Select annotations based on agreement threshold
     agg_class_df = raw_class_df[raw_class_df.class_prop >= agg_users].reset_index(drop=True)
+    
+    # Calculate the proportion of unique classifications aggregated per subject
+    agg_class_df["class_n_agg"] = agg_class_df.groupby(["subject_ids"])[
+        "label"
+    ].transform("nunique")
     
     return agg_class_df
 
@@ -432,7 +416,10 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         # Aggregrate frames based on their labels
         agg_labels_df = aggregrate_labels(raw_class_df, agg_users, min_users)
         
-        # Select frames aggregrated as empty
+        # Get rid of the "empty" labels if other species are among the volunteer consensus
+        agg_labels_df = agg_labels_df[~((agg_labels_df["class_n_agg"]>1) & (agg_labels_df["label"]=="empty"))]
+    
+        # Select frames aggregrated only as empty
         agg_labels_df_empty = agg_labels_df[agg_labels_df["label"]=="empty"]
         agg_labels_df_empty = agg_labels_df_empty.rename(columns={'frame_number': 'start_frame'})
         agg_labels_df_empty = agg_labels_df_empty[[
@@ -444,7 +431,7 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
                 "h",
             ]]
         
-        # Exclude empty frames
+        # Temporary exclude frames aggregrated as empty
         agg_labels_df = agg_labels_df[agg_labels_df["label"]!="empty"]
         
         # Map the position of the annotation parameters
@@ -526,7 +513,7 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         agg_class_df["subject_type"] = "frame"
         agg_class_df["label"] = agg_class_df["label"].apply(lambda x: x.split("(")[0].strip())
         
-        # Add the empty frames
+        # Add the frames aggregated as "empty"
         agg_class_df = pd.concat([agg_class_df,agg_labels_df_empty])
         
         # Select the aggregated labels
@@ -674,7 +661,6 @@ def process_frames(df: pd.DataFrame, project_name: str):
                     # Specify the frame was classified as empty
                     choice_i = {
                             "classification_id": row["classification_id"],
-                            # If value_i is not empty flatten labels
                             "x": None,
                             "y": None,
                             "w": None,
@@ -687,7 +673,6 @@ def process_frames(df: pd.DataFrame, project_name: str):
                     for i in ann_i["value"]:
                         choice_i = {
                             "classification_id": row["classification_id"],
-                            # If value_i is not empty flatten labels
                             "x": int(i["x"]) if "x" in i else None,
                             "y": int(i["y"]) if "y" in i else None,
                             "w": int(i["width"]) if "width" in i else None,
