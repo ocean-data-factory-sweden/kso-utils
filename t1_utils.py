@@ -12,6 +12,7 @@ from ipywidgets import Layout, HBox
 import ipywidgets as widgets
 import ipysheet
 import folium
+from folium.plugins import MiniMap
 import asyncio
 
 # util imports
@@ -69,8 +70,7 @@ def map_site(db_info_dict: dict, project: project_utils.Project):
                                                             case=False)]).add_to(kso_map), axis=1)
 
     # Add a minimap to the corner for reference
-    minimap = folium.plugins.MiniMap()
-    kso_map = kso_map.add_child(minimap)
+    kso_map = kso_map.add_child(MiniMap())
     
     # Return the map
     return kso_map
