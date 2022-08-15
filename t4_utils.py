@@ -33,9 +33,9 @@ import kso_utils.project_utils as project_utils
 import kso_utils.t8_utils as t8
 
 # Logging
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
 out_df = pd.DataFrame()
 
 # Function to set up and collect project-specific information

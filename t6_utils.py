@@ -20,9 +20,8 @@ from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
 # logging setup
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def generate_csv_report(evaluation_path: str):

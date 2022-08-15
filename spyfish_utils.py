@@ -13,9 +13,8 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.db_utils as db_utils
 
 # Logging
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def check_spyfish_movies(movies_df: pd.DataFrame, db_info_dict: dict):

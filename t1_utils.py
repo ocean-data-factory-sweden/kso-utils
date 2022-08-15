@@ -24,9 +24,9 @@ import kso_utils.tutorials_utils as t_utils
 import kso_utils.koster_utils as koster_utils
 import kso_utils.project_utils as project_utils
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
 out_df = pd.DataFrame()
 
 ####################################################    

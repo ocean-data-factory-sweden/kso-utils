@@ -22,9 +22,8 @@ import kso_utils.project_utils as project_utils
 
 # Logging
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     # Specify the output folder
