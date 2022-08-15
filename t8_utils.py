@@ -7,6 +7,7 @@ import numpy as np
 import json
 import logging
 from io import BytesIO
+from base64 import b64encode
 
 # module imports
 import kso_utils.db_utils as db_utils
@@ -814,12 +815,16 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
         
         # Save the new image
         im.save(temp_image_path)
+
+        # Load image data (used to enable viewing in Colab)
+        img = open(temp_image_path, 'rb').read()
+        data_url = 'data:image/jpeg;base64,' + b64encode(img).decode()
         
         html_code = f"""
         <html>
         <div style="display: flex; justify-content: space-around">
         <div>
-          <img src={temp_image_path} type="image/jpeg" width=500>
+          <img src={data_url} type="image/jpeg" width=500>
         </img>
         </div>
         <div>{class_df_subject[['label','colour']].value_counts().sort_values(ascending=False).to_frame().to_html()}</div>
@@ -913,7 +918,7 @@ def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: st
             "frame_number",
             "movie_id"]]
             clear_output()
-            show(a)
+            display(a)
                 
                 
     subject_widget.observe(on_change, names='value')
