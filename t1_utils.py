@@ -8,7 +8,7 @@ import logging
 
 # widget imports
 from IPython.display import display
-from ipywidgets import Layout, HBox
+from ipywidgets import interactive, Layout, HBox
 import ipywidgets as widgets
 import ipysheet
 import folium
@@ -51,7 +51,7 @@ def map_site(db_info_dict: dict, project: project_utils.Project):
       init_location = [-39.296109, 174.063916]
 
     # Create the initial kso map
-    kso_map = folium.Map(location=init_location)
+    kso_map = folium.Map(location=init_location,width=900,height=600)
 
     # Read the csv file with site information
     sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
@@ -76,23 +76,56 @@ def map_site(db_info_dict: dict, project: project_utils.Project):
     return kso_map
 
 
-def open_sites_csv(db_initial_info: dict):
+def select_sites_range(db_initial_info: dict):
     """
-    > This function loads the sites csv file into a pandas dataframe, and then loads the dataframe into
-    an ipysheet
+    > This function loads the sites csv file into a pandas dataframe and enables users to pick a range of sites(rows) to display
     
     :param db_initial_info: a dictionary with the following keys:
     :return: A dataframe with the sites information
     """
+    
     # Load the csv with sites information
     sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
+    
+    sites_range = widgets.SelectionRangeSlider(
+                          options=range(0, len(sites_df.index)+1),
+                          index=(0,len(sites_df. index)),
+                          description='Sites to display',
+                          orientation='horizontal',
+                          layout=Layout(width='90%', padding='35px'),
+                          style = {'description_width': 'initial'}
+                          )
+
+    display(sites_range)
+
+    return sites_df, sites_range                   
+
+def open_sites_csv(sites_df: pd.DataFrame, sites_range: widgets.Widget):
+    """
+    > This function loads the sites dataframe, filters the range of sites selected and then loads the dataframe into
+    an ipysheet
+    
+    :param sites_df: a pandas dataframe of the sites information:
+    :param sites_range: the range widget selection :
+    :return: A dataframe with the sites information
+    """
+    # Extract the first and last row to display
+    sites_start = int(sites_range.label[0])
+    sites_end = int(sites_range.label[1])
+
+    # Display the range of sites selected
+    logging.info("Displaying sites #", sites_start, "to #", sites_end)
+    
+    # Filter the dataframe based on the selection
+    sites_df_filtered = sites_df.filter(items = range(sites_start, sites_end), axis=0)
 
     # Load the df as ipysheet
-    sheet = ipysheet.from_dataframe(sites_df)
+    sheet = ipysheet.from_dataframe(sites_df_filtered)
 
-    return sheet
+    return sites_df_filtered, sheet
     
-def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, local_csv: str):
+    
+def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtered: pd.DataFrame):
     """
     It takes the dataframe from the ipysheet and compares it to the dataframe from the local csv file.
     If there are any differences, it highlights them and returns the dataframe with the changes
@@ -101,17 +134,14 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, local_csv: str):
     :param db_info_dict: a dictionary containing the database information
     :type db_info_dict: dict
     :param isheet: The ipysheet object that contains the data
-    :param local_csv: The name of the csv file that is stored locally
+    :param sites_df_filtered: a pandas dataframe with information of a range of sites
     :return: A tuple with the highlighted changes and the sheet_df
     """
-    # Read the local csv file
-    df = pd.read_csv(db_info_dict[local_csv])
-
     # Convert ipysheet to pandas
     sheet_df = ipysheet.to_dataframe(isheet)
     
     # Check the differences between the spreadsheet and sites_csv
-    sheet_diff_df = pd.concat([df , sheet_df]).drop_duplicates(keep=False)
+    sheet_diff_df = pd.concat([sites_df_filtered , sheet_df]).drop_duplicates(keep=False)
     
     # If changes in dataframes display them and ask the user to confirm them
     if sheet_diff_df.empty:
@@ -119,14 +149,14 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, local_csv: str):
         raise
     else:
         # Retieve the column name of the site_id
-        site_id_col = [col for col in df.columns if 'site_id' in col][0]
+        site_id_col = [col for col in sites_df_filtered.columns if 'site_id' in col][0]
         
         # Concatenate DataFrames and distinguish each frame with the keys parameter
-        df_all = pd.concat([df.set_index(site_id_col), sheet_df.set_index(site_id_col)],
+        df_all = pd.concat([sites_df_filtered.set_index(site_id_col), sheet_df.set_index(site_id_col)],
             axis='columns', keys=['Origin', 'Update'])
         
         # Rearrange columns to have them next to each other
-        df_final = df_all.swaplevel(axis='columns')[df.columns[1:]]
+        df_final = df_all.swaplevel(axis='columns')[sites_df_filtered.columns[1:]]
         
 
         # Create a function to highlight the changes
@@ -141,15 +171,14 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, local_csv: str):
 
         return highlight_changes, sheet_df
 
-def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, local_csv: str, serv_csv: str):
+def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, sites_df: pd.DataFrame):
     """
-    This function is used to update the csv files for the database
+    This function is used to update the csv files locally and in the server
     
     :param db_info_dict: The dictionary containing the database information
     :param project: The project object
     :param sheet_df: The dataframe of the sheet you want to update
-    :param local_csv: The name of the csv file in the local directory
-    :param serv_csv: The name of the csv file in the server
+    :param sites_df: a pandas dataframe of the sites information
     """
     # Create button to confirm changes
     confirm_button = widgets.Button(
@@ -168,43 +197,53 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
     )
 
     # Save changes in survey csv locally and in the server
-    async def f(sheet_df):
+    async def f(sheet_df, sites_df):
         x = await t_utils.wait_for_change(confirm_button,deny_button) #<---- Pass both buttons into the function
         if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
-            print("Checking if changes can be incorporated to the database")
+            logging.info("Checking if changes can be incorporated to the database")
+            
+            print(sites_df.columns)
+            # Replace the different values based on site_id
+            sites_df.set_index('site_id', inplace=True)
+            sites_df.update(sheet_df.set_index('site_id', inplace=True))
+            sites_df.reset_index(drop=False, inplace=True) 
+            
+            print("sites_df updated")
             
             # Check if the project is the Spyfish Aotearoa
             if project.Project_name == "Spyfish_Aotearoa":
                 # Rename columns to match schema fields
-                sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
+                sites_df = spyfish_utils.process_spyfish_sites(sites_df)
         
             # Select relevant fields
-            sheet_df = sheet_df[
+            sites_df = sites_df[
                 ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
             ]
     
             # Roadblock to prevent empty lat/long/datum/countrycode
             db_utils.test_table(
-                sheet_df, "sites", sheet_df.columns
+                sites_df, "sites", sites_df.columns
             )
-            
-            print("Updating the changes into the csv files for the database.")
-            
+
+            # Specify the path of the files to update
+            local_csv = "local_sites_csv"
+            serv_csv = "server_sites_csv"
+              
             # Save the updated df locally
-            sheet_df.to_csv(db_info_dict[local_csv],index=False)
-        
+            sites_df.to_csv(db_info_dict[local_csv], index=False)
+            logging.info("The local csv file has been updated.")
+            
             # Save the updated df in the server
             server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
-            print("SUCCESS: The changes have been added!")
+            logging.info("The csv file in the server has been updated")
             
         else:
-            print("Run this cell again when the changes are correct!")
+            logging.info("Run this cell again when the changes are correct!")
 
-    print("")
     print("")
     print("Are the site changes above correct?")
     display(HBox([confirm_button,deny_button])) #<----Display both buttons in an HBox
-    asyncio.create_task(f(sheet_df))
+    asyncio.create_task(f(sheet_df, sites_df))
 
 
 ####################################################    
