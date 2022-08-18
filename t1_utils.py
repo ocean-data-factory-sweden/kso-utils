@@ -202,14 +202,12 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
         if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
             logging.info("Checking if changes can be incorporated to the database")
             
-            print(sites_df.columns)
             # Replace the different values based on site_id
             sites_df.set_index('site_id', inplace=True)
-            sites_df.update(sheet_df.set_index('site_id', inplace=True))
-            sites_df.reset_index(drop=False, inplace=True) 
-            
-            print("sites_df updated")
-            
+            sheet_df.set_index('site_id', inplace=True)
+            sites_df.update(sheet_df)
+            sites_df.reset_index(drop=False, inplace=True)
+
             # Check if the project is the Spyfish Aotearoa
             if project.Project_name == "Spyfish_Aotearoa":
                 # Rename columns to match schema fields
@@ -231,7 +229,7 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
               
             # Save the updated df locally
             sites_df.to_csv(db_info_dict[local_csv], index=False)
-            logging.info("The local csv file has been updated.")
+            logging.info("The local csv file has been updated")
             
             # Save the updated df in the server
             server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
