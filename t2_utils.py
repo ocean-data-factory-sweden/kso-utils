@@ -724,11 +724,11 @@ def confirm_survey(survey_i, db_info_dict: dict):
         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
 
         # Select the specific survey info
-        surveys_df_i = surveys_df[surveys_df["SurveyName"]==survey_i.result.value].reset_index(drop=True)
+        new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_i.result.value].reset_index(drop=True)
 
         print("The details of the selected survey are:")
-        for ind in surveys_df_i.T.index:
-            print(ind,"-->", surveys_df_i.T[0][ind])
+        for ind in new_survey_row.T.index:
+            print(ind,"-->", new_survey_row.T[0][ind])
 
         async def f(new_survey_row):
             x = await t_utils.wait_for_change(correct_button,wrong_button) #<---- Pass both buttons into the function
