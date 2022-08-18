@@ -201,12 +201,12 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
     # TODO: email original csv to project owner before updating the file
 
     if server == "AWS":
-        logging.info("Updating sites.csv in AWS server")
+        logging.info("Updating csv file in AWS server")
         # Update csv to AWS
         upload_file_to_s3(db_info_dict["client"],
         bucket=db_info_dict["bucket"], 
-        key=db_info_dict[orig_csv], 
-        filename=db_info_dict[updated_csv])
+        key=str(db_info_dict[orig_csv]), 
+        filename=str(db_info_dict[updated_csv]))
  
     
     elif server == "SNIC":
@@ -529,8 +529,8 @@ def upload_file_to_s3(client: boto3.client, *, bucket: str, key: str, filename: 
     # Get the size of the file to upload
     file_size = os.stat(filename).st_size
     
-    # prvent issues with small files and tqdm
-    if file_size > 10000:
+    # Prevent issues with small files (<1MB) and tqdm
+    if file_size > 1000000:
         with tqdm(total=file_size, unit="B", unit_scale=True, desc=filename, position=0, leave=True) as pbar:
             client.upload_file(
                 Filename=filename,

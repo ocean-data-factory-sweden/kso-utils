@@ -202,25 +202,26 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
         if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
             logging.info("Checking if changes can be incorporated to the database")
             
+            # Check if the project is the Spyfish Aotearoa
+            if project.Project_name == "Spyfish_Aotearoa":
+                # Rename columns to match schema fields
+                sites_df = spyfish_utils.process_spyfish_sites(sites_df)
+                sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
+        
             # Replace the different values based on site_id
             sites_df.set_index('site_id', inplace=True)
             sheet_df.set_index('site_id', inplace=True)
             sites_df.update(sheet_df)
             sites_df.reset_index(drop=False, inplace=True)
-
-            # Check if the project is the Spyfish Aotearoa
-            if project.Project_name == "Spyfish_Aotearoa":
-                # Rename columns to match schema fields
-                sites_df = spyfish_utils.process_spyfish_sites(sites_df)
-        
-            # Select relevant fields
-            sites_df = sites_df[
+            
+            # Select the basic fields for the db check
+            sites_df_to_db = sites_df[
                 ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
             ]
     
             # Roadblock to prevent empty lat/long/datum/countrycode
             db_utils.test_table(
-                sites_df, "sites", sites_df.columns
+                sites_df_to_db, "sites", sites_df_to_db.columns
             )
 
             # Specify the path of the files to update
