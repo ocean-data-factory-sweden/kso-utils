@@ -1,4 +1,5 @@
 # base imports
+from lib2to3.pytree import convert
 import os
 import cv2
 import pandas as pd
@@ -158,7 +159,7 @@ def get_movie_extensions():
     return movie_formats
 
 
-def check_movie_information(movie_path: str):
+def check_movie_information(movie_path: str, gpu_available: bool = False):
     """
     This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
     it is converted using ffmpeg. 
@@ -171,7 +172,10 @@ def check_movie_information(movie_path: str):
     filename, ext = os.path.splitext(movie_path)
     if not ext.lower() == "mp4":
         logging.info("Extension not supported, conversion started.")
-        new_mov_path = convert_video(movie_path)
+        if gpu_available:
+            new_mov_path = convert_video(movie_path, True)
+        else:
+            new_mov_path = convert_video(movie_path)
 
     # Check frame rate
     cap = cv2.VideoCapture(movie_path)
@@ -179,24 +183,33 @@ def check_movie_information(movie_path: str):
 
     if not float(fps).is_integer():
         logging.info("Variable frame rate not supported, conversion started.")
-        new_mov_path = convert_video(movie_path)
+        if gpu_available:
+            new_mov_path = convert_video(movie_path, True)
+        else:
+            new_mov_path = convert_video(movie_path)
 
     # Check codec information
     h = int(cap.get(cv2.CAP_PROP_FOURCC))
     codec = chr(h&0xff) + chr((h>>8)&0xff) + chr((h>>16)&0xff) + chr((h>>24)&0xff)
     if not codec == "h264":
         logging.info("Non-h264 codecs not supported, conversion started.")
-        new_mov_path = convert_video(movie_path)
+        if gpu_available:
+            new_mov_path = convert_video(movie_path, True)
+        else:
+            new_mov_path = convert_video(movie_path)
 
     # Check movie filesize
     size = os.path.getsize(movie_path)
     sizeGB = size/(1024*1024*1024)
     if sizeGB > 5:
         logging.info("File sizes above 5GB are not currently supported, conversion started.")
-        new_mov_path = convert_video(movie_path)
+        if gpu_available:
+            new_mov_path = convert_video(movie_path, True)
+        else:
+            new_mov_path = convert_video(movie_path)
            
 
-def convert_video(movie_path: str, gpu_available: bool):
+def convert_video(movie_path: str, gpu_available: bool = False):
     """
     It takes a movie file path and a boolean indicating whether a GPU is available, and returns a new
     movie file path.
