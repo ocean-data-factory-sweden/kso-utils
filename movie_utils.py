@@ -5,15 +5,15 @@ import pandas as pd
 from tqdm import tqdm
 import difflib
 import logging
+import subprocess
 
 # util imports
 import kso_utils.server_utils as server_utils
 import kso_utils.project_utils as project_utils
 
 # Logging
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 # Calculate length and fps of a movie
 def get_length(video_file: str, movie_folder: str):
@@ -157,6 +157,84 @@ def get_movie_extensions():
     movie_formats = tuple(['wmv', 'mpg', 'mov', 'avi', 'mp4', 'MOV', 'MP4'])
     return movie_formats
 
+
+def check_movie_information(movie_path: str):
+    """
+    This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
+    it is converted using ffmpeg. 
+    
+    :param movie_path: the path to the movie file
+    :type movie_path: str
+    """
+
+    # Check movie format
+    filename, ext = os.path.splitext(movie_path)
+    if not ext.lower() == "mp4":
+        logging.info("Extension not supported, conversion started.")
+        new_mov_path = convert_video(movie_path)
+
+    # Check frame rate
+    cap = cv2.VideoCapture(movie_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    if not float(fps).is_integer():
+        logging.info("Variable frame rate not supported, conversion started.")
+        new_mov_path = convert_video(movie_path)
+
+    # Check codec information
+    h = int(cap.get(cv2.CAP_PROP_FOURCC))
+    codec = chr(h&0xff) + chr((h>>8)&0xff) + chr((h>>16)&0xff) + chr((h>>24)&0xff)
+    if not codec == "h264":
+        logging.info("Non-h264 codecs not supported, conversion started.")
+        new_mov_path = convert_video(movie_path)
+
+    # Check movie filesize
+    size = os.path.getsize(movie_path)
+    sizeGB = size/(1024*1024*1024)
+    if sizeGB > 5:
+        logging.info("File sizes above 5GB are not currently supported, conversion started.")
+        new_mov_path = convert_video(movie_path)
+           
+
+def convert_video(movie_path: str, gpu_available: bool):
+    """
+    It takes a movie file path and a boolean indicating whether a GPU is available, and returns a new
+    movie file path.
+    
+    :param movie_path: The path to the movie file you want to convert
+    :type movie_path: str
+    :param gpu_available: Boolean, whether or not a GPU is available
+    :type gpu_available: bool
+    :return: The path to the converted video file.
+    """
+
+    movie_fpath = os.path.dirname(movie_path)
+    movie_filename = os.path.basename(movie_path)
+    conv_filename = "conv_" + movie_filename
+    conv_fpath = os.path.join(movie_fpath, conv_filename)
+
+    if gpu_available:
+        subprocess.call(["ffmpeg",
+                    "-hwaccel", "cuda",
+                    "-hwaccel_output_format", "cuda", 
+                    "-i", str(movie_path), 
+                    "-c:v", "h264_nvenc", # ensures correct codec
+                    "-an", #removes the audio
+                    "-crf", "22", # compresses the video
+                    str(conv_fpath)])
+    else:
+        subprocess.call(["ffmpeg", 
+                    "-i", str(movie_path), 
+                    "-c:v", "h264", # ensures correct codec
+                    "-an", #removes the audio
+                    "-crf", "22", # compresses the video
+                    str(conv_fpath)])
+
+    # Ensure open permissions on file (for now)
+    os.chmod(conv_fpath, 0o777)
+    # TODO (Jannes): Remove original file once satisfied with transformations
+    logging.info("Movie file successfully converted and stored.")
+    return conv_fpath
 
 
     
