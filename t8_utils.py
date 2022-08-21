@@ -35,6 +35,11 @@ def choose_agg_parameters(subject_type: str):
     :param subject_type: The type of subject you are aggregating. This can be either "frame" or "video"
     :type subject_type: str
     :return: the values of the sliders.
+        Aggregation threshold: (0-1) Minimum proportion of citizen scientists that agree in their classification of the clip/frame.
+        Min numbers of users: Minimum number of citizen scientists that need to classify the clip/frame.
+        Object threshold (0-1): Minimum proportion of citizen scientists that agree that there is at least one object in the frame.
+        IOU Epsilon (0-1): Minimum area of overlap among the classifications provided by the citizen scientists so that they will be considered to be in the same cluster.
+        Inter user agreement (0-1):  The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.
     """
     agg_users = widgets.FloatSlider(
         value=0.8,
