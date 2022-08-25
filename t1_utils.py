@@ -29,100 +29,60 @@ logger = logging.getLogger(__name__)
 
 out_df = pd.DataFrame()
 
+
 ####################################################    
-############### SITES FUNCTIONS ###################
+############ CSV/iPysheet FUNCTIONS ################
 ####################################################
-def map_site(db_info_dict: dict, project: project_utils.Project):
+
+def select_sheet_range(db_initial_info: dict, orig_csv: str):
     """
-    > This function takes a dictionary of database information and a project object as input, and
-    returns a map of the sites in the database
-    
-    :param db_info_dict: a dictionary containing the information needed to connect to the database
-    :type db_info_dict: dict
-    :param project: The project object
-    :return: A map with all the sites plotted on it.
-    """
-    if project.server == "SNIC":
-      # Set initial location to Gothenburg 
-      init_location = [57.708870, 11.974560]
-    
-    else:
-      # Set initial location to Taranaki
-      init_location = [-39.296109, 174.063916]
-
-    # Create the initial kso map
-    kso_map = folium.Map(location=init_location,width=900,height=600)
-
-    # Read the csv file with site information
-    sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
-
-    # Combine information of interest into a list to display for each site
-    sites_df["site_info"] = sites_df.values.tolist()
-
-    # Save the names of the columns
-    df_cols = sites_df.columns
-
-    # Add each site to the map 
-    sites_df.apply(lambda row:folium.CircleMarker(location=[row[df_cols.str.contains("Latitude")], 
-                                                            row[df_cols.str.contains("Longitude")]], 
-                                                            radius = 14, popup=row["site_info"], 
-                                                            tooltip=row[df_cols.str.contains("siteName", 
-                                                            case=False)]).add_to(kso_map), axis=1)
-
-    # Add a minimap to the corner for reference
-    kso_map = kso_map.add_child(MiniMap())
-    
-    # Return the map
-    return kso_map
-
-
-def select_sites_range(db_initial_info: dict):
-    """
-    > This function loads the sites csv file into a pandas dataframe and enables users to pick a range of sites(rows) to display
+    > This function loads the csv file of interest into a pandas dataframe and enables users to pick a range of (rows) to display
     
     :param db_initial_info: a dictionary with the following keys:
+    :param orig_csv: the original csv file name
+    :type orig_csv: str
     :return: A dataframe with the sites information
     """
     
-    # Load the csv with sites information
-    sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
+    # Load the csv with the information of interest
+    df = pd.read_csv(db_initial_info[orig_csv])
     
-    sites_range = widgets.SelectionRangeSlider(
-                          options=range(0, len(sites_df.index)+1),
-                          index=(0,len(sites_df. index)),
-                          description='Sites to display',
+    df_range = widgets.SelectionRangeSlider(
+                          options=range(0, len(df.index)+1),
+                          index=(0,len(df. index)),
+                          description='Rows to display',
                           orientation='horizontal',
                           layout=Layout(width='90%', padding='35px'),
                           style = {'description_width': 'initial'}
                           )
 
-    display(sites_range)
+    display(df_range)
 
-    return sites_df, sites_range                   
+    return df, df_range                   
 
-def open_sites_csv(sites_df: pd.DataFrame, sites_range: widgets.Widget):
+def open_csv(df: pd.DataFrame, df_range: widgets.Widget):
     """
-    > This function loads the sites dataframe, filters the range of sites selected and then loads the dataframe into
+    > This function loads the dataframe with the information of interest, filters the range of rows selected and then loads the dataframe into
     an ipysheet
     
-    :param sites_df: a pandas dataframe of the sites information:
-    :param sites_range: the range widget selection :
-    :return: A dataframe with the sites information
+    :param df: a pandas dataframe of the information of interest:
+    :param df_range: the range widget selection :
+    :return: A (subset) dataframe with the information of interest and the same data in an interactive sheet
     """
     # Extract the first and last row to display
-    sites_start = int(sites_range.label[0])
-    sites_end = int(sites_range.label[1])
+    range_start = int(df_range.label[0])
+    range_end = int(df_range.label[1])
 
     # Display the range of sites selected
-    logging.info("Displaying sites #", sites_start, "to #", sites_end)
+    logging.info("Displaying #", range_start, "to #", range_end)
     
     # Filter the dataframe based on the selection
-    sites_df_filtered = sites_df.filter(items = range(sites_start, sites_end), axis=0)
+    df_filtered = df.filter(items = range(range_start, range_end), axis=0)
 
     # Load the df as ipysheet
-    sheet = ipysheet.from_dataframe(sites_df_filtered)
+    sheet = ipysheet.from_dataframe(df_filtered)
 
-    return sites_df_filtered, sheet
+    return df_filtered, sheet
     
     
 def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtered: pd.DataFrame):
@@ -170,6 +130,52 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtere
         highlight_changes = df_final.style.apply(highlight_diff, axis=None)
 
         return highlight_changes, sheet_df
+
+####################################################    
+############### SITES FUNCTIONS ###################
+####################################################
+def map_site(db_info_dict: dict, project: project_utils.Project):
+    """
+    > This function takes a dictionary of database information and a project object as input, and
+    returns a map of the sites in the database
+    
+    :param db_info_dict: a dictionary containing the information needed to connect to the database
+    :type db_info_dict: dict
+    :param project: The project object
+    :return: A map with all the sites plotted on it.
+    """
+    if project.server == "SNIC":
+      # Set initial location to Gothenburg 
+      init_location = [57.708870, 11.974560]
+    
+    else:
+      # Set initial location to Taranaki
+      init_location = [-39.296109, 174.063916]
+
+    # Create the initial kso map
+    kso_map = folium.Map(location=init_location,width=900,height=600)
+
+    # Read the csv file with site information
+    sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+
+    # Combine information of interest into a list to display for each site
+    sites_df["site_info"] = sites_df.values.tolist()
+
+    # Save the names of the columns
+    df_cols = sites_df.columns
+
+    # Add each site to the map 
+    sites_df.apply(lambda row:folium.CircleMarker(location=[row[df_cols.str.contains("Latitude")], 
+                                                            row[df_cols.str.contains("Longitude")]], 
+                                                            radius = 14, popup=row["site_info"], 
+                                                            tooltip=row[df_cols.str.contains("siteName", 
+                                                            case=False)]).add_to(kso_map), axis=1)
+
+    # Add a minimap to the corner for reference
+    kso_map = kso_map.add_child(MiniMap())
+    
+    # Return the map
+    return kso_map
 
 def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, sites_df: pd.DataFrame):
     """
@@ -256,7 +262,7 @@ def choose_movie_review():
     :return: The widget is being returned.
     """
     choose_movie_review_widget = widgets.RadioButtons(
-          options=["Basic: Check for empty cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
+          options=["Basic: Automatic check of empty cells and manual check of incorrect cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
           description='What method you want to use to review the movies:',
           disabled=False,
           layout=Layout(width='95%'),
@@ -278,10 +284,13 @@ def check_movies_csv(db_initial_info: dict, project: project_utils.Project, revi
     movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
     
     if review_method.value.startswith("Basic"):
-      check_empty_movies_csv(db_initial_info, project, movies_df)
+      basic_check_movies(db_initial_info, project, movies_df)
+    
+    else:
+      advanced_check_movies(db_initial_info, project, movies_df)
 
 
-def check_empty_movies_csv(db_initial_info: dict, project: project_utils.Project, movies_df: pd.DataFrame):
+def basic_check_movies(db_initial_info: dict, project: project_utils.Project, movies_df: pd.DataFrame):
     """
     It checks if the movies.csv is empty, if it is, it displays the movies.csv as an ipysheet and asks
     the user to fill it up
