@@ -198,7 +198,7 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
     """
     server = project.server
     
-    # TODO: email original csv to project owner before updating the file
+    # TODO: add changes in a log file
 
     if server == "AWS":
         logging.info("Updating csv file in AWS server")
@@ -210,6 +210,10 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
  
     
     elif server == "SNIC":
+        # print("Updating sites.csv in SNIC server")
+        logging.info("Work in progress")
+
+    else:
         # print("Updating sites.csv in SNIC server")
         logging.info("Work in progress")
       

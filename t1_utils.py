@@ -85,7 +85,7 @@ def open_csv(df: pd.DataFrame, df_range: widgets.Widget):
     return df_filtered, sheet
     
     
-def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtered: pd.DataFrame):
+def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
     """
     It takes the dataframe from the ipysheet and compares it to the dataframe from the local csv file.
     If there are any differences, it highlights them and returns the dataframe with the changes
@@ -100,23 +100,23 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtere
     # Convert ipysheet to pandas
     sheet_df = ipysheet.to_dataframe(isheet)
     
-    # Check the differences between the spreadsheet and sites_csv
-    sheet_diff_df = pd.concat([sites_df_filtered , sheet_df]).drop_duplicates(keep=False)
+    # Check the differences between the modified and original spreadsheets
+    sheet_diff_df = pd.concat([df_filtered, sheet_df]).drop_duplicates(keep=False)
     
     # If changes in dataframes display them and ask the user to confirm them
     if sheet_diff_df.empty:
         logging.error("There are no changes to update")
         raise
     else:
-        # Retieve the column name of the site_id
-        site_id_col = [col for col in sites_df_filtered.columns if 'site_id' in col][0]
+        # Retieve the column name of the id of interest (Sites, movies,..)
+        id_col = [col for col in df_filtered.columns if '_id' in col][0]
         
         # Concatenate DataFrames and distinguish each frame with the keys parameter
-        df_all = pd.concat([sites_df_filtered.set_index(site_id_col), sheet_df.set_index(site_id_col)],
+        df_all = pd.concat([df_filtered.set_index(id_col), sheet_df.set_index(id_col)],
             axis='columns', keys=['Origin', 'Update'])
         
         # Rearrange columns to have them next to each other
-        df_final = df_all.swaplevel(axis='columns')[sites_df_filtered.columns[1:]]
+        df_final = df_all.swaplevel(axis='columns')[df_filtered.columns[1:]]
         
 
         # Create a function to highlight the changes
@@ -130,6 +130,94 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, sites_df_filtere
         highlight_changes = df_final.style.apply(highlight_diff, axis=None)
 
         return highlight_changes, sheet_df
+
+def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, df: pd.DataFrame, local_csv: str, serv_csv: str):
+    """
+    This function is used to update the csv files locally and in the server
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param project: The project object
+    :param sheet_df: The dataframe of the sheet you want to update
+    :param df: a pandas dataframe of the information of interest
+    :param local_csv: a string of the names of the local csv to update
+    :param serv_csv: a string of the names of the server csv to update
+    """
+    # Create button to confirm changes
+    confirm_button = widgets.Button(
+      description = 'Yes, details are correct',
+      layout=Layout(width='25%'),
+      style = {'description_width': 'initial'},
+      button_style='danger'
+      )
+
+    # Create button to deny changes
+    deny_button = widgets.Button(
+        description = 'No, I will go back and fix them',
+        layout=Layout(width='45%'),
+        style = {'description_width': 'initial'}, 
+        button_style='danger'
+    )
+
+    # Save changes in survey csv locally and in the server
+    async def f(sheet_df, df):
+        x = await t_utils.wait_for_change(confirm_button,deny_button) #<---- Pass both buttons into the function
+        if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
+            logging.info("Checking if changes can be incorporated to the database")
+            
+            if 'sites' in local_csv:
+                csv_i = "sites"
+            if 'movies' in local_csv:
+                csv_i = "movies"
+            if 'species' in local_csv:
+                csv_i = "species"
+                
+            # Retieve the column name of the id of interest (Sites, movies,..)
+            id_col = [col for col in df.columns if '_id' in col][0]
+                
+            if csv_i=="sites":
+              # Check if the project is the Spyfish Aotearoa
+              if project.Project_name == "Spyfish_Aotearoa":
+                  # Rename columns to match schema fields
+                  df = spyfish_utils.process_spyfish_sites(df)
+                  sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
+        
+            # Replace the different values based on id
+            df.set_index(id_col, inplace=True)
+            sheet_df.set_index(id_col, inplace=True)
+            df.update(sheet_df)
+            df.reset_index(drop=False, inplace=True)
+            
+            # Retrieve the names of the basic columns in the sql db
+            conn = db_utils.create_connection(db_info_dict["db_path"])
+            data = conn.execute(f"SELECT * FROM {csv_i}")
+            field_names = [i[0] for i in data.description]
+            
+            # Select the basic fields for the db check
+            df_to_db = df[
+                [c for c in df.columns if c in field_names]
+            ]
+    
+            # Roadblock to prevent empty lat/long/datum/countrycode
+            db_utils.test_table(
+                df_to_db, csv_i, df_to_db.columns
+            )
+              
+            # Save the updated df locally
+            df.to_csv(db_info_dict[local_csv], index=False)
+            logging.info("The local csv file has been updated")
+            
+            # Save the updated df in the server
+            server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
+            logging.info("The csv file in the server has been updated")
+            
+        else:
+            logging.info("Run this cell again when the changes are correct!")
+
+    print("")
+    print("Are the changes above correct?")
+    display(HBox([confirm_button,deny_button])) #<----Display both buttons in an HBox
+    asyncio.create_task(f(sheet_df, df))
+
 
 ####################################################    
 ############### SITES FUNCTIONS ###################
@@ -176,80 +264,6 @@ def map_site(db_info_dict: dict, project: project_utils.Project):
     
     # Return the map
     return kso_map
-
-def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.DataFrame, sites_df: pd.DataFrame):
-    """
-    This function is used to update the csv files locally and in the server
-    
-    :param db_info_dict: The dictionary containing the database information
-    :param project: The project object
-    :param sheet_df: The dataframe of the sheet you want to update
-    :param sites_df: a pandas dataframe of the sites information
-    """
-    # Create button to confirm changes
-    confirm_button = widgets.Button(
-      description = 'Yes, details are correct',
-      layout=Layout(width='25%'),
-      style = {'description_width': 'initial'},
-      button_style='danger'
-      )
-
-    # Create button to deny changes
-    deny_button = widgets.Button(
-        description = 'No, I will go back and fix them',
-        layout=Layout(width='45%'),
-        style = {'description_width': 'initial'}, 
-        button_style='danger'
-    )
-
-    # Save changes in survey csv locally and in the server
-    async def f(sheet_df, sites_df):
-        x = await t_utils.wait_for_change(confirm_button,deny_button) #<---- Pass both buttons into the function
-        if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
-            logging.info("Checking if changes can be incorporated to the database")
-            
-            # Check if the project is the Spyfish Aotearoa
-            if project.Project_name == "Spyfish_Aotearoa":
-                # Rename columns to match schema fields
-                sites_df = spyfish_utils.process_spyfish_sites(sites_df)
-                sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
-        
-            # Replace the different values based on site_id
-            sites_df.set_index('site_id', inplace=True)
-            sheet_df.set_index('site_id', inplace=True)
-            sites_df.update(sheet_df)
-            sites_df.reset_index(drop=False, inplace=True)
-            
-            # Select the basic fields for the db check
-            sites_df_to_db = sites_df[
-                ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
-            ]
-    
-            # Roadblock to prevent empty lat/long/datum/countrycode
-            db_utils.test_table(
-                sites_df_to_db, "sites", sites_df_to_db.columns
-            )
-
-            # Specify the path of the files to update
-            local_csv = "local_sites_csv"
-            serv_csv = "server_sites_csv"
-              
-            # Save the updated df locally
-            sites_df.to_csv(db_info_dict[local_csv], index=False)
-            logging.info("The local csv file has been updated")
-            
-            # Save the updated df in the server
-            server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
-            logging.info("The csv file in the server has been updated")
-            
-        else:
-            logging.info("Run this cell again when the changes are correct!")
-
-    print("")
-    print("Are the site changes above correct?")
-    display(HBox([confirm_button,deny_button])) #<----Display both buttons in an HBox
-    asyncio.create_task(f(sheet_df, sites_df))
-
 
 ####################################################    
 ############### MOVIES FUNCTIONS ###################
@@ -536,8 +550,36 @@ def update_new_deployments(deployment_selected: widgets.Widget, db_info_dict: di
                                     key=movie_i,
                                    )
 
+#############
+#####Species#####
+#################
+def check_species_csv(db_initial_info: dict, project: project_utils.Project):
+    """
+    > The function `check_species_csv` loads the csv with species information and checks if it is empty
+    
+    :param db_initial_info: a dictionary with the following keys:
+    :param project: The project name
+    """
+    # Load the csv with movies information
+    species_df = pd.read_csv(db_initial_info["local_species_csv"])
 
-        
+    # Retrieve the names of the basic columns in the sql db
+    conn = db_utils.create_connection(db_initial_info["db_path"])
+    data = conn.execute(f"SELECT * FROM species")
+    field_names = [i[0] for i in data.description]
+
+    # Select the basic fields for the db check
+    df_to_db = species_df[
+        [c for c in species_df.columns if c in field_names]
+    ]
+
+    # Roadblock to prevent empty lat/long/datum/countrycode
+    db_utils.test_table(
+        df_to_db, "species", df_to_db.columns
+    )
+
+    logging.info("The species dataframe is complete")
+#           
         
 # def upload_movies():
     
