@@ -9,6 +9,7 @@ import pandas as pd
 import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.sgu_utils as sgu_utils
+import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig(level=logging.WARNING)
@@ -17,8 +18,10 @@ logger.setLevel(logging.DEBUG)
 
 # Utility functions for common database operations
 
-# Initiate the database
 def init_db(db_path: str):
+    """Initiate a new database for the project
+    :param db_path: path of the database file
+    """
     
     # Delete previous database versions if exists
     if os.path.exists(db_path):
@@ -154,6 +157,183 @@ def get_id(row: int, field_name: str, table_name: str, conn: sqlite3.Connection,
     return id_value
 
 
+def get_column_names_db(db_info_dict: pd.DataFrame, table_i: str):
+    """
+    > This function returns the "column" names of the sql table of interest
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param table_i: a string of the name of the table of interest
+    :return: A list of column names of the table of interest
+    """
+    # Connect to the db
+    conn = create_connection(db_info_dict["db_path"])
+
+    # Get the data of the table of interest
+    data = conn.execute(f"SELECT * FROM {table_i}")
+
+    # Get the names of the columns inside the table of interest
+    field_names = [i[0] for i in data.description]
+
+    return field_names
+
+
+def process_test_csv(db_info_dict: dict, project: project_utils.Project, local_csv: str):
+    """
+    > This function process a csv of interest and tests for compatibility with the respective sql table of interest 
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param project: The project object
+    :param local_csv: a string of the names of the local csv to populate from
+    :return a string of the category of interest and the processed dataframe
+    """
+    # Load the csv with the information of interest
+    df = pd.read_csv(db_info_dict[local_csv])
+    
+    # Save the category of interest and process the df
+    if 'sites' in local_csv:
+        csv_i, df = process_sites_df(db_info_dict, df, project)
+
+    if 'movies' in local_csv:
+        csv_i, df = process_movies_df(db_info_dict, df, project)
+
+    if 'species' in local_csv:
+        csv_i, df = process_species_df(db_info_dict, df, project)
+
+    if 'photos' in local_csv:
+        csv_i, df = process_photos_df(db_info_dict, df, project) 
+        
+    # Retrieve the names of the basic columns in the sql db
+    field_names = get_column_names_db(db_info_dict, csv_i)
+    
+    # Select relevant fields
+    df = df[
+        [c for c in df.columns if c in field_names]
+    ]
+    
+    # Roadblock to prevent empty rows
+    test_table(
+        df, csv_i, df.columns
+    )
+    
+    return csv_i, df
+
+
+def populate_db(db_initial_info: dict, project: project_utils.Project, local_csv: str):
+    """
+    > This function populates a sql table of interest based on the info from the respective csv 
+    
+    :param db_initial_info: The dictionary containing the initial database information
+    :param project: The project object
+    :param local_csv: a string of the names of the local csv to populate from
+    """
+    
+    # Process the csv of interest and tests for compatibility with sql table 
+    csv_i, df = process_test_csv(db_info_dict = db_initial_info, 
+                                 project = project,
+                                 local_csv = local_csv)
+    
+    # Add values of the processed csv to the sql table of interest
+    add_to_table(
+        db_initial_info["db_path"], csv_i, [tuple(i) for i in df.values], len(df.columns)
+    )
+
+
+def process_sites_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
+    """
+    > This function processes the sites dataframe and returns a string with the category of interest 
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Rename columns to match schema fields
+        df = spyfish_utils.process_spyfish_sites(df)
+
+    # Specify the category of interest
+    csv_i = "sites"
+
+    return csv_i, df
+
+
+def process_movies_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
+    """
+    > This function processes the movies dataframe and returns a string with the category of interest 
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        df = spyfish_utils.process_spyfish_movies(df)
+        
+    # Check if the project is the KSO
+    if project.Project_name == "Koster_Seafloor_Obs":
+        df = koster_utils.process_koster_movies_csv(df)
+    
+    # Connect to database
+    conn = create_connection(db_info_dict["db_path"])
+    
+    # Reference movies with their respective sites
+    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
+    sites_df = sites_df.rename(columns={"id": "Site_id"})
+
+    # Merge movies and sites dfs
+    df = pd.merge(
+        df, sites_df, how="left", on="siteName"
+    )
+    
+    # Select only those fields of interest
+    if "Fpath" not in df.columns:
+        df["Fpath"] = df["filename"]
+
+    # Specify the category of interest
+    csv_i = "movies"
+
+    return csv_i, df
+
+
+def process_photos_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
+    """
+    > This function processes the photos dataframe and returns a string with the category of interest 
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+    # Check if the project is the SGU
+    if project.Project_name == "SGU":
+        df = sgu_utils.process_sgu_photos_csv(db_info_dict)
+
+    # Specify the category of interest
+    csv_i = "photos"
+
+    return csv_i, df
+
+
+def process_species_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
+    """
+    > This function processes the species dataframe and returns a string with the category of interest 
+    
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Specify the category of interest
+    csv_i = "species"
+
+    return csv_i, df
+
+
 def find_duplicated_clips(conn: sqlite3.Connection):
 
     # Retrieve the information of all the clips uploaded
@@ -177,122 +357,3 @@ def find_duplicated_clips(conn: sqlite3.Connection):
     )
 
     return times_uploaded_df["times"].value_counts()
-
-# ## Populate sites, movies and species
-
-def add_sites(db_initial_info: dict, project_name: str, db_path: str):
-    # Load the csv with sites information
-    sites_df = pd.read_csv(db_initial_info["local_sites_csv"])
-    
-    # Check if the project is the Spyfish Aotearoa
-    if project_name == "Spyfish_Aotearoa":
-        # Rename columns to match schema fields
-        sites_df = spyfish_utils.process_spyfish_sites(sites_df)
-        
-    # Select relevant fields
-    sites_df = sites_df[
-        ["site_id", "siteName", "decimalLatitude", "decimalLongitude", "geodeticDatum", "countryCode"]
-    ]
-    
-    # Roadblock to prevent empty lat/long/datum/countrycode
-    test_table(
-        sites_df, "sites", sites_df.columns
-    )
-
-    # Add values to sites table
-    add_to_table(
-        db_path, "sites", [tuple(i) for i in sites_df.values], 6
-    )
-
-
-def add_movies(db_initial_info: dict, project_name: str, db_path: str):
-
-    # Load the csv with movies information
-    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
-    
-    # Check if the project is the Spyfish Aotearoa
-    if project_name == "Spyfish_Aotearoa":
-        movies_df = spyfish_utils.process_spyfish_movies(movies_df)
-        
-    # Check if the project is the KSO
-    if project_name == "Koster_Seafloor_Obs":
-        movies_df = koster_utils.process_koster_movies_csv(movies_df)
-    
-    # Connect to database
-    conn = create_connection(db_path)
-    
-    # Reference movies with their respective sites
-    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
-    sites_df = sites_df.rename(columns={"id": "Site_id"})
-
-    # Merge movies and sites dfs
-    movies_df = pd.merge(
-        movies_df, sites_df, how="left", on="siteName"
-    )
-    
-    # Select only those fields of interest
-    if "Fpath" not in movies_df.columns:
-        movies_df["Fpath"] = movies_df["filename"]
-        
-    movies_db = movies_df[
-        ["movie_id", "filename", "created_on", "fps", "duration",
-         "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
-    ]
-
-    # Roadblock to prevent empty information
-    test_table(
-        movies_db, "movies", movies_db.columns
-    )
-    
-    # Add values to movies table
-    add_to_table(
-        db_path, "movies", [tuple(i) for i in movies_db.values], 10
-    )
-
-def add_photos(db_initial_info: dict, project_name: str, db_path: str):
-
-    # Load the csv with photos information
-    photos_df = pd.read_csv(db_initial_info["local_photos_csv"])
-    
-    
-    # Check if the project is the KSO
-    if project_name == "SGU":
-        photos_df = sgu_utils.process_sgu_photos_csv(db_initial_info)
-        
-    # Select relevant fields
-    photos_df = photos_df[
-        ["ID", "filename", "created_on", "site_id", "fpath"]
-    ]
-    
-    # Roadblock to prevent empty columns
-    test_table(
-        photos_df, "photos", photos_df.columns
-    ) 
-
-    # Add values to sites table
-    add_to_table(
-        db_path, "photos", [tuple(i) for i in photos_df.values], 5
-    )
-
-
-def add_species(db_initial_info: dict, project_name: str, db_path: str):
-
-    # Load the csv with species information
-    species_df = pd.read_csv(db_initial_info["local_species_csv"])
-    
-    # Select relevant fields
-    species_df = species_df[
-        ["species_id", "commonName", "scientificName", "taxonRank", "kingdom"]
-    ]
-    
-    # Roadblock to prevent empty information
-    test_table(
-        species_df, "species", species_df.columns
-    )
-    
-    # Add values to species table
-    add_to_table(
-        db_path, "species", [tuple(i) for i in species_df.values], 5
-    )
-
-

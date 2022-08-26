@@ -159,49 +159,25 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
     )
 
     # Save changes in survey csv locally and in the server
-    async def f(sheet_df, df):
+    async def f(sheet_df, df, local_csv, serv_csv):
         x = await t_utils.wait_for_change(confirm_button,deny_button) #<---- Pass both buttons into the function
         if x == "Yes, details are correct": #<--- use if statement to trigger different events for the two buttons
             logging.info("Checking if changes can be incorporated to the database")
             
-            if 'sites' in local_csv:
-                csv_i = "sites"
-            if 'movies' in local_csv:
-                csv_i = "movies"
-            if 'species' in local_csv:
-                csv_i = "species"
-                
             # Retieve the column name of the id of interest (Sites, movies,..)
             id_col = [col for col in df.columns if '_id' in col][0]
-                
-            if csv_i=="sites":
-              # Check if the project is the Spyfish Aotearoa
-              if project.Project_name == "Spyfish_Aotearoa":
-                  # Rename columns to match schema fields
-                  df = spyfish_utils.process_spyfish_sites(df)
-                  sheet_df = spyfish_utils.process_spyfish_sites(sheet_df)
-        
+            
             # Replace the different values based on id
             df.set_index(id_col, inplace=True)
             sheet_df.set_index(id_col, inplace=True)
             df.update(sheet_df)
             df.reset_index(drop=False, inplace=True)
             
-            # Retrieve the names of the basic columns in the sql db
-            conn = db_utils.create_connection(db_info_dict["db_path"])
-            data = conn.execute(f"SELECT * FROM {csv_i}")
-            field_names = [i[0] for i in data.description]
+            # Process the csv of interest and tests for compatibility with sql table 
+            csv_i, df_to_db = db_utils.process_test_csv(db_info_dict= db_info_dict, 
+                                                        project = project,
+                                                        local_csv = local_csv)
             
-            # Select the basic fields for the db check
-            df_to_db = df[
-                [c for c in df.columns if c in field_names]
-            ]
-    
-            # Roadblock to prevent empty lat/long/datum/countrycode
-            db_utils.test_table(
-                df_to_db, csv_i, df_to_db.columns
-            )
-              
             # Save the updated df locally
             df.to_csv(db_info_dict[local_csv], index=False)
             logging.info("The local csv file has been updated")
@@ -216,7 +192,7 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
     print("")
     print("Are the changes above correct?")
     display(HBox([confirm_button,deny_button])) #<----Display both buttons in an HBox
-    asyncio.create_task(f(sheet_df, df))
+    asyncio.create_task(f(sheet_df, df, local_csv, serv_csv))
 
 
 ####################################################    

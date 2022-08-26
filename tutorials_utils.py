@@ -97,17 +97,13 @@ def get_project_details(project: project_utils.Project):
     :param project: the project object
     """
     
-    # Get the project-specific name of the database
-    db_path = project.db_path
-    project_name = project.Project_name
-    
     # Connect to the server (or folder) hosting the csv files
     server_i_dict = server_utils.connect_to_server(project)
     
     # Get the initial info
     db_initial_info = server_utils.get_db_init_info(project, server_i_dict)
     
-    return db_path, project_name, server_i_dict, db_initial_info
+    return server_i_dict, db_initial_info
 
 def initiate_db(project: project_utils.Project):
     """
@@ -124,32 +120,27 @@ def initiate_db(project: project_utils.Project):
     """
     
     # Get project specific info
-    db_path, project_name, server_i_dict, db_initial_info = get_project_details(project)
+    server_i_dict, db_initial_info = get_project_details(project)
     
     # Initiate the sql db
-    db_utils.init_db(db_path)
+    db_utils.init_db(db_initial_info["db_path"])
     
-    # Populate the sites info
-    if "local_sites_csv" in db_initial_info.keys():
-        db_utils.add_sites(db_initial_info, project_name, db_path)
+    # List the csv files of interest
+    list_of_init_csv = ["local_sites_csv",
+                        "local_movies_csv",
+                        "local_photos_csv",
+                        "local_species_csv"
+                       ]
     
-    # Populate the movies info
-    if "local_movies_csv" in db_initial_info.keys():
-        db_utils.add_movies(db_initial_info, project_name, db_path)
-        
-    # Populate the photos info
-    if "local_photos_csv" in db_initial_info.keys():
-        db_utils.add_photos(db_initial_info, project_name, db_path)
-    
-    # Populate the species info
-    if "local_species_csv" in db_initial_info.keys():
-        db_utils.add_species(db_initial_info, project_name, db_path)
+    # Populate the sites, movies, photos, info
+    for local_i_csv in list_of_init_csv:
+        if local_i_csv in db_initial_info.keys():
+            db_utils.populate_db(db_initial_info = db_initial_info,
+                                 project = project, 
+                                 local_csv = local_i_csv)
     
     # Combine server/project info in a dictionary
     db_info_dict = {**db_initial_info, **server_i_dict}
-    
-    # Add project-specific db_path
-    db_info_dict["db_path"] = db_path
     
     return db_info_dict
 

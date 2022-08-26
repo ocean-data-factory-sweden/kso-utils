@@ -209,15 +209,11 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
         filename=str(db_info_dict[updated_csv]))
  
     
-    elif server == "SNIC":
-        # print("Updating sites.csv in SNIC server")
-        logging.info("Work in progress")
-
     else:
         # print("Updating sites.csv in SNIC server")
         logging.info("Work in progress")
-      
 
+        
 def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict: dict):
     """
     This function uses the project information and the database information, and returns a dataframe with the
