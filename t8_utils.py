@@ -760,7 +760,7 @@ def draw_annotations_in_frame(im: PILImage.Image, class_df_subject: pd.DataFrame
     return im
 
 
-def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
+def view_subject(subject_id: int, class_df: pd.DataFrame, subject_type: str):
     """
     It takes a subject id, a dataframe containing the annotations for that subject, and the type of
     subject (clip or frame) and returns an HTML object that can be displayed in a notebook
@@ -811,7 +811,10 @@ def view_subject(subject_id: int,  class_df: pd.DataFrame, subject_type: str):
             im = draw_annotations_in_frame(im, class_df_subject)
         
         # Remove previous temp image if exist
-        temp_image_path = "temp.jpg"
+        if os.access('.', os.W_OK):
+            temp_image_path = "temp.jpg"
+        else:
+            temp_image_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/temp.jpg"
         
         if os.path.exists(temp_image_path):
             os.remove(temp_image_path)
