@@ -460,23 +460,23 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         new_rows = []
         
         if agg_labels_df["frame_number"].isnull().all():
-            group_cols = ["filename", "label"]
+            group_cols = ["subject_ids", "label"]
         else:
-            group_cols = ["filename", "label", "frame_number"]
+            group_cols = ["subject_ids", "label", "frame_number"]
         
         for name, group in agg_labels_df.groupby(group_cols):
             if "frame_number" in group_cols:
-                filename, label, start_frame = name
+                subj_id, label, start_frame = name
                 total_users = agg_labels_df[
-                    (agg_labels_df.filename == filename)
+                    (agg_labels_df.subject_ids == subj_id)
                     & (agg_labels_df.label == label)
                     & (agg_labels_df.frame_number == start_frame)
                 ]["user_name"].nunique()
             else:
-                filename, label = name
+                subj_id, label = name
                 start_frame = np.nan
                 total_users = agg_labels_df[
-                    (agg_labels_df.filename == filename)
+                    (agg_labels_df.subject_ids == subj_id)
                     & (agg_labels_df.label == label)
                 ]["user_name"].nunique()
             
@@ -499,7 +499,6 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
             for ix, box in zip(subject_ids, new_group):
                 new_rows.append(
                     (
-                        filename,
                         label,
                         start_frame,
                         ix,
@@ -510,7 +509,6 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         agg_class_df = pd.DataFrame(
             new_rows,
             columns=[
-                "filename",
                 "label",
                 "start_frame",
                 "subject_ids",
@@ -525,7 +523,7 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         agg_class_df["label"] = agg_class_df["label"].apply(lambda x: x.split("(")[0].strip())
         
         # Add the frames aggregated as "empty"
-        agg_class_df = pd.concat([agg_class_df,agg_labels_df_empty])
+        agg_class_df = pd.concat([agg_class_df, agg_labels_df_empty])
         
         # Select the aggregated labels
         agg_class_df = agg_class_df[["subject_ids", "label", "x", "y", "w", "h"]].drop_duplicates()
@@ -533,7 +531,7 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         # Add the http info
         agg_class_df =  pd.merge(
         agg_class_df,
-        raw_class_df[["subject_ids","https_location","subject_type", "filename"]].drop_duplicates(),
+        raw_class_df[["subject_ids","https_location","subject_type"]].drop_duplicates(),
         how="left",
         on="subject_ids"
     )

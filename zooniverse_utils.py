@@ -185,6 +185,10 @@ def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db
     # Set movie_id column to None if no movies are linked to the subject
     if movie_folder == "None" and server in ["local", "SNIC"]:
         subjects["movie_id"] = None
+
+    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+    subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
+                                lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
     
     # Set the columns in the right order
     subjects = subjects[
