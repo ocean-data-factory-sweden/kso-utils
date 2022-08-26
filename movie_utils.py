@@ -43,15 +43,13 @@ def check_fps_duration(db_info_dict: dict, project: project_utils.Project):
     :return: the dataframe with the fps and duration information.
     """
     
-    movie_folder = project.movie_folder
-    
     # Load the csv with movies information
     df = pd.read_csv(db_info_dict["local_movies_csv"])
     
     # Check if fps or duration is missing from any movie
     if not df[["fps", "duration"]].isna().any().all():
         
-        logging.info("Fps and duration information checked")
+        logging.info("Fps and duration information is not empty")
         
     else:
 
@@ -93,7 +91,29 @@ def check_fps_duration(db_info_dict: dict, project: project_utils.Project):
             df["fps"] = df.fps.fillna(miss_par_df.fps)
             df["duration"] = df.duration.fillna(miss_par_df.duration)
             
+        elif server == "wildlife_ai":
+            # Loop through each movie missing the info and retrieve it
+            for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
+                # Calculate the fps and duration
+                cap = cv2.VideoCapture(row['fpath'])
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = frame_count/fps
+
+                # Update the fps/duration info in the miss_par_df
+                miss_par_df.at[index,'fps'] = fps
+                miss_par_df.at[index,'duration'] = duration
+                
+                cap.release()
+                
+            # Save the fps/duration info in the df
+            df["fps"] = df.fps.fillna(miss_par_df.fps)
+            df["duration"] = df.duration.fillna(miss_par_df.duration)
+          
         else:   
+            # Retrieve information of the movie folder
+            movie_folder = project.movie_folder
+
             # Set the fps and duration of each movie
             movie_files = server_utils.get_snic_files(db_info_dict["client"], movie_folder)["spath"].tolist()
             f_movies = pd.Series([difflib.get_close_matches(i, movie_files)[0] for i in df["filename"]])
@@ -119,13 +139,10 @@ def check_sampling_start_end(df: pd.DataFrame, db_info_dict: dict):
     :param db_info_dict: a dictionary with the following keys:
     :return: The dataframe with the sampling start and end times.
     """
-    # Load the csv with movies information
-    movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
-    
     # Check if sampling start or end is missing from any movie
     if not df[["sampling_start", "sampling_end"]].isna().all().any():
         
-        logging.info("sampling_start and survey_end information checked")
+        logging.info("sampling_start and sampling_end information checked")
         
     else:
         
@@ -134,13 +151,9 @@ def check_sampling_start_end(df: pd.DataFrame, db_info_dict: dict):
         
         # Set the start of each movie to 0 if empty
         df.loc[df["sampling_start"].isna(),"sampling_start"] = 0
-
             
         # Set the end of each movie to the duration of the movie if empty
-        df.loc[df["survey_end"].isna(),"sampling_end"] = df["duration"]
-
-        # Update the local movies.csv file with the new sampling start/end info
-        df.to_csv(movies_csv, index=False)
+        df.loc[df["sampling_end"].isna(),"sampling_end"] = df["duration"]
         
         logging.info("The survey start and end columns have been updated in movies.csv")
 

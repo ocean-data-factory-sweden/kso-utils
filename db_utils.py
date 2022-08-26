@@ -210,12 +210,6 @@ def process_test_csv(db_info_dict: dict, project: project_utils.Project, local_c
         [c for c in field_names if c in df.columns]
     ]
     
-    print("columns are",
-    df.columns,
-    "field_names are",
-    field_names
-    )
-
     # Roadblock to prevent empty rows
     test_table(
         df, csv_i, df.columns

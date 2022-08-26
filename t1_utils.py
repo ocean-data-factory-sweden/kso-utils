@@ -34,18 +34,18 @@ out_df = pd.DataFrame()
 ############ CSV/iPysheet FUNCTIONS ################
 ####################################################
 
-def select_sheet_range(db_initial_info: dict, orig_csv: str):
+def select_sheet_range(db_info_dict: dict, orig_csv: str):
     """
     > This function loads the csv file of interest into a pandas dataframe and enables users to pick a range of (rows) to display
     
-    :param db_initial_info: a dictionary with the following keys:
+    :param db_info_dict: a dictionary with the following keys:
     :param orig_csv: the original csv file name
     :type orig_csv: str
     :return: A dataframe with the sites information
     """
     
     # Load the csv with the information of interest
-    df = pd.read_csv(db_initial_info[orig_csv])
+    df = pd.read_csv(db_info_dict[orig_csv])
     
     df_range = widgets.SelectionRangeSlider(
                           options=range(0, len(df.index)+1),
@@ -262,99 +262,49 @@ def choose_movie_review():
     
     return choose_movie_review_widget
 
-def check_movies_csv(db_initial_info: dict, project: project_utils.Project, review_method: widgets.Widget):
+def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_method: widgets.Widget):
     """
     > The function `check_movies_csv` loads the csv with movies information and checks if it is empty
     
-    :param db_initial_info: a dictionary with the following keys:
+    :param db_info_dict: a dictionary with the following keys:
     :param project: The project name
     :param review_method: The method used to review the movies
     """
-    # Load the csv with movies information
-    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
     
     if review_method.value.startswith("Basic"):
-      basic_check_movies(db_initial_info, project, movies_df)
-    
+      # Check for empty fps and duration
+      movies_df = movie_utils.check_fps_duration(db_info_dict, project)
+      
+      # Check for sampling_start and sampling_end info
+      movies_df = movie_utils.check_sampling_start_end(movies_df, db_info_dict)
+      
+      # Save the updated df locally
+      movies_df.to_csv(db_info_dict["local_movies_csv"], index=False)
+      logging.info("The local csv file has been updated")
+      
+      # Save the updated df in the server
+      server_utils.update_csv_server(project, db_info_dict, orig_csv = "server_movies_csv", updated_csv = "local_movies_csv")
+      logging.info("The csv file in the server has been updated")
+
+
     else:
-      advanced_check_movies(db_initial_info, project, movies_df)
+      advanced_check_movies(db_info_dict, project, movies_df)
 
-
-def basic_check_movies(db_initial_info: dict, project: project_utils.Project, movies_df: pd.DataFrame):
-    """
-    It checks if the movies.csv is empty, if it is, it displays the movies.csv as an ipysheet and asks
-    the user to fill it up
     
-    :param db_initial_info: dict, project, movies_df: pd.DataFrame
-    :type db_initial_info: dict
-    :param project: the project object
-    :param movies_df: the dataframe of the movies.csv file
-    :type movies_df: pd.DataFrame
-    """
-    # Process Spyfish Aotearoa movies
-    if project.Project_name == "Spyfish_Aotearoa":
-        movies_df = spyfish_utils.process_spyfish_movies(movies_df)
-        
-    # Process KSO movies
-    if project.Project_name == "Koster_Seafloor_Obs":
-        movies_df = koster_utils.process_koster_movies_csv(movies_df)
     
-    # Process template movies
-    if project.Project_name == "Template project":
-        # Add path of the movies
-        movies_df["Fpath"] = "https://www.wildlife.ai/wp-content/uploads/2022/06/"+ movies_df["filename"]
-    
-    # Connect to database
-    conn = db_utils.create_connection(db_initial_info['db_path'])
-    
-    # Reference movies with their respective sites
-    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
-    sites_df = sites_df.rename(columns={"id": "Site_id"})
 
-    # Merge movies and sites dfs
-    movies_df = pd.merge(
-        movies_df, sites_df, how="left", on="siteName"
-    )
-    
-    # Select only those fields of interest
-    movies_db = movies_df[
-        ["movie_id", "filename", "created_on", "fps", "duration", "sampling_start", "sampling_end", "Author", "Site_id", "Fpath"]
-    ]
+def advanced_check_movies(db_info_dict, project, movies_df):
+    return "WIP"
 
-    # TODO if empty cells display the movies.csv
-    # if ...:
-        # Load the df as ipysheet
-        # sheet = ipysheet.from_dataframe(movies_df)
-
-        # print(There are empty cells, please fill them up and confirm the changes)
-        # return sheet
-        
-    # Roadblock to prevent empty information
-    db_utils.test_table(
-        movies_db, "movies", movies_db.columns
-    )
-    
-    # Check for sampling_start and sampling_end info
-    movies_df = movie_utils.check_sampling_start_end(movies_df, db_initial_info)
-    
-    # Ensure date is ISO 8601:2004(E) and compatible with Darwin Data standards
-    #date_time_check = pd.to_datetime(movies_df.created_on, infer_datetime_format=True)
-#     print("The last dates from the created_on column are:")
-#     print(date_time_check.tail())
-   
-    logging.info("movies.csv is all good!") 
-
-
-
-def open_movies_csv(db_initial_info: dict):
+def open_movies_csv(db_info_dict: dict):
     """
     It loads the movies csv file into a pandas dataframe, and then loads that dataframe into an ipysheet
     
-    :param db_initial_info: a dictionary with the following keys:
+    :param db_info_dict: a dictionary with the following keys:
     :return: A sheet with the movies information
     """
     # Load the csv with movies information
-    movies_df = pd.read_csv(db_initial_info["local_movies_csv"])
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
 
     # Load the df as ipysheet
     sheet = ipysheet.from_dataframe(movies_df)
@@ -529,18 +479,18 @@ def update_new_deployments(deployment_selected: widgets.Widget, db_info_dict: di
 #############
 #####Species#####
 #################
-def check_species_csv(db_initial_info: dict, project: project_utils.Project):
+def check_species_csv(db_info_dict: dict, project: project_utils.Project):
     """
     > The function `check_species_csv` loads the csv with species information and checks if it is empty
     
-    :param db_initial_info: a dictionary with the following keys:
+    :param db_info_dict: a dictionary with the following keys:
     :param project: The project name
     """
     # Load the csv with movies information
-    species_df = pd.read_csv(db_initial_info["local_species_csv"])
+    species_df = pd.read_csv(db_info_dict["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    conn = db_utils.create_connection(db_initial_info["db_path"])
+    conn = db_utils.create_connection(db_info_dict["db_path"])
     data = conn.execute(f"SELECT * FROM species")
     field_names = [i[0] for i in data.description]
 
