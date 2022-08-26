@@ -92,8 +92,6 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
             
         if project_name == "Spyfish_Aotearoa":
             db_initial_info = spyfish_utils.get_spyfish_choices(server_dict, db_initial_info, db_csv_info)
-            
-        return db_initial_info
                 
     elif server in ["local", "SNIC"]:
         
@@ -182,7 +180,12 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
 
     else:
         raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
+    
+    # Add project-specific db_path
+    db_initial_info["db_path"] = project.db_path
+
     return db_initial_info
+        
     
 def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_csv: str, updated_csv: str):
     """

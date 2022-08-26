@@ -191,25 +191,31 @@ def process_test_csv(db_info_dict: dict, project: project_utils.Project, local_c
     
     # Save the category of interest and process the df
     if 'sites' in local_csv:
-        csv_i, df = process_sites_df(db_info_dict, df, project)
+        field_names, csv_i, df = process_sites_df(db_info_dict, df, project)
 
     if 'movies' in local_csv:
-        csv_i, df = process_movies_df(db_info_dict, df, project)
+        field_names, csv_i, df = process_movies_df(db_info_dict, df, project)
 
     if 'species' in local_csv:
-        csv_i, df = process_species_df(db_info_dict, df, project)
+        field_names, csv_i, df = process_species_df(db_info_dict, df, project)
 
     if 'photos' in local_csv:
-        csv_i, df = process_photos_df(db_info_dict, df, project) 
+        field_names, csv_i, df = process_photos_df(db_info_dict, df, project) 
         
-    # Retrieve the names of the basic columns in the sql db
-    field_names = get_column_names_db(db_info_dict, csv_i)
+    # Add the names of the basic columns in the sql db
+    field_names = field_names + get_column_names_db(db_info_dict, csv_i)
     
     # Select relevant fields
     df = df[
-        [c for c in df.columns if c in field_names]
+        [c for c in field_names if c in df.columns]
     ]
     
+    print("columns are",
+    df.columns,
+    "field_names are",
+    field_names
+    )
+
     # Roadblock to prevent empty rows
     test_table(
         df, csv_i, df.columns
@@ -256,7 +262,10 @@ def process_sites_df(db_info_dict: dict, df: pd.DataFrame, project: project_util
     # Specify the category of interest
     csv_i = "sites"
 
-    return csv_i, df
+    # Specify the id of the df of interest
+    field_names = ["site_id"]
+
+    return field_names, csv_i, df
 
 
 def process_movies_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
@@ -282,21 +291,24 @@ def process_movies_df(db_info_dict: dict, df: pd.DataFrame, project: project_uti
     
     # Reference movies with their respective sites
     sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
-    sites_df = sites_df.rename(columns={"id": "Site_id"})
-
+    sites_df = sites_df.rename(columns={"id": "site_id"})
+   
     # Merge movies and sites dfs
     df = pd.merge(
         df, sites_df, how="left", on="siteName"
     )
     
     # Select only those fields of interest
-    if "Fpath" not in df.columns:
-        df["Fpath"] = df["filename"]
+    if "fpath" not in df.columns:
+        df["fpath"] = df["filename"]
 
     # Specify the category of interest
     csv_i = "movies"
 
-    return csv_i, df
+    # Specify the id of the df of interest
+    field_names = ["movie_id"]
+
+    return field_names, csv_i, df
 
 
 def process_photos_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
@@ -315,7 +327,10 @@ def process_photos_df(db_info_dict: dict, df: pd.DataFrame, project: project_uti
     # Specify the category of interest
     csv_i = "photos"
 
-    return csv_i, df
+    # Specify the id of the df of interest
+    field_names = ["ID"]
+
+    return field_names, csv_i, df
 
 
 def process_species_df(db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project):
@@ -328,10 +343,16 @@ def process_species_df(db_info_dict: dict, df: pd.DataFrame, project: project_ut
     :return: a string of the category of interest and the processed dataframe
     """
 
+    # Rename columns to match sql fields
+    df = df.rename(columns={"commonName": "label"})
+        
     # Specify the category of interest
     csv_i = "species"
 
-    return csv_i, df
+    # Specify the id of the df of interest
+    field_names = ["species_id"]
+
+    return field_names, csv_i, df
 
 
 def find_duplicated_clips(conn: sqlite3.Connection):

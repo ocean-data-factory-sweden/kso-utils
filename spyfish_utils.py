@@ -146,7 +146,7 @@ def process_spyfish_movies(movies_df: pd.DataFrame):
             "EventDate": "created_on",
             "SamplingStart": "sampling_start",
             "SamplingEnd": "sampling_end",
-            "RecordedBy": "Author",
+            "RecordedBy": "author",
             "SiteID": "siteName",
 
         }
