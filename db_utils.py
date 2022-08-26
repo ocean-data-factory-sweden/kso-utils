@@ -204,8 +204,10 @@ def process_test_csv(db_info_dict: dict, project: project_utils.Project, local_c
         
     # Add the names of the basic columns in the sql db
     field_names = field_names + get_column_names_db(db_info_dict, csv_i)
+    field_names.remove("id")
     
     # Select relevant fields
+    df.rename(columns={"Author": "author"}, inplace=True)
     df = df[
         [c for c in field_names if c in df.columns]
     ]

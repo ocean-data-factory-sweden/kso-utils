@@ -73,13 +73,13 @@ def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_
     """
     if hasattr(project, "info_df"):
         if project.info_df is not None:
-            logging.info("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
+            print("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
             return project.info_df
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
     for info_n in zoo_info:
-        logging.info("Retrieving", info_n, "from Zooniverse")
+        print("Retrieving", info_n, "from Zooniverse")
 
         # Get the information of interest from Zooniverse
         export = zoo_project.get_export(info_n)
@@ -111,7 +111,7 @@ def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_
         # Add df to dictionary
         info_df[info_n] = export_df
         project.info_df = info_df
-        logging.info(info_n, "were retrieved successfully")
+        print(info_n, "were retrieved successfully")
 
     return info_df
 
@@ -229,7 +229,7 @@ def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db
     frame_subjs = subjects_df[subjects_df["subject_type"]=="frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"]=="clip"].shape[0]
     
-    logging.info("The database has a total of", frame_subjs,
+    print("The database has a total of", frame_subjs,
           "frame subjects and", clip_subjs,
           "clip subjects have been updated")
 

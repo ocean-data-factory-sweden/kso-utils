@@ -23,8 +23,9 @@ from itables import show
 from PIL import Image as PILImage, ImageDraw
 
 # Logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.getLogger().setLevel(logging.INFO)
 
 #### Set up ####
 def choose_agg_parameters(subject_type: str):
@@ -339,11 +340,9 @@ def get_classifications(workflow_dict: dict, workflows_df: pd.DataFrame,
                                             how='any').reset_index(drop=True)
         
         # Report on the issue
-        logging.info("There are", 
-              (classes_df.shape[0]-filtered_class_df.shape[0]), 
-              "classifications out of",
-              classes_df.shape[0],
-              "missing subject info. Maybe the subjects have been removed from Zooniverse?")
+        logging.info(f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}" 
+                     f" classifications out of {classes_df.shape[0]}"
+                     f" missing subject info. Maybe the subjects have been removed from Zooniverse?")
         
         classes_df = filtered_class_df
         
@@ -418,7 +417,6 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         
         
         # Report selected parameters
-        logging.info("Aggregation parameters are: Agg. threshold", agg_users, ", Min. users", min_users, ", Obj threshold", agg_obj, ", IOU",agg_iou, ", Int. agg.", agg_iua)
         print("Aggregation parameters are: Agg. threshold", agg_users, ", Min. users", min_users, ", Obj threshold", agg_obj, ", IOU",agg_iou, ", Int. agg.", agg_iua)
         
         # Process the raw classifications
@@ -561,7 +559,7 @@ def aggregrate_classifications(df: pd.DataFrame, subj_type: str, project: projec
         on="classification_id"
     )
     
-    logging.info(agg_class_df.shape[0], "classifications aggregated out of",
+    print(agg_class_df.shape[0], "classifications aggregated out of",
           df.subject_ids.nunique(), "unique subjects available")
     
     return agg_class_df, raw_class_df
