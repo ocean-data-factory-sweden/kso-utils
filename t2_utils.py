@@ -419,7 +419,7 @@ def select_UnitSelectionDesign(unit_selection_options: list):
     # Widget to record the unit selection of the survey
     UnitSelectionDesign_widget = widgets.Dropdown(
         options=unit_selection_options,
-        description='What was the design for site selection?',
+        description='What was the design for unit selection?',
         disabled=False,
         layout=Layout(width='95%'),
         style = {'description_width': 'initial'}
