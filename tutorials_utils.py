@@ -18,6 +18,7 @@ import kso_utils.server_utils as server_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
 import kso_utils.project_utils as project_utils
+import kso_utils.movie_utils as movie_utils
 
 
 # Logging
@@ -270,10 +271,10 @@ def preview_movie(project: project_utils.Project, db_info_dict: dict, available_
     else:
         # Generate temporary path to the movie select
         if project.server == "SNIC":
-            movie_path = server_utils.get_movie_url(project, db_info_dict, movie_selected["spath"].values[0])
+            movie_path = movie_utils.get_movie_path(project, db_info_dict, movie_selected["spath"].values[0])
             url = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
         else:
-            url = server_utils.get_movie_url(project, db_info_dict, movie_selected["fpath"].values[0])
+            url = movie_utils.get_movie_path(project, db_info_dict, movie_selected["fpath"].values[0])
             movie_path = url
         html_code = f"""<html>
                 <div style="display: flex; justify-content: space-around; align-items: center">

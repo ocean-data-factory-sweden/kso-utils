@@ -30,6 +30,7 @@ import kso_utils.server_utils as s_utils
 import kso_utils.koster_utils as k_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.project_utils as project_utils
+import kso_utils.movie_utils as movie_utils
 import kso_utils.t8_utils as t8
 
 # Logging
@@ -317,7 +318,7 @@ def extract_frames(project: project_utils.Project, df: pd.DataFrame, server_dict
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
-        url = s_utils.get_movie_url(project, server_dict, movie)
+        url = movie_utils.get_movie_path(project, server_dict, movie)
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")

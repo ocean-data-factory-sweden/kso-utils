@@ -252,7 +252,7 @@ def choose_movie_review():
     :return: The widget is being returned.
     """
     choose_movie_review_widget = widgets.RadioButtons(
-          options=["Basic: Automatic check of empty cells and manual check of incorrect cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
+          options=["Basic: Automatic check for empty fps/duration and sampling start/end cells in the movies.csv","Advanced: Basic + Check format and metadata of each movie"],
           description='What method you want to use to review the movies:',
           disabled=False,
           layout=Layout(width='95%'),
@@ -271,47 +271,50 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     :param review_method: The method used to review the movies
     """
     
-    if review_method.value.startswith("Basic"):
-      # Check for empty fps and duration
-      movies_df = movie_utils.check_fps_duration(db_info_dict, project)
-      
-      # Check for sampling_start and sampling_end info
-      movies_df = movie_utils.check_sampling_start_end(movies_df, db_info_dict)
-      
-      # Save the updated df locally
-      movies_df.to_csv(db_info_dict["local_movies_csv"], index=False)
-      logging.info("The local csv file has been updated")
-      
-      # Save the updated df in the server
-      server_utils.update_csv_server(project, db_info_dict, orig_csv = "server_movies_csv", updated_csv = "local_movies_csv")
-      logging.info("The csv file in the server has been updated")
-
-
-    else:
-      advanced_check_movies(db_info_dict, project, movies_df)
-
-    
-    
-
-def advanced_check_movies(db_info_dict, project, movies_df):
-    return "WIP"
-
-def open_movies_csv(db_info_dict: dict):
-    """
-    It loads the movies csv file into a pandas dataframe, and then loads that dataframe into an ipysheet
-    
-    :param db_info_dict: a dictionary with the following keys:
-    :return: A sheet with the movies information
-    """
     # Load the csv with movies information
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    df = pd.read_csv(db_info_dict["local_movies_csv"])
+        
+    if review_method.value.startswith("Basic"):
+      # Check if fps or duration is missing from any movie
+      if not df[["fps", "duration", "sampling_start", "sampling_end"]].isna().any().all():
+        logging.error("Fps, duration and sampling information is not empty")
+        
+      else:
+        # Add a column with the path (or url) where the movie with missing info can be accessed from
+        df.loc[df["fps"].isna()|df["duration"].isna(), "movie_path"] = df.loc[df["fps"].isna()|df["duration"].isna(),"fpath"].apply(movie_utils.get_movie_path(db_info_dict, project), axis = 1)
 
-    # Load the df as ipysheet
-    sheet = ipysheet.from_dataframe(movies_df)
+        # Read the movies and fill out the missing fps and duration info 
+        df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = df.loc[df["fps"].isna()|df["duration"].isna(), "movie_path"].apply(movie_utils.get_fps_duration, axis = 1)
+            
+    else:
+        # Add a column with the path (or url) where the movies can be accessed from
+        df["movie_path"] = df["fpath"].apply(movie_utils.get_movie_path(db_info_dict, project), axis = 1)
 
-    return sheet
+        # Read the movies and overwrite the existing fps and duration info 
+        df["fps": "duration"] = df["movie_path"].apply(movie_utils.get_fps_duration, axis = 1)
 
+        # Convert to the right format, frame rate or codec the movies if needed
+        df["movie_path"].apply(movie_utils.check_movie_information(), axis = 1)
+        
+    # Fill out missing sampling start information
+    df.loc[df["SamplingStart"].isna(), "SamplingStart"] = 0.0
+    
+    # Fill out missing sampling end information
+    df.loc[df["SamplingStart"].isna(), "SamplingStart"] = df["duration"]
 
+    # Prevent sampling end times longer than actual movies
+    if (df["sampling_end"] > df["duration"]).any():
+        logging.error("The sampling_end times of the following movies are longer than the actual movies")
+        logging.error(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
+        
+    # Save the updated df locally
+    df.to_csv(db_info_dict["local_movies_csv"], index=False)
+    logging.info("The local movies.csv file has been updated")
+    
+    # Save the updated df in the server
+    server_utils.update_csv_server(project, db_info_dict, orig_csv = "server_movies_csv", updated_csv = "local_movies_csv")
+    logging.info("The movies.csv file in the server has been updated")
+    
 def check_movies_from_server(db_info_dict: dict, project: project_utils.Project):
     """
     It takes in a dataframe of movies and a dictionary of database information, and returns two
