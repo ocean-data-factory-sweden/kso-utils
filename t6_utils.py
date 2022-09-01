@@ -19,9 +19,9 @@ import ipywidgets as widgets
 from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
-# logging setup
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 def generate_csv_report(evaluation_path: str):
@@ -145,6 +145,19 @@ def track_objects(source_dir: str, artifact_dir: str, tracker_folder: str, conf_
     logging.info("Tracking completed succesfully")
     return latest_tracker
 
+def encode_image(filepath):
+    """
+    It takes a filepath to an image, opens the image, reads the bytes, encodes the bytes as base64, and
+    returns the encoded string
+    
+    :param filepath: The path to the image file
+    :return: the base64 encoding of the image.
+    """
+    with open(filepath, 'rb') as f:
+        image_bytes = f.read()
+    encoded = str(base64.b64encode(image_bytes), 'utf-8')
+    return "data:image/jpg;base64,"+encoded
+
 def get_annotations_viewer(data_path: str, species_list: list):
     """
     It takes a path to a folder containing images and annotations, and a list of species names, and
@@ -176,8 +189,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
             s=line.split(' ')
             labels.append(s[0])
             
-            left = int((float(s[1]) - (float(s[3]) / 2)) * width)
-            top = int((float(s[1]) + (float(s[3]) / 2)) * width)
+            left = (float(s[1]) - (float(s[3]) / 2)) * width
+            top = (float(s[2]) - (float(s[4]) / 2)) * height
             
             bboxes.append({'x': left, #(float(s[1])-(float(s[3])/2))*width,
                            'y': top, #(float(s[2])-(float(s[4])/2))*height,
@@ -185,7 +198,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
                            'height': float(s[4])*height,
                            'label': species_list[int(s[0])]})
     w_bbox = BBoxWidget(
-        image = image,
+        image = encode_image(image),
         classes = species_list
     )
 
@@ -203,17 +216,21 @@ def get_annotations_viewer(data_path: str, species_list: list):
     # when Skip button is pressed we move on to the next file
     def on_skip():
         w_progress.value += 1
+        if w_progress.value == len(annotations):
+            print("No more annotations")
+            return None
         # open new image in the widget
         image_file = images[w_progress.value]
-        w_bbox.image = os.path.join(image_path, image_file)
-        width, height = imagesize.get(w_bbox.image)
+        image_p = os.path.join(image_path, image_file)
+        width, height = imagesize.get(image_p)
+        w_bbox.image = encode_image(image_p)
         label_file = annotations[w_progress.value]
         bboxes = []
         with open(os.path.join(annot_path, label_file), 'r') as f:
             for line in f:
                 s=line.split(' ')
-                left = int((float(s[1]) - (float(s[3]) / 2)) * width)
-                top = int((float(s[1]) + (float(s[3]) / 2)) * width)
+                left = (float(s[1]) - (float(s[3]) / 2)) * width
+                top = (float(s[2]) - (float(s[4]) / 2)) * height
                 bboxes.append({'x': left, #(float(s[1])-(float(s[3])/2))*width, 
                                'y': top, #(float(s[2])-(float(s[4])/2))*height,
                                'width': float(s[3])*width,

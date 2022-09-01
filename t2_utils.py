@@ -17,8 +17,9 @@ import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as t_utils
 
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 out_df = pd.DataFrame()
 

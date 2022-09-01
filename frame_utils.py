@@ -1,5 +1,6 @@
 # base imports
 import os
+import logging
 import argparse
 import pims
 import db_utils
@@ -7,6 +8,9 @@ import cv2 as cv
 import pandas as pd
 from tqdm import tqdm
 
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
     """

@@ -23,9 +23,8 @@ from itables import show
 from PIL import Image as PILImage, ImageDraw
 
 # Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-logging.getLogger().setLevel(logging.INFO)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 #### Set up ####
 def choose_agg_parameters(subject_type: str):

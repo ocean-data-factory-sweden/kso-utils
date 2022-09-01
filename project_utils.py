@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from dataclass_csv import DataclassReader, DataclassWriter
 
 # Logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 @dataclass
 class Project:

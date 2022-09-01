@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # base imports
 import json
+import logging
 import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
@@ -10,6 +11,10 @@ from collections import Counter
 # util imports
 import kso_utils.db_utils as db_utils
 import kso_utils.project_utils as project_utils
+
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 # Function to prevent issues with Swedish characters

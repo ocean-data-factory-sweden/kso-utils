@@ -23,9 +23,8 @@ import kso_utils.movie_utils as movie_utils
 
 
 # Logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     # Specify the output folder

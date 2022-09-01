@@ -28,8 +28,8 @@ import kso_utils.db_utils as db_utils
 import kso_utils.project_utils as project_utils
 
 # Logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############################################################

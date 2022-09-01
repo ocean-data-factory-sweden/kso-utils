@@ -12,6 +12,10 @@ import ipywidgets as widgets
 # util imports
 import kso_utils.db_utils as db_utils
 
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
+
 def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: str, password: str):
     """
     It takes the model name, the artifact directory, the project name, the user and the password as

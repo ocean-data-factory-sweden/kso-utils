@@ -34,8 +34,8 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.t8_utils as t8
 
 # Logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 out_df = pd.DataFrame()
 

@@ -1,5 +1,10 @@
 # base imports
 import pandas as pd
+import logging
+
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 def process_sgu_photos_csv(db_initial_info: dict):
