@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import logging
+from tqdm import tqdm
 
 # widget imports
 from IPython.display import display
@@ -262,13 +263,14 @@ def choose_movie_review():
     
     return choose_movie_review_widget
 
-def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_method: widgets.Widget):
+def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_method: widgets.Widget, gpu_available: bool = False):
     """
     > The function `check_movies_csv` loads the csv with movies information and checks if it is empty
     
     :param db_info_dict: a dictionary with the following keys:
     :param project: The project name
     :param review_method: The method used to review the movies
+    :param gpu_available: Boolean, whether or not a GPU is available
     """
     
     # Load the csv with movies information
@@ -287,14 +289,18 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
         df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = df.loc[df["fps"].isna()|df["duration"].isna(), "movie_path"].apply(movie_utils.get_fps_duration, axis = 1)
             
     else:
+        logging.info("Retrieving the paths to access the movies")
         # Add a column with the path (or url) where the movies can be accessed from
-        df["movie_path"] = df["fpath"].apply(movie_utils.get_movie_path(db_info_dict, project), axis = 1)
+        df["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df["fpath"], total=df.shape[0])])
 
+        logging.info("Getting the fps and duration of the movies")
         # Read the movies and overwrite the existing fps and duration info 
-        df["fps": "duration"] = df["movie_path"].apply(movie_utils.get_fps_duration, axis = 1)
+        df[["fps","duration"]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])], columns=["fps", "duration"])
+
+        logging.info("Standardising the format, frame rate and codec of the movies")
 
         # Convert to the right format, frame rate or codec the movies if needed
-        df["movie_path"].apply(movie_utils.check_movie_information(), axis = 1)
+        [movie_utils.standarise_movie_format(i, j, gpu_available) for i,j in tqdm(zip(df["movie_path"],df["filename"]), total=df.shape[0])]
         
     # Fill out missing sampling start information
     df.loc[df["SamplingStart"].isna(), "SamplingStart"] = 0.0
@@ -307,6 +313,9 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
         logging.error("The sampling_end times of the following movies are longer than the actual movies")
         logging.error(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
         
+    # Drop unnecessary columns
+    df = df.drop(columns=['movie_path'])
+    
     # Save the updated df locally
     df.to_csv(db_info_dict["local_movies_csv"], index=False)
     logging.info("The local movies.csv file has been updated")

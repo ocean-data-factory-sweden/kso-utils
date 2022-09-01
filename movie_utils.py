@@ -7,10 +7,13 @@ from tqdm import tqdm
 import difflib
 import logging
 import subprocess
+import urllib
 
 # util imports
 import kso_utils.server_utils as server_utils
 import kso_utils.project_utils as project_utils
+import kso_utils.tutorials_utils as tutorials_utils
+
 
 # Logging
 logging.basicConfig(level=logging.DEBUG)
@@ -68,72 +71,114 @@ def get_movie_extensions():
     return movie_formats
 
 
-def check_movie_information(movie_path: str, gpu_available: bool = False):
+def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available: bool = False):
     """
     This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
     it is converted using ffmpeg. 
     
-    :param movie_path: the path to the movie file
+    :param movie_path: The local path- or url to the movie file you want to convert
     :type movie_path: str
+    :param movie_filename: The filename of the movie file you want to convert
+    :type movie_path: str
+    :param gpu_available: Boolean, whether or not a GPU is available
+    :type gpu_available: bool
     """
 
     # Check movie format
-    filename, ext = os.path.splitext(movie_path)
+    filename, ext = os.path.splitext(movie_filename)
+    
     if not ext.lower() == "mp4":
-        logging.info("Extension not supported, conversion started.")
-        if gpu_available:
-            new_mov_path = convert_video(movie_path, True)
-        else:
-            new_mov_path = convert_video(movie_path)
+        logging.info("Extension of", movie_filename ,"not supported.")
+        # Set conversion to True
+        convert_video = True
 
     # Check frame rate
     cap = cv2.VideoCapture(movie_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     if not float(fps).is_integer():
-        logging.info("Variable frame rate not supported, conversion started.")
-        if gpu_available:
-            new_mov_path = convert_video(movie_path, True)
-        else:
-            new_mov_path = convert_video(movie_path)
+        logging.info("Variable frame rate of", movie_filename,"not supported.")
+        # Set conversion to True
+        convert_video = True
 
     # Check codec information
     h = int(cap.get(cv2.CAP_PROP_FOURCC))
     codec = chr(h&0xff) + chr((h>>8)&0xff) + chr((h>>16)&0xff) + chr((h>>24)&0xff)
+    
     if not codec == "h264":
-        logging.info("Non-h264 codecs not supported, conversion started.")
-        if gpu_available:
-            new_mov_path = convert_video(movie_path, True)
-        else:
-            new_mov_path = convert_video(movie_path)
+        logging.info("The codecs of", movie_filename, "are not supported (only h264 is supported).")
+        # Set conversion to True
+        convert_video = True
 
-    # Check movie filesize
-    size = os.path.getsize(movie_path)
+    # Check movie filesize in relation to its duration
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = frame_count/fps
+    duration_mins = duration/60
+    
+    # Check if the movie is accessible locally
+    if os.path.exists(movie_path):
+        # Store the size of the movie
+        size = os.path.getsize(movie_path)
+
+    # Check if the path to the movie is a url
+    elif tutorials_utils.is_url(movie_path):
+        # Store the size of the movie
+        size = urllib.request.urlopen(movie_path).length
+    
+    else:
+        logging.error("The path to", movie_path," is invalid")      
+      
     sizeGB = size/(1024*1024*1024)
-    if sizeGB > 5:
-        logging.info("File sizes above 5GB are not currently supported, conversion started.")
-        if gpu_available:
-            new_mov_path = convert_video(movie_path, True)
-        else:
-            new_mov_path = convert_video(movie_path)
-           
+    size_duration = sizeGB/duration_mins
 
-def convert_video(movie_path: str, gpu_available: bool = False):
+    if size_duration > 0.16:
+        logging.info("File size of movie is too large (+5GB per 30 mins of footage).")
+        # Set conversion to True
+        convert_video = True
+           
+    # Start converting video if movie didn't pass any of the checks
+    if convert_video:
+        if gpu_available:
+            print("gpu_available")
+            new_mov_path = convert_video(movie_path, movie_filename, True)
+        else:
+            print("gpu_available not available")
+            new_mov_path = convert_video(movie_path, movie_filename, False)
+
+    else:
+        logging.info(movie_filename, "format is standard.")
+        
+
+def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = False):
     """
     It takes a movie file path and a boolean indicating whether a GPU is available, and returns a new
     movie file path.
     
-    :param movie_path: The path to the movie file you want to convert
+    :param movie_path: The local path- or url to the movie file you want to convert
+    :type movie_path: str
+    :param movie_filename: The filename of the movie file you want to convert
     :type movie_path: str
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
     :return: The path to the converted video file.
     """
+    print("made it here")
 
-    movie_fpath = os.path.dirname(movie_path)
-    movie_filename = os.path.basename(movie_path)
     conv_filename = "conv_" + movie_filename
-    conv_fpath = os.path.join(movie_fpath, conv_filename)
+    
+    # Check the movie is accessible locally
+    if os.path.exists(movie_path):
+      # Store the directory and filename of the movie
+      movie_fpath = os.path.dirname(movie_path)
+      conv_fpath = os.path.join(movie_fpath, conv_filename) 
+
+    # Check if the path to the movie is a url
+    elif tutorials_utils.is_url(movie_path):
+      # Specify the directory to store the converted movie
+      conv_fpath = os.path.join(conv_filename)
+
+    else:
+      logging.error("The path to", movie_path," is invalid")
 
     if gpu_available:
         subprocess.call(["ffmpeg",

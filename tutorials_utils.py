@@ -2,6 +2,7 @@
 import os 
 import pandas as pd
 import logging
+from urllib.parse import urlparse
 
 # widget imports
 import ipywidgets as widgets
@@ -299,3 +300,12 @@ def wait_for_change(widget1: widgets.Widget, widget2: widgets.Widget):
     widget1.on_click(getvalue)
     widget2.on_click(getvalue) 
     return future
+
+
+# Function to check if an url is valid or not
+def is_url(url):
+  try:
+    result = urlparse(url)
+    return all([result.scheme, result.netloc])
+  except ValueError:
+    return False
