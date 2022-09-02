@@ -673,6 +673,7 @@ def process_frames(df: pd.DataFrame, project_name: str):
                             "h": None,
                             "label": "empty",
                         }
+                    rows_list.append(choice_i)
                 
                 else:
                     # Select each species annotated and flatten the relevant answers
@@ -685,9 +686,7 @@ def process_frames(df: pd.DataFrame, project_name: str):
                             "h": int(i["height"]) if "height" in i else None,
                             "label": str(i["tool_label"]) if "tool_label" in i else None,
                         }
-                        
-
-                rows_list.append(choice_i)
+                        rows_list.append(choice_i)
 
     # Create a data frame with annotations as rows
     flat_annot_df = pd.DataFrame(
@@ -748,11 +747,11 @@ def draw_annotations_in_frame(im: PILImage.Image, class_df_subject: pd.DataFrame
         vals = row.vals
 
         # Adjust annotantions to image size
-        vals_adjusted = tuple([int((vals[0]-vals[2]/2)*dw), int((vals[1]-vals[3]/2)*dh),
-                               int((vals[0]+vals[2]/2)*dw), int((vals[1]+vals[3]/2)*dh)])
+        vals_adjusted = tuple([int(vals[0]), int(vals[1]),
+                               int((vals[0]+vals[2])), int((vals[1]+vals[3]))])
 
         # Draw annotation
-        img1.rectangle(vals, outline=row.colour, width=2)
+        img1.rectangle(vals_adjusted, width=2)
         
     return im
 
