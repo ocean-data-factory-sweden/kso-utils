@@ -2,12 +2,14 @@
 import os 
 import pandas as pd
 import logging
+import subprocess
 from urllib.parse import urlparse
 
 # widget imports
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import HTML, display
+from ipywidgets import interactive
 import asyncio
 
 from panoptes_client import (
@@ -308,3 +310,61 @@ def is_url(url):
     return all([result.scheme, result.netloc])
   except ValueError:
     return False
+
+
+
+def gpu_select():
+    """
+    If the user selects "No GPU", then the function will return a boolean value of False. If the user
+    selects "Colab GPU", then the function will install the GPU requirements and return a boolean value
+    of True. If the user selects "Other GPU", then the function will return a boolean value of True
+    :return: The gpu_available variable is being returned.
+    """
+    
+    def gpu_output(gpu_option):
+        if gpu_option == "No GPU":
+            logging.info("You are set to start the modifications")
+            # Set GPU argument
+            gpu_available = False
+            return gpu_available
+        
+        if gpu_option == "Colab GPU":
+            # Install the GPU requirements
+            if not os.path.exists("./colab-ffmpeg-cuda/bin/."):
+                try:
+                    logging.info('Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS')# Install ffmpeg with GPU version
+                    subprocess.check_call(
+                        "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
+                        shell=True)
+                    subprocess.check_call(
+                        "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/",
+                        shell=True)
+                    logging.info("GPU Requirements installed!")
+
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"There was an issues trying to install the GPU requirements, {e}")
+
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+        
+        if gpu_option == "Other GPU":
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+            
+        
+
+    # Select the gpu availability
+    gpu_output_interact = interactive(gpu_output, 
+                                      gpu_option = widgets.RadioButtons(
+                                        options = ['No GPU', 'Colab GPU', 'Other GPU'],
+                                        value = 'No GPU', 
+                                        description = 'Select GPU availability:',
+                                        disabled = False
+                                        )
+                                    )
+    
+                                   
+    display(gpu_output_interact)
+    return gpu_output_interact
