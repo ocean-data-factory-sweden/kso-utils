@@ -76,7 +76,7 @@ def open_csv(df: pd.DataFrame, df_range: widgets.Widget):
     range_end = int(df_range.label[1])
 
     # Display the range of sites selected
-    logging.info("Displaying #", range_start, "to #", range_end)
+    logging.info(f"Displaying # {range_start} to # {range_end}")
     
     # Filter the dataframe based on the selection
     df_filtered = df.filter(items = range(range_start, range_end), axis=0)
@@ -186,8 +186,7 @@ def update_csv(db_info_dict: dict, project: project_utils.Project, sheet_df: pd.
             
             # Save the updated df in the server
             server_utils.update_csv_server(project, db_info_dict, orig_csv = serv_csv, updated_csv = local_csv)
-            logging.info("The csv file in the server has been updated")
-            
+                        
         else:
             logging.info("Run this cell again when the changes are correct!")
 
@@ -278,16 +277,27 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     df = pd.read_csv(db_info_dict["local_movies_csv"])
         
     if review_method.value.startswith("Basic"):
-      # Check if fps or duration is missing from any movie
-      if not df[["fps", "duration", "sampling_start", "sampling_end"]].isna().any().all():
-        logging.error("Fps, duration and sampling information is not empty")
-        
-      else:
-        # Add a column with the path (or url) where the movie with missing info can be accessed from
-        df.loc[df["fps"].isna()|df["duration"].isna(), "movie_path"] = df.loc[df["fps"].isna()|df["duration"].isna(),"fpath"].apply(movie_utils.get_movie_path(db_info_dict, project), axis = 1)
+        # Check if fps or duration is missing from any movie
+        if not df[["fps", "duration", "sampling_start", "sampling_end"]].isna().any().any():
+            raise ValueError("Fps, duration and sampling information is not empty")
+          
+        else:
+            # Create a df with only those rows with missing fps/duration
+            df_missing = df[df["fps"].isna()|df["duration"].isna()].reset_index(drop=True)
+            
+            logging.info("Retrieving the paths to access the movies")
+            # Add a column with the path (or url) where the movies can be accessed from
+            df_missing["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df_missing["fpath"], total=df_missing.shape[0])])
 
-        # Read the movies and fill out the missing fps and duration info 
-        df.loc[df["fps"].isna()|df["duration"].isna(), "fps": "duration"] = df.loc[df["fps"].isna()|df["duration"].isna(), "movie_path"].apply(movie_utils.get_fps_duration, axis = 1)
+            logging.info("Getting the fps and duration of the movies")
+            # Read the movies and overwrite the existing fps and duration info 
+            df_missing[["fps","duration"]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])], columns=["fps", "duration"])
+
+            # Add the missing info to the original df based on movie ids
+            df.set_index("movie_id", inplace=True)
+            df_missing.set_index("movie_id", inplace=True)
+            df.update(df_missing)
+            df.reset_index(drop=False, inplace=True)
             
     else:
         logging.info("Retrieving the paths to access the movies")
@@ -300,22 +310,22 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
 
         logging.info("Standardising the format, frame rate and codec of the movies")
 
-        # Convert to the right format, frame rate or codec the movies if needed
-        [movie_utils.standarise_movie_format(i, j, gpu_available) for i,j in tqdm(zip(df["movie_path"],df["filename"]), total=df.shape[0])]
+        # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
+        [movie_utils.standarise_movie_format(i, j, k, db_info_dict, project, gpu_available) for i,j,k in tqdm(zip(df["movie_path"],df["filename"], df["fpath"]), total=df.shape[0])]
         
+        # Drop unnecessary columns
+        df = df.drop(columns=['movie_path'])
+    
     # Fill out missing sampling start information
-    df.loc[df["SamplingStart"].isna(), "SamplingStart"] = 0.0
+    df.loc[df["sampling_start"].isna(), "sampling_start"] = 0.0
     
     # Fill out missing sampling end information
-    df.loc[df["SamplingStart"].isna(), "SamplingStart"] = df["duration"]
+    df.loc[df["sampling_end"].isna(), "sampling_end"] = df["duration"]
 
     # Prevent sampling end times longer than actual movies
     if (df["sampling_end"] > df["duration"]).any():
-        logging.error("The sampling_end times of the following movies are longer than the actual movies")
-        logging.error(*df[df["sampling_end"] > df["duration"]].filename.unique(), sep = "\n")
-        
-    # Drop unnecessary columns
-    df = df.drop(columns=['movie_path'])
+        mov_list = df[df["sampling_end"] > df["duration"]].filename.unique()
+        raise ValueError(f"The sampling_end times of the following movies are longer than the actual movies {mov_list}")
     
     # Save the updated df locally
     df.to_csv(db_info_dict["local_movies_csv"], index=False)
@@ -323,7 +333,6 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     
     # Save the updated df in the server
     server_utils.update_csv_server(project, db_info_dict, orig_csv = "server_movies_csv", updated_csv = "local_movies_csv")
-    logging.info("The movies.csv file in the server has been updated")
     
 def check_movies_from_server(db_info_dict: dict, project: project_utils.Project):
     """
@@ -344,13 +353,12 @@ def check_movies_from_server(db_info_dict: dict, project: project_utils.Project)
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"]=="left_only"]
     
-    logging.info("There are", len(missing_from_server.index), "movies missing")
+    logging.info(f"There are {len(missing_from_server.index)} movies missing")
     
     # Find out files missing from the csv
     missing_from_csv = missing_info[missing_info["_merge"]=="right_only"].reset_index(drop=True)
             
-    logging.info("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
-#     print(*missing_from_csv.filename.unique(), sep = "\n")
+    logging.info(f"There are {len(missing_from_csv.index)} movies missing from movies.csv. Their filenames are:{missing_from_csv.filename.unique()}")
     
     return missing_from_server, missing_from_csv
 
@@ -418,7 +426,7 @@ def update_new_deployments(deployment_selected: widgets.Widget, db_info_dict: di
             logging.info(f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}")
         else:
             # Concatenate the files if multiple
-            logging.info("The files", movie_files_server, "will be concatenated")
+            logging.info(f"The files {movie_files_server} will be concatenated")
 
             # Start text file and list to keep track of the videos to concatenate
             textfile_name = "a_file.txt"
@@ -470,7 +478,7 @@ def update_new_deployments(deployment_selected: widgets.Widget, db_info_dict: di
                 filename=filename,
             )
 
-            logging.info(filename, "successfully uploaded to", deployment_i)
+            logging.info(f"{filename} successfully uploaded to {deployment_i}")
 
             # Delete the raw videos downloaded from the S3 bucket
             for f in video_list:

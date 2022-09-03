@@ -276,7 +276,7 @@ def preview_movie(project: project_utils.Project, db_info_dict: dict, available_
             movie_path = movie_utils.get_movie_path(project, db_info_dict, movie_selected["spath"].values[0])
             url = "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/" + movie_path
         else:
-            url = movie_utils.get_movie_path(project, db_info_dict, movie_selected["fpath"].values[0])
+            url = movie_utils.get_movie_path(movie_selected["fpath"].values[0], db_info_dict, project)
             movie_path = url
         html_code = f"""<html>
                 <div style="display: flex; justify-content: space-around; align-items: center">

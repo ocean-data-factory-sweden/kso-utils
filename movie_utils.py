@@ -54,13 +54,13 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: project_utils.Proje
 
         # Generate presigned url
         movie_url = db_info_dict['client'].generate_presigned_url('get_object', 
-                                                            Params = {'Bucket': server_dict['bucket'], 
+                                                            Params = {'Bucket': db_info_dict['bucket'], 
                                                                       'Key': movie_key}, 
                                                             ExpiresIn = 86400)
         return movie_url
 
     elif server == "SNIC":
-        logging.error("Work still to be completed")
+        logging.error("Getting the path of the movies is still work in progress")
     
     else:
         return f_path
@@ -71,7 +71,8 @@ def get_movie_extensions():
     return movie_formats
 
 
-def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available: bool = False):
+def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, db_info_dict: dict, project: project_utils.Project, gpu_available: bool = False):
+
     """
     This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
     it is converted using ffmpeg. 
@@ -79,7 +80,11 @@ def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available:
     :param movie_path: The local path- or url to the movie file you want to convert
     :type movie_path: str
     :param movie_filename: The filename of the movie file you want to convert
-    :type movie_path: str
+    :type movie_filename: str
+    :param f_path: The server or storage path of the original movie you want to convert
+    :type f_path: str
+    :param db_info_dict: a dictionary with the initial information of the project
+    :param project: the project object
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
     """
@@ -88,27 +93,27 @@ def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available:
     filename, ext = os.path.splitext(movie_filename)
     
     if not ext.lower() == "mp4":
-        logging.info("Extension of", movie_filename ,"not supported.")
+        logging.info(f"Extension of {movie_filename} not supported.")
         # Set conversion to True
-        convert_video = True
+        convert_video_T_F = True
 
     # Check frame rate
     cap = cv2.VideoCapture(movie_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     if not float(fps).is_integer():
-        logging.info("Variable frame rate of", movie_filename,"not supported.")
+        logging.info(f"Variable frame rate of {movie_filename} not supported.")
         # Set conversion to True
-        convert_video = True
+        convert_video_T_F = True
 
     # Check codec information
     h = int(cap.get(cv2.CAP_PROP_FOURCC))
     codec = chr(h&0xff) + chr((h>>8)&0xff) + chr((h>>16)&0xff) + chr((h>>24)&0xff)
     
     if not codec == "h264":
-        logging.info("The codecs of", movie_filename, "are not supported (only h264 is supported).")
+        logging.info(f"The codecs of {movie_filename} are not supported (only h264 is supported).")
         # Set conversion to True
-        convert_video = True
+        convert_video_T_F = True
 
     # Check movie filesize in relation to its duration
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -126,7 +131,7 @@ def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available:
         size = urllib.request.urlopen(movie_path).length
     
     else:
-        logging.error("The path to", movie_path," is invalid")      
+        logging.error(f"The path to {movie_path} is invalid")      
       
     sizeGB = size/(1024*1024*1024)
     size_duration = sizeGB/duration_mins
@@ -134,19 +139,20 @@ def standarise_movie_format(movie_path: str, movie_filename: str, gpu_available:
     if size_duration > 0.16:
         logging.info("File size of movie is too large (+5GB per 30 mins of footage).")
         # Set conversion to True
-        convert_video = True
+        convert_video_T_F = True
            
     # Start converting video if movie didn't pass any of the checks
-    if convert_video:
+    if convert_video_T_F:
         if gpu_available:
-            print("gpu_available")
-            new_mov_path = convert_video(movie_path, movie_filename, True)
+            conv_mov_path = convert_video(movie_path, movie_filename, True)
         else:
-            print("gpu_available not available")
-            new_mov_path = convert_video(movie_path, movie_filename, False)
+            conv_mov_path = convert_video(movie_path, movie_filename, False)
+
+        # Upload the converted movie to the server
+        server_utils.upload_movie_server(conv_mov_path, f_path, db_info_dict, project)
 
     else:
-        logging.info(movie_filename, "format is standard.")
+        logging.info(f"{movie_filename} format is standard.")
         
 
 def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = False):
@@ -162,8 +168,6 @@ def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = Fa
     :type gpu_available: bool
     :return: The path to the converted video file.
     """
-    print("made it here")
-
     conv_filename = "conv_" + movie_filename
     
     # Check the movie is accessible locally
@@ -199,9 +203,7 @@ def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = Fa
 
     # Ensure open permissions on file (for now)
     os.chmod(conv_fpath, 0o777)
-    # TODO (Jannes): Remove original file once satisfied with transformations
-    logging.info("Movie file successfully converted and stored.")
+    logging.info("Movie file successfully converted and stored locally.")
     return conv_fpath
-
 
     

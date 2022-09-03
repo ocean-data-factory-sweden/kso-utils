@@ -211,10 +211,59 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
         key=str(db_info_dict[orig_csv]), 
         filename=str(db_info_dict[updated_csv]))
  
+    elif server == "wildlife_ai":
+        logging.error(f"{orig_csv} couldn't be updated. Check writing permisions to the server.")
+
+    elif server == "SNIC":
+        logging.error("Updating csv files to the server is a work in progress")
     
+    elif server == "local":
+        logging.error("Updating csv files to the server is a work in progress")        
+
     else:
-        # print("Updating sites.csv in SNIC server")
-        logging.info("Work in progress")
+        logging.error(f"{orig_csv} couldn't be updated. Check writing permisions to the server.")
+
+def upload_movie_server(movie_path: str, f_path: str, db_info_dict: dict, project: project_utils.Project):
+    """
+    Takes the file path of a movie file and uploads it to the server.
+    
+    :param movie_path: The local path to the movie file you want to upload
+    :type movie_path: str
+    :param f_path: The server or storage path of the original movie you want to convert
+    :type f_path: str
+    :param db_info_dict: a dictionary with the initial information of the project
+    :param project: The filename of the movie file you want to convert
+    :type movie_path: str
+    """
+    # Get the project-specific server
+    server = project.server
+    
+    if server == "AWS":
+        # Retrieve the key of the movie of interest
+        f_path_key = f_path.split("/").str[:2].str.join("/")
+        print(f_path_key)
+
+        # Upload the movie to AWS
+        # upload_file_to_s3(db_info_dict["client"],
+        # bucket=db_info_dict["bucket"], 
+        # key=f_path_key, 
+        # filename=movie_path)
+
+        # logging.info(f"{movie_path} has been added to the server")
+ 
+    elif server == "wildlife_ai":
+        logging.error(f"{movie_path} not uploaded to the server as project is template")
+
+    elif server == "SNIC":
+        logging.error("Uploading the movies to the server is a work in progress")
+    
+    elif server == "local":
+        logging.error(f"{movie_path} not uploaded to the server as project is local")        
+
+    else:
+        raise ValueError("Specify the server of the project in the project_list.csv.")
+        
+    
 
         
 def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict: dict):
@@ -254,7 +303,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     
     elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
-            logger.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
+            logging.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
             return pd.DataFrame(columns = ["filename"])
         else:
             server_files = os.listdir(movie_folder)
@@ -325,32 +374,7 @@ def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str
         return movie_url
     else:
         return f_path
-    
-    
-def update_db_init_info(project: project_utils.Project, csv_to_update: str):
-    """
-    This function takes a project and a csv file as input, and uploads the csv file to the project's AWS
-    S3 bucket.
-    
-    :param project: the project object
-    :param csv_to_update: the csv file to be updated
-    """
-    
-    if project.server == "AWS":
-            
-        # Start AWS session
-        aws_access_key_id, aws_secret_access_key = aws_credentials()
-        client = connect_s3(aws_access_key_id, aws_secret_access_key)
-        bucket = project.bucket
-        key = project.key
-
-        csv_filename=csv_to_update.name
-
-        upload_file_to_s3(client,
-                              bucket=bucket,
-                              key=str(Path(key, csv_filename)),
-                              filename=str(csv_to_update))
-
+     
 
 #####################
 # ## AWS functions ###
@@ -676,7 +700,7 @@ def download_init_csv(gdrive_id: str, db_csv_info: dict):
     # Specify the url of the file to download
     url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
     
-    logging.info("Retrieving the file from ", url_input)
+    logging.info(f"Retrieving the file from {url_input}")
     
     # Specify the output of the file
     zip_file = 'db_csv_info.zip'
