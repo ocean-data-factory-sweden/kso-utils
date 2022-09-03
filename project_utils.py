@@ -46,7 +46,10 @@ def find_project(project_name: str = ''):
         reader = DataclassReader(csv, Project)
         for row in reader:
             if row.Project_name == project_name:
+                logging.info(f"{project_name} loaded succesfully")
                 return row
+
+    
 
 def add_project(project_info: dict = {}):
     '''Add new project information to

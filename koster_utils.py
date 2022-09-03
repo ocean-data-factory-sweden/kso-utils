@@ -309,13 +309,13 @@ def process_koster_movies_csv(movies_df: pd.DataFrame):
     
     - The filename is standardized
     - The filename is unswedified
-    - The filename is renamed to Fpath
+    - The filename is renamed to fpath
     - The SamplingStart and SamplingEnd columns are renamed to sampling_start and sampling_end
     
     :param movies_df: the dataframe containing the movies
     :return: A dataframe with the columns:
         - filename
-        - Fpath
+        - fpath
         - sampling_start
         - sampling_end
     """
@@ -326,7 +326,7 @@ def process_koster_movies_csv(movies_df: pd.DataFrame):
     movies_df["filename"] = movies_df["filename"].apply(lambda x: unswedify(x))
 
     # TO DO Include server's path to the movie files
-    movies_df["Fpath"] = movies_df["filename"]
+    movies_df["fpath"] = movies_df["filename"]
     
     # Rename relevant fields
     movies_df = movies_df.rename(

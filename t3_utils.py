@@ -64,10 +64,10 @@ def check_movie_uploaded(movie_i: str, db_info_dict: dict):
 
     if already_uploaded:
         clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
-        logging.info(movie_i, "has clips already uploaded. The clips start and finish at:")
+        logging.info(f"{movie_i} has clips already uploaded. The clips start and finish at:")
         logging.info(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
     else:
-        logging.info(movie_i, "has not been uploaded to Zooniverse yet")
+        logging.info(f"{movie_i} has not been uploaded to Zooniverse yet")
         
 def select_clip_length():
     """

@@ -163,6 +163,8 @@ def connect_zoo_project(project: project_utils.Project):
     
     # Connect to the Zooniverse project
     project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
+
+    logging.info("Connected to Zooniverse")
     
     return project
 

@@ -142,7 +142,7 @@ def process_spyfish_movies(movies_df: pd.DataFrame):
     # Rename relevant fields
     movies_df = movies_df.rename(
         columns = {
-            "LinkToVideoFile": "Fpath",
+            "LinkToVideoFile": "fpath",
             "EventDate": "created_on",
             "SamplingStart": "sampling_start",
             "SamplingEnd": "sampling_end",

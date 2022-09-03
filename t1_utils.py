@@ -275,6 +275,11 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     
     # Load the csv with movies information
     df = pd.read_csv(db_info_dict["local_movies_csv"])
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Rename columns to match squema requirements
+        df = spyfish_utils.process_spyfish_movies(df)
         
     if review_method.value.startswith("Basic"):
         # Check if fps or duration is missing from any movie
