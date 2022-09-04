@@ -17,6 +17,44 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 
+def get_spyfish_col_names(table_name: str):
+    '''Return a dictionary with the project-specific column names of a csv of interest
+    This function helps matching the schema format without modifying the column names of the original csv.
+    
+    :param table_name: a string of the name of the schema table of interest
+    :return: a dictionary with the names of the columns
+    '''
+    
+    if table_name == 'sites':
+        # Save the column names of interest in a dict
+        col_names_sites = {
+            "siteName": "SiteID",
+            "decimalLatitude": "Latitude",
+            "decimalLongitude": "Longitude",
+            "geodeticDatum": "geodeticDatum",
+            "countryCode": "countryCode",
+        }
+
+        return col_names_sites
+    
+    if table_name == 'movies':
+        # Save the column names of interest in a dict
+        col_names_movies = {
+            "filename": "filename",
+            "created_on": "EventDate",
+            "fps": "fps",
+            "duration": "duration",
+            "sampling_start": "SamplingStart",
+            "sampling_end": "SamplingEnd",
+            "author": "RecordedBy",
+            "site_id": "SiteID",
+            "fpath": "LinkToVideoFile",
+        }
+        return col_names_movies
+    
+    else:
+        raise ValueError("The table for Spyfish doesn't match the schema tables")
+
 def check_spyfish_movies(movies_df: pd.DataFrame, db_info_dict: dict):
     """
     It takes a dataframe of movies and a dictionary with the info of the database and returns a

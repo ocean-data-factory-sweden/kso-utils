@@ -276,27 +276,34 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     # Load the csv with movies information
     df = pd.read_csv(db_info_dict["local_movies_csv"])
 
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        # Rename columns to match squema requirements
-        df = spyfish_utils.process_spyfish_movies(df)
-        
+    # Get project-specific column names
+    col_names = project_utils.get_col_names(project, "local_movies_csv")
+    
+    print(col_names)
+    
+    # Set project-specific column names of interest
+    col_fps = col_names['fps']
+    col_duration = col_names['duration']
+    col_sampling_start = col_names['sampling_start']
+    col_sampling_end = col_names['sampling_end']
+    col_fpath = col_names['fpath']
+
     if review_method.value.startswith("Basic"):
         # Check if fps or duration is missing from any movie
-        if not df[["fps", "duration", "sampling_start", "sampling_end"]].isna().any().any():
+        if not df[[col_fps, col_duration, col_sampling_start, col_sampling_end]].isna().any().any():
             raise ValueError("Fps, duration and sampling information is not empty")
           
         else:
             # Create a df with only those rows with missing fps/duration
-            df_missing = df[df["fps"].isna()|df["duration"].isna()].reset_index(drop=True)
+            df_missing = df[df[col_fps].isna()|df[col_duration].isna()].reset_index(drop=True)
             
             logging.info("Retrieving the paths to access the movies")
             # Add a column with the path (or url) where the movies can be accessed from
-            df_missing["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df_missing["fpath"], total=df_missing.shape[0])])
+            df_missing["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df_missing[col_fpath], total=df_missing.shape[0])])
 
             logging.info("Getting the fps and duration of the movies")
             # Read the movies and overwrite the existing fps and duration info 
-            df_missing[["fps","duration"]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])], columns=["fps", "duration"])
+            df_missing[[col_fps,col_duration]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])], columns=[col_fps, col_duration])
 
             # Add the missing info to the original df based on movie ids
             df.set_index("movie_id", inplace=True)
@@ -307,29 +314,29 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     else:
         logging.info("Retrieving the paths to access the movies")
         # Add a column with the path (or url) where the movies can be accessed from
-        df["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df["fpath"], total=df.shape[0])])
+        df["movie_path"] = pd.Series([movie_utils.get_movie_path(i, db_info_dict, project) for i in tqdm(df[col_fpath], total=df.shape[0])])
 
         logging.info("Getting the fps and duration of the movies")
         # Read the movies and overwrite the existing fps and duration info 
-        df[["fps","duration"]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])], columns=["fps", "duration"])
+        df[[col_fps,col_duration]] = pd.DataFrame([movie_utils.get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])], columns=[col_fps, col_duration])
 
         logging.info("Standardising the format, frame rate and codec of the movies")
 
         # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
-        [movie_utils.standarise_movie_format(i, j, k, db_info_dict, project, gpu_available) for i,j,k in tqdm(zip(df["movie_path"],df["filename"], df["fpath"]), total=df.shape[0])]
+        [movie_utils.standarise_movie_format(i, j, k, db_info_dict, project, gpu_available) for i,j,k in tqdm(zip(df["movie_path"],df["filename"], df[col_fpath]), total=df.shape[0])]
         
         # Drop unnecessary columns
         df = df.drop(columns=['movie_path'])
     
     # Fill out missing sampling start information
-    df.loc[df["sampling_start"].isna(), "sampling_start"] = 0.0
+    df.loc[df[col_sampling_start].isna(), col_sampling_start] = 0.0
     
     # Fill out missing sampling end information
-    df.loc[df["sampling_end"].isna(), "sampling_end"] = df["duration"]
+    df.loc[df[col_sampling_end].isna(), col_sampling_end] = df[col_duration]
 
     # Prevent sampling end times longer than actual movies
-    if (df["sampling_end"] > df["duration"]).any():
-        mov_list = df[df["sampling_end"] > df["duration"]].filename.unique()
+    if (df[col_sampling_end] > df[col_duration]).any():
+        mov_list = df[df[col_sampling_end] > df[col_duration]].filename.unique()
         raise ValueError(f"The sampling_end times of the following movies are longer than the actual movies {mov_list}")
     
     # Save the updated df locally

@@ -5,6 +5,10 @@ import pandas as pd
 from dataclasses import dataclass
 from dataclass_csv import DataclassReader, DataclassWriter
 
+# util imports
+import kso_utils.spyfish_utils as spyfish_utils
+
+
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -65,3 +69,65 @@ def add_project(project_info: dict = {}):
         w = DataclassWriter(f, project, Project)
         w.write(skip_header=True)
 
+def get_col_names(project: Project, local_csv: str):
+    '''Return a dictionary with the project-specific column names of a csv of interest
+    This function helps matching the schema format without modifying the column names of the original csv.
+    
+    :param project: The project object
+    :param local_csv: a string of the name of the local csv of interest
+    :return: a dictionary with the names of the columns
+    '''
+
+    # Get project-specific server info
+    project_name = project.Project_name
+
+    if 'sites' in local_csv:
+        # Get spyfish specific column names
+        if project_name == "Spyfish_Aotearoa":
+            col_names_sites = spyfish_utils.get_spyfish_col_names("sites")
+
+        else:
+            # Save the column names of interest in a dict
+            col_names_sites = {
+                "siteName": "siteName",
+                "decimalLatitude": "decimalLatitude",
+                "decimalLongitude": "decimalLongitude",
+                "geodeticDatum": "geodeticDatum",
+                "countryCode": "countryCode",
+            }
+
+        return col_names_sites
+    
+    if 'movies' in local_csv:
+        # Get spyfish specific column names
+        if project_name == "Spyfish_Aotearoa":
+            col_names_movies = spyfish_utils.get_spyfish_col_names("movies")
+            
+        else:
+            # Save the column names of interest in a dict
+            col_names_movies = {
+                "filename": "filename",
+                "created_on": "created_on",
+                "fps": "fps",
+                "duration": "duration",
+                "sampling_start": "sampling_start",
+                "sampling_end": "sampling_end",
+                "author": "author",
+                "site_id": "site_id",
+                "fpath": "fpath",
+            }
+        
+        return col_names_movies
+
+    if 'species' in local_csv:
+        # Save the column names of interest in a dict
+        col_names_species = {
+            "label": "label",
+            "scientificName": "scientificName",
+            "taxonRank": "taxonRank",
+            "kingdom": "kingdom",
+        }
+        return col_names_species
+
+    else:
+        raise ValueError("The local csv doesn't have a table match in the schema")
