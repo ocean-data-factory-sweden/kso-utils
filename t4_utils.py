@@ -39,29 +39,25 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 out_df = pd.DataFrame()
 
-# Function to set up and collect project-specific information
-def setup_frame_info(project: project_utils.Project):
-    # Initiate db
-    db_info_dict = t_utils.initiate_db(project)
-    zoo_number = project.Zooniverse_number
-    if str(zoo_number).isdigit():
-        # Connect to Zooniverse project
-        zoo_project = t_utils.connect_zoo_project(project)
-        zoo_info_dict = t_utils.retrieve__populate_zoo_info(project = project, 
-                                                    db_info_dict = db_info_dict,
-                                                    zoo_project = zoo_project,
-                                                    zoo_info = ["subjects", "classifications", "workflows"])
-    else:
-        zoo_project, zoo_info_dict = None, None
-    return db_info_dict, zoo_project, zoo_info_dict
+# 
+def choose_species(db_info_dict: dict):
+    """
+    This function generates a widget to select the species of interest
+    
+    :param db_info_dict: a dictionary containing the path to the database
+    :type db_info_dict: dict
+    """
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
 
-# Function to select the species of interest from those available
-def choose_species(db_path: str = "koster_lab.db"):
-    conn = db_utils.create_connection(db_path)
+    # Get a list of the species available
     species_list = pd.read_sql_query("SELECT label from species", conn)["label"].tolist()
+    
+    # Roadblock to check if species list is empty
     if len(species_list) == 0:
-        species_list = [""]
-        logging.error("Your database contains no species, please add at least one species before continuing.")
+        raise ValueError(f"Your database contains no species, please add at least one species before continuing.")
+    
+    #Generate the widget
     w = widgets.SelectMultiple(
         options=species_list,
         value=[species_list[0]],
@@ -338,16 +334,14 @@ def extract_frames(project: project_utils.Project, df: pd.DataFrame, server_dict
 def get_frames(species_names: list, db_path: str, zoo_info_dict: dict,
                server_dict: dict, project: project_utils.Project, n_frames_subject=3, subsample_up_to=100):
     
-    ### Transform species names to species ids ##
-
-    if species_names[0] == "":
-        logging.error("No species were selected. Please select at least one species before continuing.")
+    # Roadblock to check if species list is empty
+    if len(species_names) == 0:
+        raise ValueError(f"No species were selected. Please select at least one species before continuing.")
         
-    else:
-        species_ids = get_species_ids(project, species_names)
+    # Transform species names to species ids
+    species_ids = get_species_ids(project, species_names)
         
-    
-    ### Retrieve project-specific information and connect to db
+    # Retrieve project-specific information and connect to db
     movie_df = s_utils.retrieve_movie_info_from_server(project=project, db_info_dict=server_dict)
     conn = db_utils.create_connection(db_path)
     
