@@ -24,7 +24,7 @@ from PIL import Image as PILImage, ImageDraw
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 #### Set up ####
 def choose_agg_parameters(subject_type: str):

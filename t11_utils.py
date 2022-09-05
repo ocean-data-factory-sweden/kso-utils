@@ -18,7 +18,7 @@ import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 
 def check_movies_from_server(db_info_dict: dict, project: project_utils.Project):

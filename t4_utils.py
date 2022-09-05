@@ -35,7 +35,7 @@ import kso_utils.t8_utils as t8
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 out_df = pd.DataFrame()
 

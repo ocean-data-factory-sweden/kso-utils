@@ -2,6 +2,7 @@
 import pandas as pd
 import os
 import paramiko
+import logging
 from paramiko import SSHClient
 from scp import SCPClient
 
@@ -14,7 +15,7 @@ import kso_utils.db_utils as db_utils
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 def transfer_model(model_name: str, artifact_dir: str, project_name: str, user: str, password: str):
     """

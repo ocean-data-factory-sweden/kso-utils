@@ -14,7 +14,7 @@ import kso_utils.db_utils as db_utils
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 
 def get_spyfish_col_names(table_name: str):

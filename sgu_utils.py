@@ -4,7 +4,7 @@ import logging
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 
 def process_sgu_photos_csv(db_initial_info: dict):

@@ -21,7 +21,7 @@ import imagesize
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 
 def generate_csv_report(evaluation_path: str):

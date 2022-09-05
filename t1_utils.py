@@ -27,7 +27,7 @@ import kso_utils.project_utils as project_utils
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 out_df = pd.DataFrame()
 

@@ -17,7 +17,7 @@ import kso_utils.tutorials_utils as tutorials_utils
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 def get_fps_duration(movie_path: str):
     '''

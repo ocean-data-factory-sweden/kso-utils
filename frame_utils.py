@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 # Logging
 logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
     """

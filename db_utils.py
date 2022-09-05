@@ -12,9 +12,8 @@ import kso_utils.sgu_utils as sgu_utils
 import kso_utils.project_utils as project_utils
 
 # Logging
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
 
 # Utility functions for common database operations
 
