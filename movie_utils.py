@@ -89,7 +89,7 @@ def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, d
     :type gpu_available: bool
     """
 
-    # Check movie format
+    ##### Check movie format ######
     filename, ext = os.path.splitext(movie_filename)
     
     if not ext.lower() == "mp4":
@@ -97,7 +97,7 @@ def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, d
         # Set conversion to True
         convert_video_T_F = True
 
-    # Check frame rate
+    ##### Check frame rate #######
     cap = cv2.VideoCapture(movie_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
@@ -106,7 +106,7 @@ def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, d
         # Set conversion to True
         convert_video_T_F = True
 
-    # Check codec information
+    ##### Check codec info ########
     h = int(cap.get(cv2.CAP_PROP_FOURCC))
     codec = chr(h&0xff) + chr((h>>8)&0xff) + chr((h>>16)&0xff) + chr((h>>24)&0xff)
     
@@ -115,39 +115,52 @@ def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, d
         # Set conversion to True
         convert_video_T_F = True
 
-    # Check movie filesize in relation to its duration
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = frame_count/fps
-    duration_mins = duration/60
+    ##### Check movie file #######
+    ##### (not needed in Spyfish) #####
+    # Create a list of the project where movie compression is not needed
+    project_no_compress = ["Spyfish_Aotearoa"]
     
-    # Check if the movie is accessible locally
-    if os.path.exists(movie_path):
-        # Store the size of the movie
-        size = os.path.getsize(movie_path)
+    if project.Project_name in project_no_compress:
+        # Set movie compression to false
+        compress_video = False
 
-    # Check if the path to the movie is a url
-    elif tutorials_utils.is_url(movie_path):
-        # Store the size of the movie
-        size = urllib.request.urlopen(movie_path).length
-    
     else:
-        logging.error(f"The path to {movie_path} is invalid")      
-      
-    sizeGB = size/(1024*1024*1024)
-    size_duration = sizeGB/duration_mins
+        # Check movie filesize in relation to its duration
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count/fps
+        duration_mins = duration/60
+        
+        # Check if the movie is accessible locally
+        if os.path.exists(movie_path):
+            # Store the size of the movie
+            size = os.path.getsize(movie_path)
 
-    if size_duration > 0.16:
-        logging.info("File size of movie is too large (+5GB per 30 mins of footage).")
-        # Set conversion to True
-        convert_video_T_F = True
-           
-    # Start converting video if movie didn't pass any of the checks
-    if convert_video_T_F:
-        if gpu_available:
-            conv_mov_path = convert_video(movie_path, movie_filename, True)
+        # Check if the path to the movie is a url
+        elif tutorials_utils.is_url(movie_path):
+            # Store the size of the movie
+            size = urllib.request.urlopen(movie_path).length
+        
         else:
-            conv_mov_path = convert_video(movie_path, movie_filename, False)
+            logging.error(f"The path to {movie_path} is invalid")      
+          
+        # Calculate the size:duration ratio
+        sizeGB = size/(1024*1024*1024)
+        size_duration = sizeGB/duration_mins
 
+        if size_duration > 0.16:
+            # Compress the movie if file size is too large
+            logging.info("File size of movie is too large (+5GB per 30 mins of footage).")
+            
+            # Specify to compress the video
+            compress_video = True
+        else:
+            # Set movie compression to false
+            compress_video = False
+
+    # Start converting/compressing video if movie didn't pass any of the checks
+    if convert_video_T_F or compress_video:
+        conv_mov_path = convert_video(movie_path, movie_filename, gpu_available, compress_video)
+        
         # Upload the converted movie to the server
         server_utils.upload_movie_server(conv_mov_path, f_path, db_info_dict, project)
 
@@ -155,7 +168,7 @@ def standarise_movie_format(movie_path: str, movie_filename: str, f_path: str, d
         logging.info(f"{movie_filename} format is standard.")
         
 
-def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = False):
+def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = False, compression: bool = False):
     """
     It takes a movie file path and a boolean indicating whether a GPU is available, and returns a new
     movie file path.
@@ -166,6 +179,8 @@ def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = Fa
     :type movie_path: str
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
+    :param compression: Boolean, whether or not movie compression is required
+    :type compression: bool
     :return: The path to the converted video file.
     """
     conv_filename = "conv_" + movie_filename
@@ -184,7 +199,8 @@ def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = Fa
     else:
       logging.error("The path to", movie_path," is invalid")
 
-    if gpu_available:
+    
+    if gpu_available and compression:
         subprocess.call(["ffmpeg",
                     "-hwaccel", "cuda",
                     "-hwaccel_output_format", "cuda", 
@@ -193,13 +209,32 @@ def convert_video(movie_path: str, movie_filename: str, gpu_available: bool = Fa
                     "-an", #removes the audio
                     "-crf", "22", # compresses the video
                     str(conv_fpath)])
-    else:
+                    
+    elif gpu_available and not compression:
+        subprocess.call(["ffmpeg",
+                    "-hwaccel", "cuda",
+                    "-hwaccel_output_format", "cuda", 
+                    "-i", str(movie_path), 
+                    "-c:v", "h264_nvenc", # ensures correct codec
+                    "-an", #removes the audio
+                    str(conv_fpath)])
+                    
+    elif not gpu_available and compression:
         subprocess.call(["ffmpeg", 
                     "-i", str(movie_path), 
                     "-c:v", "h264", # ensures correct codec
                     "-an", #removes the audio
                     "-crf", "22", # compresses the video
                     str(conv_fpath)])
+
+    elif not gpu_available and not compression:
+        subprocess.call(["ffmpeg", 
+                    "-i", str(movie_path), 
+                    "-c:v", "h264", # ensures correct codec
+                    "-an", #removes the audio
+                    str(conv_fpath)])
+    else:
+        raise ValueError(f"{movie_path} not modified")
 
     # Ensure open permissions on file (for now)
     os.chmod(conv_fpath, 0o777)
