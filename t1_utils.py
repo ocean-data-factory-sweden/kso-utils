@@ -279,8 +279,6 @@ def check_movies_csv(db_info_dict: dict, project: project_utils.Project, review_
     # Get project-specific column names
     col_names = project_utils.get_col_names(project, "local_movies_csv")
     
-    print(col_names)
-    
     # Set project-specific column names of interest
     col_fps = col_names['fps']
     col_duration = col_names['duration']

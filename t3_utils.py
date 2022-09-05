@@ -64,8 +64,7 @@ def check_movie_uploaded(movie_i: str, db_info_dict: dict):
 
     if already_uploaded:
         clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
-        logging.info(f"{movie_i} has clips already uploaded. The clips start and finish at:")
-        logging.info(clips_uploaded[["clip_start_time", "clip_end_time"]], sep = "\n")
+        logging.info(f"{movie_i} has clips already uploaded.")
     else:
         logging.info(f"{movie_i} has not been uploaded to Zooniverse yet")
         
@@ -121,7 +120,7 @@ def select_random_clips(movie_i: str, db_info_dict: dict):
                 "random_clip_length": clip_length
         }
 
-        logging.info("The initial seconds of the examples will be:", *random_clips_info["clip_start_time"], sep = "\n")
+        logging.info(f"The initial seconds of the examples will be: {random_clips_info['clip_start_time']}")
 
         return random_clips_info
 
@@ -385,7 +384,7 @@ def modify_clips(clip_i: str, modification_details: dict, output_clip_path: str,
                 logging.info('stderr:', e.stderr.decode('utf8'))
                 raise e
 
-    logging.info("Clip", clip_i, "modified successfully")
+    logging.info(f"Clip {clip_i} modified successfully")
         
     
 def create_modified_clips(clips_list: list, movie_i: str, modification_details: dict, project: project_utils.Project, gpu_available: bool, pool_size: int = 4):
@@ -550,7 +549,7 @@ def select_clip_n_len(movie_i: str, db_info_dict: dict):
         # Calculate the number of clips
         clips = int((clips_range[1]-clips_range[0])/clip_length)
 
-        logging.info("Number of clips to upload:", clips)
+        logging.info(f"Number of clips to upload: {clips}")
 
         return clips
 
@@ -584,11 +583,9 @@ def review_clip_selection(clip_selection, movie_i: str, clip_modification):
     end_trim = clip_selection.kwargs['clips_range'][1]
 
     # Review the clips that will be created
-    logging.info("You are about to create", round(clip_selection.result), 
-          "clips from", movie_i)
-    logging.info("starting at", datetime.timedelta(seconds=start_trim), 
-          "and ending at", datetime.timedelta(seconds=end_trim))
-    logging.info("The modification selected is", clip_modification)
+    logging.info(f"You are about to create {round(clip_selection.result)} clips from {movie_i}")
+    logging.info(f"starting at {datetime.timedelta(seconds=start_trim)} and ending at {datetime.timedelta(seconds=end_trim)}")
+    logging.info(f"The modification selected is {clip_modification}")
 
 
 # Func to expand seconds
@@ -717,7 +714,7 @@ def create_clips(available_movies_df: pd.DataFrame, movie_i: str, movie_path: st
     potential_start_df["clip_length"] = clip_length
 
     if not clip_numbers==potential_start_df.shape[0]:
-        logging.info("There was an issue estimating the starting seconds for the", clip_numbers, "clips")
+        logging.info(f"There was an issue estimating the starting seconds for the {clip_numbers} clips")
 
     # Get project-specific server info
     server = project.server
@@ -733,7 +730,7 @@ def create_clips(available_movies_df: pd.DataFrame, movie_i: str, movie_path: st
     potential_start_df["clip_filename"] = movie_i + "_clip_" + potential_start_df["upl_seconds"].astype(str) + "_" + str(clip_length) + ".mp4"
 
     # Set the path of the clips
-    potential_start_df["clip_path"] = os.path.join(clips_folder, potential_start_df["clip_filename"])
+    potential_start_df["clip_path"] = clips_folder + os.sep + potential_start_df["clip_filename"]
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
@@ -744,7 +741,7 @@ def create_clips(available_movies_df: pd.DataFrame, movie_i: str, movie_path: st
     logging.info("Extracting clips")
     
     for i in range(0, potential_start_df.shape[0], pool_size):
-      logging.info("Modifying", i, "to", i+pool_size, "out of", potential_start_df.shape[0])
+      logging.info(f"Modifying {i} to {i+pool_size} out of {potential_start_df.shape[0]}")
       
       threadlist = []
       # Read each movie and extract the clips 
@@ -829,6 +826,11 @@ def set_zoo_metadata(df: pd.DataFrame, project: project_utils.Project, db_info_d
         # Read movies csv as pd
         moviesdf = pd.read_csv(db_info_dict["local_movies_csv"])
         
+        # Rename columns to match schema names
+        sitesdf = sitesdf.rename(columns={
+            "siteName": "SiteID",
+            })
+            
         # Include movie info to the sites df
         sitesdf = sitesdf.merge(moviesdf, on="SiteID")
         
@@ -882,8 +884,7 @@ def set_zoo_metadata(df: pd.DataFrame, project: project_utils.Project, db_info_d
         
     # Prevent NANs on any column
     if upload_to_zoo.isnull().values.any():
-        logging.info("The following columns have NAN values", 
-              upload_to_zoo.columns[upload_to_zoo.isna().any()].tolist())
+        logging.info(f"The following columns have NAN values {upload_to_zoo.columns[upload_to_zoo.isna().any()].tolist()}")
         
     return upload_to_zoo, sitename, created_on
 
