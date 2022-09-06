@@ -247,8 +247,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
     # when Skip button is pressed we move on to the next file
     def on_skip():
         w_progress.value += 1
-        if w_progress.value == 2 or w_progress.value == len(annotations):
-            w_progress.value = len(annotations)
+        if w_progress.value == len(annotations):
             button = widgets.Button(
                 description='Click to restart.',
                 disabled=False,
