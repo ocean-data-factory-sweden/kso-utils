@@ -107,8 +107,8 @@ def display_changes(db_info_dict: dict, isheet: ipysheet.Sheet, df_filtered: pd.
     
     # If changes in dataframes display them and ask the user to confirm them
     if sheet_diff_df.empty:
-        logging.error("There are no changes to update")
-        raise
+        logging.info("No changes were made.")
+        return sheet_df, sheet_df
     else:
         # Retieve the column name of the id of interest (Sites, movies,..)
         id_col = [col for col in df_filtered.columns if '_id' in col][0]
