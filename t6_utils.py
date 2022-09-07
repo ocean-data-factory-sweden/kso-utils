@@ -30,7 +30,7 @@ def generate_csv_report(evaluation_path: str):
     > We read the labels from the `labels` folder, and create a dictionary with the filename as the key,
     and the list of labels as the value. We then convert this dictionary to a dataframe, and write it to
     a csv file
-    
+
     :param evaluation_path: The path to the evaluation folder
     :type evaluation_path: str
     :return: A dataframe with the following columns:
@@ -46,25 +46,23 @@ def generate_csv_report(evaluation_path: str):
             for line in lines:
                 class_id, x, y, w, h, conf = line.split(" ")
                 data_dict[f].append([class_id, frame_no, x, y, w, h, float(conf)])
-    dlist = [
-            [key, *i] for key, value in data_dict.items() for i in value
-            ]
+    dlist = [[key, *i] for key, value in data_dict.items() for i in value]
     detect_df = pd.DataFrame.from_records(
-                dlist, columns=["filename", "class_id", "frame_no", "x", "y", "w", "h", "conf"]
-                )
-    csv_out = Path(evaluation_path,"annotations.csv")
+        dlist, columns=["filename", "class_id", "frame_no", "x", "y", "w", "h", "conf"]
+    )
+    csv_out = Path(evaluation_path, "annotations.csv")
     detect_df.sort_values(
-                    by="frame_no",
-                    key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
-                    ).to_csv(csv_out, index=False)
+        by="frame_no", key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
+    ).to_csv(csv_out, index=False)
     logging.info("Report created at {}".format(csv_out))
     return detect_df
+
 
 def generate_tracking_report(tracker_dir: str, eval_dir: str):
     """
     > It takes the tracking output from the tracker and creates a csv file that can be used for
     evaluation
-    
+
     :param tracker_dir: The directory where the tracking results are stored
     :type tracker_dir: str
     :param eval_dir: The directory where the evaluation results will be stored
@@ -82,18 +80,20 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
                     class_id, frame_no, tracker_id = vals[0], vals[1], vals[2]
                     data_dict[track_file].append([class_id, frame_no, tracker_id])
     dlist = [
-            [os.path.splitext(key)[0]+f"_{i[1]}.txt", i[0], i[1], i[2]] for key, value in data_dict.items() for i in value
-            ]
+        [os.path.splitext(key)[0] + f"_{i[1]}.txt", i[0], i[1], i[2]]
+        for key, value in data_dict.items()
+        for i in value
+    ]
     detect_df = pd.DataFrame.from_records(
-                dlist, columns=["filename", "class_id", "frame_no", "tracker_id"]
-                )
-    csv_out = Path(eval_dir,"tracking.csv")
+        dlist, columns=["filename", "class_id", "frame_no", "tracker_id"]
+    )
+    csv_out = Path(eval_dir, "tracking.csv")
     detect_df.sort_values(
-                    by="frame_no",
-                    key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
-                    ).to_csv(csv_out, index=False)
+        by="frame_no", key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
+    ).to_csv(csv_out, index=False)
     logging.info("Report created at {}".format(csv_out))
     return detect_df
+
 
 def generate_counts(eval_dir: str, tracker_dir: str, model_dir: str):
     model = torch.load(os.path.join(model_dir, "best.pt"))
@@ -101,19 +101,28 @@ def generate_counts(eval_dir: str, tracker_dir: str, model_dir: str):
     class_df = generate_csv_report(eval_dir)
     tracker_df = generate_tracking_report(tracker_dir, eval_dir)
     tracker_df["frame_no"] = tracker_df["frame_no"].astype(int)
-    combined_df = pd.merge(class_df, tracker_df, on=["filename", "frame_no", "class_id"])
+    combined_df = pd.merge(
+        class_df, tracker_df, on=["filename", "frame_no", "class_id"]
+    )
     combined_df["species_name"] = combined_df["class_id"].apply(lambda x: names[int(x)])
     print("--- DETECTION REPORT ---")
     print("--------------------------------")
     print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
 
-def track_objects(source_dir: str, artifact_dir: str, tracker_folder: str, conf_thres: float = 0.5, img_size: int = 720):
+
+def track_objects(
+    source_dir: str,
+    artifact_dir: str,
+    tracker_folder: str,
+    conf_thres: float = 0.5,
+    img_size: int = 720,
+):
     """
     This function takes in the source directory of the video, the artifact directory, the tracker
     folder, the confidence threshold, and the image size. It then copies the best model from the
     artifact directory to the tracker folder, and runs the tracking script. It then returns the latest
     tracker folder
-    
+
     :param source_dir: The directory where the images are stored
     :param artifact_dir: The directory where the model is saved
     :param tracker_folder: The folder where the Yolov5_DeepSort_OSNet repo is located
@@ -131,89 +140,117 @@ def track_objects(source_dir: str, artifact_dir: str, tracker_folder: str, conf_
     shutil.copyfile(os.path.join(artifact_dir, "best.pt"), "best.pt")
     best_model = "best.pt"
     try:
-        subprocess.check_output([f'python track.py --conf-thres {str(conf_thres)}  \
+        subprocess.check_output(
+            [
+                f'python track.py --conf-thres {str(conf_thres)}  \
                                  --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
                                  --imgsz {str(img_size)} --project {tracker_folder}/runs/track/ \
-                                 --deep_sort_model osnet_x0_5_msmt17'],
-                     shell=True, stderr=subprocess.STDOUT)
+                                 --deep_sort_model osnet_x0_5_msmt17'
+            ],
+            shell=True,
+            stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
+        raise RuntimeError(
+            "command '{}' return with error (code {}): {}".format(
+                e.cmd, e.returncode, e.output
+            )
+        )
     # Go up one directory
     if "Yolov5_DeepSort_OSNet" in os.getcwd():
         os.chdir(cwd)
     tracker_root = os.path.join(tracker_folder, "runs", "track")
-    latest_tracker = os.path.join(tracker_root, sorted(os.listdir(tracker_root))[-1], "tracks")
+    latest_tracker = os.path.join(
+        tracker_root, sorted(os.listdir(tracker_root))[-1], "tracks"
+    )
     logging.info("Tracking completed succesfully")
     return latest_tracker
+
 
 def encode_image(filepath):
     """
     It takes a filepath to an image, opens the image, reads the bytes, encodes the bytes as base64, and
     returns the encoded string
-    
+
     :param filepath: The path to the image file
     :return: the base64 encoding of the image.
     """
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         image_bytes = f.read()
-    encoded = str(base64.b64encode(image_bytes), 'utf-8')
-    return "data:image/jpg;base64,"+encoded
+    encoded = str(base64.b64encode(image_bytes), "utf-8")
+    return "data:image/jpg;base64," + encoded
+
 
 def get_annotations_viewer(data_path: str, species_list: list):
     """
     It takes a path to a folder containing images and annotations, and a list of species names, and
     returns a widget that allows you to view the images and their annotations, and to edit the
     annotations
-    
+
     :param data_path: the path to the data folder
     :type data_path: str
     :param species_list: a list of species names
     :type species_list: list
     :return: A VBox widget containing a progress bar and a BBoxWidget.
     """
-    image_path = os.path.join(data_path, 'images')
-    annot_path = os.path.join(data_path, 'labels')
-    
-    images = sorted([f for f in os.listdir(image_path) if os.path.isfile(os.path.join(image_path, f))])
-    annotations = sorted([f for f in os.listdir(annot_path) if os.path.isfile(os.path.join(annot_path, f))])
+    image_path = os.path.join(data_path, "images")
+    annot_path = os.path.join(data_path, "labels")
+
+    images = sorted(
+        [
+            f
+            for f in os.listdir(image_path)
+            if os.path.isfile(os.path.join(image_path, f))
+        ]
+    )
+    annotations = sorted(
+        [
+            f
+            for f in os.listdir(annot_path)
+            if os.path.isfile(os.path.join(annot_path, f))
+        ]
+    )
 
     # a progress bar to show how far we got
-    w_progress = widgets.IntProgress(value=0, max=len(images), description='Progress')
+    w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
     # the bbox widget
     image = os.path.join(image_path, images[0])
     width, height = imagesize.get(image)
     label_file = annotations[w_progress.value]
     bboxes = []
     labels = []
-    with open(os.path.join(annot_path, label_file), 'r') as f:
+    with open(os.path.join(annot_path, label_file), "r") as f:
         for line in f:
-            s=line.split(' ')
+            s = line.split(" ")
             labels.append(s[0])
-            
+
             left = (float(s[1]) - (float(s[3]) / 2)) * width
             top = (float(s[2]) - (float(s[4]) / 2)) * height
-            
-            bboxes.append({'x': left, #(float(s[1])-(float(s[3])/2))*width,
-                           'y': top, #(float(s[2])-(float(s[4])/2))*height,
-                           'width': float(s[3])*width, 
-                           'height': float(s[4])*height,
-                           'label': species_list[int(s[0])]})
-    w_bbox = BBoxWidget(
-        image = encode_image(image),
-        classes = species_list
-    )
 
-    # here we assign an empty list to bboxes but 
+            bboxes.append(
+                {
+                    "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                    "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                    "width": float(s[3]) * width,
+                    "height": float(s[4]) * height,
+                    "label": species_list[int(s[0])],
+                }
+            )
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
+
+    # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
     # and use its output for creating inital bboxes
     w_bbox.bboxes = bboxes
 
     # combine widgets into a container
-    w_container = widgets.VBox([
-        w_progress,
-        w_bbox,
-    ])
-     
+    w_container = widgets.VBox(
+        [
+            w_progress,
+            w_bbox,
+        ]
+    )
+
     def on_button_clicked(b):
         w_progress.value = 0
         image = os.path.join(image_path, images[0])
@@ -221,69 +258,76 @@ def get_annotations_viewer(data_path: str, species_list: list):
         label_file = annotations[w_progress.value]
         bboxes = []
         labels = []
-        with open(os.path.join(annot_path, label_file), 'r') as f:
+        with open(os.path.join(annot_path, label_file), "r") as f:
             for line in f:
-                s=line.split(' ')
+                s = line.split(" ")
                 labels.append(s[0])
-                
+
                 left = (float(s[1]) - (float(s[3]) / 2)) * width
                 top = (float(s[2]) - (float(s[4]) / 2)) * height
-                
-                bboxes.append({'x': left, #(float(s[1])-(float(s[3])/2))*width,
-                              'y': top, #(float(s[2])-(float(s[4])/2))*height,
-                              'width': float(s[3])*width, 
-                              'height': float(s[4])*height,
-                              'label': species_list[int(s[0])]})
+
+                bboxes.append(
+                    {
+                        "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                        "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                        "width": float(s[3]) * width,
+                        "height": float(s[4]) * height,
+                        "label": species_list[int(s[0])],
+                    }
+                )
         w_bbox.image = encode_image(image)
 
-        # here we assign an empty list to bboxes but 
+        # here we assign an empty list to bboxes but
         # we could also run a detection model on the file
         # and use its output for creating inital bboxes
         w_bbox.bboxes = bboxes
-        w_container.children=tuple(list(w_container.children[1:]))
+        w_container.children = tuple(list(w_container.children[1:]))
         b.close()
 
-    
     # when Skip button is pressed we move on to the next file
     def on_skip():
         w_progress.value += 1
         if w_progress.value == len(annotations):
             button = widgets.Button(
-                description='Click to restart.',
+                description="Click to restart.",
                 disabled=False,
-                display='flex',
-                flex_flow='column',
-                align_items='stretch'
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
             )
             if isinstance(w_container.children[0], widgets.Button):
-              w_container.children=tuple(list(w_container.children[1:]))
-            w_container.children=tuple([button] + list(w_container.children) )  
+                w_container.children = tuple(list(w_container.children[1:]))
+            w_container.children = tuple([button] + list(w_container.children))
             button.on_click(on_button_clicked)
 
         # open new image in the widget
         else:
-          image_file = images[w_progress.value]
-          image_p = os.path.join(image_path, image_file)
-          width, height = imagesize.get(image_p)
-          w_bbox.image = encode_image(image_p)
-          label_file = annotations[w_progress.value]
-          bboxes = []
-          with open(os.path.join(annot_path, label_file), 'r') as f:
-              for line in f:
-                  s=line.split(' ')
-                  left = (float(s[1]) - (float(s[3]) / 2)) * width
-                  top = (float(s[2]) - (float(s[4]) / 2)) * height
-                  bboxes.append({'x': left, #(float(s[1])-(float(s[3])/2))*width, 
-                                'y': top, #(float(s[2])-(float(s[4])/2))*height,
-                                'width': float(s[3])*width,
-                                'height': float(s[4])*height,
-                                'label': species_list[int(s[0])]})
+            image_file = images[w_progress.value]
+            image_p = os.path.join(image_path, image_file)
+            width, height = imagesize.get(image_p)
+            w_bbox.image = encode_image(image_p)
+            label_file = annotations[w_progress.value]
+            bboxes = []
+            with open(os.path.join(annot_path, label_file), "r") as f:
+                for line in f:
+                    s = line.split(" ")
+                    left = (float(s[1]) - (float(s[3]) / 2)) * width
+                    top = (float(s[2]) - (float(s[4]) / 2)) * height
+                    bboxes.append(
+                        {
+                            "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                            "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                            "width": float(s[3]) * width,
+                            "height": float(s[4]) * height,
+                            "label": species_list[int(s[0])],
+                        }
+                    )
 
-          # here we assign an empty list to bboxes but 
-          # we could also run a detection model on the file
-          # and use its output for creating initial bboxes
-          w_bbox.bboxes = bboxes
-    
+            # here we assign an empty list to bboxes but
+            # we could also run a detection model on the file
+            # and use its output for creating initial bboxes
+            w_bbox.bboxes = bboxes
+
     w_bbox.on_skip(on_skip)
 
     # when Submit button is pressed we save current annotations
@@ -292,20 +336,22 @@ def get_annotations_viewer(data_path: str, species_list: list):
         image_file = images[w_progress.value]
         width, height = imagesize.get(os.path.join(image_path, image_file))
         # save annotations for current image
-        open(os.path.join(annot_path, label_file), 'w').write(
-                                "\n".join(
-                                        [
-                                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                                            species_list.index(i['label']),  # single class vs multiple classes
-                                            min((i['x'] + i['width'] / 2) / width, 1.0),
-                                            min((i['y'] + i['height'] / 2) / height, 1.0),
-                                            min(i['width'] / width, 1.0),
-                                            min(i['height'] / height, 1.0),
-                                        )
-                                        for i in w_bbox.bboxes
-                                        ]
-                                    )
-                                )
+        open(os.path.join(annot_path, label_file), "w").write(
+            "\n".join(
+                [
+                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                        species_list.index(
+                            i["label"]
+                        ),  # single class vs multiple classes
+                        min((i["x"] + i["width"] / 2) / width, 1.0),
+                        min((i["y"] + i["height"] / 2) / height, 1.0),
+                        min(i["width"] / width, 1.0),
+                        min(i["height"] / height, 1.0),
+                    )
+                    for i in w_bbox.bboxes
+                ]
+            )
+        )
         # move on to the next file
         on_skip()
 
@@ -313,40 +359,51 @@ def get_annotations_viewer(data_path: str, species_list: list):
 
     return w_container
 
+
 def get_data_viewer(data_path: str):
     """
     It takes a path to a directory of images, and returns a function that displays the images in that
     directory
-    
+
     :param data_path: the path to the data folder
     :type data_path: str
     :return: A function that takes in a parameter k and returns a widget that displays the image at
     index k in the list of images.
     """
-    imgs = list(filter(lambda fn:fn.lower().endswith('.jpg'), os.listdir(data_path)))
+    imgs = list(filter(lambda fn: fn.lower().endswith(".jpg"), os.listdir(data_path)))
+
     def loadimg(k):
-        display(draw_box(os.path.join(data_path,imgs[k])))
-    return widgets.interact(loadimg ,k=(0,len(imgs)-1))
+        display(draw_box(os.path.join(data_path, imgs[k])))
+
+    return widgets.interact(loadimg, k=(0, len(imgs) - 1))
 
 
 def draw_box(path: str):
     """
     It takes a path to an image, opens it, opens the corresponding label file, and draws a box around
     each object in the image
-    
+
     :param path: the path to the image
     :type path: str
     :return: The image with the bounding boxes drawn on it.
     """
     im = PILImage.open(path)
-    d = { line.split()[0] : line.split()[1:] for line in open(
-        path.replace("images", "labels").replace(".jpg", ".txt")) }
+    d = {
+        line.split()[0]: line.split()[1:]
+        for line in open(path.replace("images", "labels").replace(".jpg", ".txt"))
+    }
     dw, dh = im._size
     img1 = ImageDraw.Draw(im)
     for i, vals in d.items():
         vals = tuple(float(val) for val in vals)
-        vals_adjusted = tuple([int((vals[0]-vals[2]/2)*dw), int((vals[1]-vals[3]/2)*dh),
-                               int((vals[0]+vals[2]/2)*dw), int((vals[1]+vals[3]/2)*dh)])
+        vals_adjusted = tuple(
+            [
+                int((vals[0] - vals[2] / 2) * dw),
+                int((vals[1] - vals[3] / 2) * dh),
+                int((vals[0] + vals[2] / 2) * dw),
+                int((vals[1] + vals[3] / 2) * dh),
+            ]
+        )
         img1.rectangle(vals_adjusted, outline="red", width=2)
     return im
 
@@ -354,7 +411,7 @@ def draw_box(path: str):
 def get_dataset(project_name: str, model: str):
     """
     It takes in a project name and a model name, and returns the paths to the train and val datasets
-    
+
     :param project_name: The name of the project you want to download the dataset from
     :type project_name: str
     :param model: The model you want to use
@@ -364,8 +421,10 @@ def get_dataset(project_name: str, model: str):
     """
     api = wandb.Api()
     run_id = model.split("_")[1]
-    run = api.run(f'koster/{project_name.lower()}/runs/{run_id}')
-    datasets = [artifact for artifact in run.used_artifacts() if artifact.type == 'dataset']
+    run = api.run(f"koster/{project_name.lower()}/runs/{run_id}")
+    datasets = [
+        artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
+    ]
     if len(datasets) == 0:
         logging.error("No datasets are linked to these runs. Please try another run.")
         return None, None
@@ -382,7 +441,7 @@ def get_dataset(project_name: str, model: str):
 def get_model(model_name: str, project_name: str, download_path: str):
     """
     It downloads the latest model checkpoint from the specified project and model name
-    
+
     :param model_name: The name of the model you want to download
     :type model_name: str
     :param project_name: The name of the project you want to download the model from
@@ -393,7 +452,10 @@ def get_model(model_name: str, project_name: str, download_path: str):
     """
     api = wandb.Api()
     collections = [
-        coll for coll in api.artifact_type(type_name='model', project=f'koster/{project_name.lower()}').collections()
+        coll
+        for coll in api.artifact_type(
+            type_name="model", project=f"koster/{project_name.lower()}"
+        ).collections()
     ]
     model = [i for i in collections if i.name == model_name]
     if len(model) == 1:
@@ -412,7 +474,7 @@ def choose_model(project_name: str):
     """
     It takes a project name and returns a dropdown widget that displays the metrics of the model
     selected
-    
+
     :param project_name: The name of the project you want to load the model from
     :return: The model_widget is being returned.
     """
@@ -420,37 +482,49 @@ def choose_model(project_name: str):
     model_info = {}
     api = wandb.Api()
     # weird error fix (initialize api another time)
-    api.runs(path=f'koster/{project_name.lower()}')
-    for edge, obj in zip(api.runs(path=f'koster/{project_name.lower()}').last_response["project"]["runs"]["edges"],
-                    api.runs(path=f'koster/{project_name.lower()}').objects):
-        model_dict[edge["node"]["displayName"]] = "run_"+obj.id+"_model"
-        model_info["run_"+obj.id+"_model"] = literal_eval(edge["node"]["summaryMetrics"])
+    api.runs(path=f"koster/{project_name.lower()}")
+    for edge, obj in zip(
+        api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
+            "runs"
+        ]["edges"],
+        api.runs(path=f"koster/{project_name.lower()}").objects,
+    ):
+        model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
+        model_info["run_" + obj.id + "_model"] = literal_eval(
+            edge["node"]["summaryMetrics"]
+        )
     # Add "no movie" option to prevent conflicts
-    #models = np.append(list(model_dict.keys()),"No model")
-    
+    # models = np.append(list(model_dict.keys()),"No model")
+
     model_widget = widgets.Dropdown(
-                    options=[(name, model)  for name, model in model_dict.items()],
-                    description="Select model:",
-                    ensure_option=False,
-                    disabled=False,
-                    layout=Layout(width='50%'),
-                    style = {'description_width': 'initial'}
-                )
-    
+        options=[(name, model) for name, model in model_dict.items()],
+        description="Select model:",
+        ensure_option=False,
+        disabled=False,
+        layout=Layout(width="50%"),
+        style={"description_width": "initial"},
+    )
+
     main_out = widgets.Output()
     display(model_widget, main_out)
-    
+
     # Display the original and modified clips
     def on_change(change):
         with main_out:
             clear_output()
-            if change["new"]=="No file":
+            if change["new"] == "No file":
                 print("Choose another file")
             else:
-                print({k:v for k,v in model_info[change["new"]].items() if "metrics" in k})
-                   
-    model_widget.observe(on_change, names='value')
-    
+                print(
+                    {
+                        k: v
+                        for k, v in model_info[change["new"]].items()
+                        if "metrics" in k
+                    }
+                )
+
+    model_widget.observe(on_change, names="value")
+
     return model_widget
 
 
@@ -459,43 +533,44 @@ def choose_files(path: str):
     """
     It creates a dropdown menu of all the files in the specified directory, and displays the selected
     file
-    
+
     :param path: the path to the folder containing the clips
     :type path: str
     """
-    
+
     # Add "no movie" option to prevent conflicts
-    files = np.append([path+i for i in os.listdir(path)], "No file")
-    
+    files = np.append([path + i for i in os.listdir(path)], "No file")
+
     clip_path_widget = widgets.Dropdown(
-                    options=tuple(np.sort(files)),
-                    description="Select file:",
-                    ensure_option=True,
-                    disabled=False,
-                    layout=Layout(width='50%'),
-                    style = {'description_width': 'initial'}
-                )
-    
+        options=tuple(np.sort(files)),
+        description="Select file:",
+        ensure_option=True,
+        disabled=False,
+        layout=Layout(width="50%"),
+        style={"description_width": "initial"},
+    )
+
     main_out = widgets.Output()
     display(clip_path_widget, main_out)
-    
+
     # Display the original and modified clips
     def on_change(change):
         with main_out:
             clear_output()
-            if change["new"]=="No file":
+            if change["new"] == "No file":
                 print("Choose another file")
             else:
                 a = view_file(change["new"])
                 display(a)
-                   
-    clip_path_widget.observe(on_change, names='value')
+
+    clip_path_widget.observe(on_change, names="value")
+
 
 # Display the frames using html
 def view_file(path: str):
     """
     It takes a path to a file, opens it, and returns a widget that can be displayed in the notebook
-    
+
     :param path: The path to the file you want to view
     :return: A widget that displays the image or video.
     """
@@ -505,16 +580,20 @@ def view_file(path: str):
     if extension.lower() in [".jpeg", ".png", ".jpg"]:
         widget = widgets.Image(value=file, format=extension)
     elif extension.lower() in [".mp4", ".mov", ".avi"]:
-        if os.path.exists('linked_content'):
-            shutil.rmtree('linked_content')
-        os.mkdir('linked_content')
-        os.symlink(path, 'linked_content/'+os.path.basename(path))
-        widget = HTML(f"""
+        if os.path.exists("linked_content"):
+            shutil.rmtree("linked_content")
+        os.mkdir("linked_content")
+        os.symlink(path, "linked_content/" + os.path.basename(path))
+        widget = HTML(
+            f"""
                     <video width=800 height=400 alt="test" controls>
                         <source src="linked_content/{os.path.basename(path)}" type="video/{extension.lower().replace(".", "")}">
                     </video>
-                """)
+                """
+        )
     else:
-        logging.error("File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi.")
+        logging.error(
+            "File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi."
+        )
 
     return widget

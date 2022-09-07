@@ -12,13 +12,14 @@ from tqdm import tqdm
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
 def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
     """
     For each unique movie, create a dictionary of movie paths and their corresponding pims.Video
     objects. Then, for each unique movie, frame number, species id, and filename, get the corresponding
     frame, get the bounding boxes for that frame, and draw the bounding boxes on the frame. Then, write
     the frame to the output directory
-    
+
     :param df: the dataframe containing the bounding box coordinates
     :param movie_dir: The directory where the movies are stored
     :param out_path: The path to the directory where you want to save the images with the bounding boxes

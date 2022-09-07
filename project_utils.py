@@ -13,6 +13,7 @@ import kso_utils.spyfish_utils as spyfish_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
+
 @dataclass
 class Project:
     Project_name: str
@@ -26,20 +27,20 @@ class Project:
     photo_folder: str = None
 
 
-def find_project(project_name: str = ''):
-    '''Find project information using
-       project csv path and project name'''
+def find_project(project_name: str = ""):
+    """Find project information using
+    project csv path and project name"""
     # Specify the path to the list of projects
     project_path = "../db_starter/projects_list.csv"
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
-        
+
     # Check path to the list of projects is a csv
     if os.path.exists(project_path) and not project_path.endswith(".csv"):
         logging.error("A csv file was not selected. Please try again.")
 
     elif os.path.exists(project_path) and os.path.exists(snic_path):
         project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
-        
+
     # If list of projects doesn't exist retrieve it from github
     elif not os.path.exists(project_path):
         github_path = "https://github.com/ocean-data-factory-sweden/koster_data_management/blob/main/db_starter/projects_list.csv?raw=true"
@@ -53,12 +54,11 @@ def find_project(project_name: str = ''):
                 logging.info(f"{project_name} loaded succesfully")
                 return row
 
-    
 
 def add_project(project_info: dict = {}):
-    '''Add new project information to
+    """Add new project information to
     project csv using a project_info dictionary
-    '''
+    """
     project_path = "../db_starter/projects_list.csv"
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
@@ -69,19 +69,20 @@ def add_project(project_info: dict = {}):
         w = DataclassWriter(f, project, Project)
         w.write(skip_header=True)
 
+
 def get_col_names(project: Project, local_csv: str):
-    '''Return a dictionary with the project-specific column names of a csv of interest
+    """Return a dictionary with the project-specific column names of a csv of interest
     This function helps matching the schema format without modifying the column names of the original csv.
-    
+
     :param project: The project object
     :param local_csv: a string of the name of the local csv of interest
     :return: a dictionary with the names of the columns
-    '''
+    """
 
     # Get project-specific server info
     project_name = project.Project_name
 
-    if 'sites' in local_csv:
+    if "sites" in local_csv:
         # Get spyfish specific column names
         if project_name == "Spyfish_Aotearoa":
             col_names_sites = spyfish_utils.get_spyfish_col_names("sites")
@@ -97,12 +98,12 @@ def get_col_names(project: Project, local_csv: str):
             }
 
         return col_names_sites
-    
-    if 'movies' in local_csv:
+
+    if "movies" in local_csv:
         # Get spyfish specific column names
         if project_name == "Spyfish_Aotearoa":
             col_names_movies = spyfish_utils.get_spyfish_col_names("movies")
-            
+
         else:
             # Save the column names of interest in a dict
             col_names_movies = {
@@ -116,10 +117,10 @@ def get_col_names(project: Project, local_csv: str):
                 "site_id": "site_id",
                 "fpath": "fpath",
             }
-        
+
         return col_names_movies
 
-    if 'species' in local_csv:
+    if "species" in local_csv:
         # Save the column names of interest in a dict
         col_names_species = {
             "label": "label",

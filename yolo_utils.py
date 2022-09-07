@@ -45,6 +45,7 @@ trackerTypes = [
     "CSRT",
 ]
 
+
 def clearImage(frame: np.ndarray):
     """
     We take the maximum value of each channel, and then take the minimum value of the three channels.
@@ -52,7 +53,7 @@ def clearImage(frame: np.ndarray):
     Then we take the maximum value of the difference between the channel and the maximum value of the
     channel, divided by the blurred image, and the maximum value of the channel. Then we divide the
     result by the maximum value of the channel and multiply by 255
-    
+
     :param frame: the image to be processed
     :return: The clear image
     """
@@ -95,7 +96,7 @@ def ProcFrames(proc_frame_func: Callable, frames_path: str):
     """
     It takes a function that processes a single frame and a path to a folder containing frames, and
     applies the function to each frame in the folder
-    
+
     :param proc_frame_func: The function that will be applied to each frame
     :type proc_frame_func: Callable
     :param frames_path: The path to the directory containing the frames
@@ -123,7 +124,7 @@ def ProcVid(proc_frame_func: Callable, vidPath: str):
     """
     It takes a function that processes a frame and a video path, and returns the average time it takes
     to process a frame and the number of frames in the video
-    
+
     :param proc_frame_func: This is the function that will be called on each frame
     :type proc_frame_func: Callable
     :param vidPath: The path to the video file
@@ -151,7 +152,7 @@ def ProcVid(proc_frame_func: Callable, vidPath: str):
 def ProcFrameCuda(frame: np.ndarray, size=(416, 416), use_gpu=False):
     """
     It takes a frame, resizes it to a smaller size, converts it to RGB, and then clears it
-    
+
     :param frame: the frame to be processed
     :type frame: np.ndarray
     :param size: the size of the image to be processed
@@ -170,12 +171,13 @@ def ProcFrameCuda(frame: np.ndarray, size=(416, 416), use_gpu=False):
         fg_host = clearImage(fg_device)
         return fg_host
 
+
 def prepare(data_path, percentage_test, out_path):
     """
     It takes a path to a folder containing images, a percentage of the images to be used for testing,
     and a path to the output folder. It then creates two files, train.txt and test.txt, which contain
     the paths to the images to be used for training and testing, respectively
-    
+
     :param data_path: the path to the dataset
     :param percentage_test: The percentage of the images that we want to be in the test set
     :param out_path: The path to the output directory
@@ -206,11 +208,12 @@ def prepare(data_path, percentage_test, out_path):
             file_train.write(out_path + os.path.basename(title) + ".jpg" + "\n")
             counter += 1
 
+
 # utility functions
 def process_frames(frames_path: str, size: tuple = (416, 416)):
     """
     It takes a path to a directory containing frames, and returns a list of processed frames
-    
+
     :param frames_path: the path to the directory containing the frames
     :param size: The size of the image to be processed
     """
@@ -291,7 +294,7 @@ def frame_aggregation(
     species to include, an image size, an output format, a boolean to remove null annotations, a boolean
     to track frames, and the number of frames to track, and it returns a dataset of frames with bounding
     boxes for the specified species
-    
+
     :param project: the project object
     :param db_info_dict: a dictionary containing the path to the database and the database name
     :type db_info_dict: dict
@@ -727,7 +730,9 @@ def createTrackerByName(trackerType: str):
     return tracker
 
 
-def track_objects(video, class_ids: list, bboxes: list, start_frame: int, last_frame: int):
+def track_objects(
+    video, class_ids: list, bboxes: list, start_frame: int, last_frame: int
+):
     """
     It takes a video, a list of bounding boxes, and a start and end frame, and returns a list of tuples
     containing the frame number, and the bounding box coordinates
@@ -785,7 +790,6 @@ def track_objects(video, class_ids: list, bboxes: list, start_frame: int, last_f
     # quit on ESC button
     # if cv2.waitKey(1) & 0xFF == 27:  # Esc pressed
     #  break
-
 
 
 def main():

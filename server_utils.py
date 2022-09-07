@@ -25,99 +25,110 @@ import kso_utils.db_utils as db_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-###################################### 
+######################################
 # ###### Common server functions ######
 # #####################################
+
 
 def connect_to_server(project: project_utils.Project):
     """
     > This function connects to the server specified in the project object and returns a dictionary with
     the client and sftp client
-    
+
     :param project: the project object
     :return: A dictionary with the client and sftp_client
     """
     # Get project-specific server info
     server = project.server
-    
+
     # Create an empty dictionary to host the server connections
     server_dict = {}
-    
-    if server=="AWS":
+
+    if server == "AWS":
         # Connect to AWS as a client
         client = get_aws_client()
-        
-    elif server=="SNIC":
+
+    elif server == "SNIC":
         # Connect to SNIC as a client and get sftp
         client, sftp_client = get_snic_client()
-        
+
     else:
         server_dict = {}
-        
+
     if "client" in vars():
-        server_dict['client'] = client
-        
+        server_dict["client"] = client
+
     if "sftp_client" in vars():
-        server_dict['sftp_client'] = sftp_client
-        
+        server_dict["sftp_client"] = sftp_client
+
     return server_dict
 
-        
+
 def get_db_init_info(project: project_utils.Project, server_dict: dict):
     """
     This function downloads the csv files from the server and returns a dictionary with the paths to the
     csv files
-    
+
     :param project: the project object
     :param server_dict: a dictionary containing the server information
     :type server_dict: dict
     :return: A dictionary with the paths to the csv files with the initial info to build the db.
     """
-    
+
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder
-        
+
     # Get project-specific server info
     server = project.server
     project_name = project.Project_name
-    
+
     # Create the folder to store the csv files if not exist
     if not os.path.exists(db_csv_info):
         os.mkdir(db_csv_info)
-            
+
     if server == "AWS":
-            
+
         # Download csv files from AWS
         db_initial_info = download_csv_aws(project_name, server_dict, db_csv_info)
-            
+
         if project_name == "Spyfish_Aotearoa":
-            db_initial_info = spyfish_utils.get_spyfish_choices(server_dict, db_initial_info, db_csv_info)
-                
+            db_initial_info = spyfish_utils.get_spyfish_choices(
+                server_dict, db_initial_info, db_csv_info
+            )
+
     elif server in ["local", "SNIC"]:
-        
+
         csv_folder = db_csv_info
-        
+
         # Define the path to the csv files with initial info to build the db
         if not os.path.exists(csv_folder):
-            logging.error("Invalid csv folder specified, please provide the path to the species, sites and movies (optional)")
-            
+            logging.error(
+                "Invalid csv folder specified, please provide the path to the species, sites and movies (optional)"
+            )
+
         for file in Path(csv_folder).rglob("*.csv"):
-            if 'sites' in file.name:
+            if "sites" in file.name:
                 sites_csv = file
-            if 'movies' in file.name:
+            if "movies" in file.name:
                 movies_csv = file
-            if 'photos' in file.name:
+            if "photos" in file.name:
                 photos_csv = file
-            if 'survey' in file.name:
+            if "survey" in file.name:
                 surveys_csv = file
-            if 'species' in file.name:
+            if "species" in file.name:
                 species_csv = file
-                
-        if "movies_csv" not in vars() and "photos_csv" not in vars() and os.path.exists(csv_folder):
-            logging.info("No movies or photos found, an empty movies file will be created.")
-            with open(f'{csv_folder}/movies.csv', 'w') as fp:
+
+        if (
+            "movies_csv" not in vars()
+            and "photos_csv" not in vars()
+            and os.path.exists(csv_folder)
+        ):
+            logging.info(
+                "No movies or photos found, an empty movies file will be created."
+            )
+            with open(f"{csv_folder}/movies.csv", "w") as fp:
                 fp.close()
-                
+
         db_initial_info = {}
 
         if "sites_csv" in vars():
@@ -125,39 +136,41 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
 
         if "species_csv" in vars():
             db_initial_info["local_species_csv"] = species_csv
-        
+
         if "movies_csv" in vars():
             db_initial_info["local_movies_csv"] = movies_csv
-            
+
         if "photos_csv" in vars():
             db_initial_info["local_photos_csv"] = photos_csv
-            
+
         if "surveys_csv" in vars():
             db_initial_info["local_surveys_csv"] = surveys_csv
-            
+
         if len(db_initial_info) == 0:
-            logging.error("Insufficient information to build the database. Please fix the path to csv files.")
+            logging.error(
+                "Insufficient information to build the database. Please fix the path to csv files."
+            )
 
     elif server == "wildlife_ai":
-            
+
         # Specify the id of the folder with csv files of the template project
         gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-        
+
         # Download template csv files from Gdrive
         db_initial_info = download_init_csv(gdrive_id, db_csv_info)
-        
+
         for file in Path(db_csv_info).rglob("*.csv"):
-            if 'sites' in file.name:
+            if "sites" in file.name:
                 sites_csv = file
-            if 'movies' in file.name:
+            if "movies" in file.name:
                 movies_csv = file
-            if 'photos' in file.name:
+            if "photos" in file.name:
                 photos_csv = file
-            if 'survey' in file.name:
+            if "survey" in file.name:
                 surveys_csv = file
-            if 'species' in file.name:
+            if "species" in file.name:
                 species_csv = file
-                
+
         db_initial_info = {}
 
         if "sites_csv" in vars():
@@ -165,32 +178,38 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
 
         if "species_csv" in vars():
             db_initial_info["local_species_csv"] = species_csv
-        
+
         if "movies_csv" in vars():
             db_initial_info["local_movies_csv"] = movies_csv
-            
+
         if "photos_csv" in vars():
             db_initial_info["local_photos_csv"] = photos_csv
-            
+
         if "surveys_csv" in vars():
             db_initial_info["local_surveys_csv"] = surveys_csv
-            
+
         if len(db_initial_info) == 0:
-            logging.error("Insufficient information to build the database. Please fix the path to csv files.")
+            logging.error(
+                "Insufficient information to build the database. Please fix the path to csv files."
+            )
 
     else:
-        raise ValueError("The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local.")
-    
+        raise ValueError(
+            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local."
+        )
+
     # Add project-specific db_path
     db_initial_info["db_path"] = project.db_path
 
     return db_initial_info
-        
-    
-def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_csv: str, updated_csv: str):
+
+
+def update_csv_server(
+    project: project_utils.Project, db_info_dict: dict, orig_csv: str, updated_csv: str
+):
     """
     > This function updates the original csv file with the updated csv file in the server
-    
+
     :param project: the project object
     :param db_info_dict: a dictionary containing the following keys:
     :type db_info_dict: dict
@@ -200,33 +219,42 @@ def update_csv_server(project: project_utils.Project, db_info_dict: dict, orig_c
     :type updated_csv: str
     """
     server = project.server
-    
+
     # TODO: add changes in a log file
 
     if server == "AWS":
         logging.info("Updating csv file in AWS server")
         # Update csv to AWS
-        upload_file_to_s3(db_info_dict["client"],
-        bucket=db_info_dict["bucket"], 
-        key=str(db_info_dict[orig_csv]), 
-        filename=str(db_info_dict[updated_csv]))
- 
+        upload_file_to_s3(
+            db_info_dict["client"],
+            bucket=db_info_dict["bucket"],
+            key=str(db_info_dict[orig_csv]),
+            filename=str(db_info_dict[updated_csv]),
+        )
+
     elif server == "wildlife_ai":
-        logging.error(f"{orig_csv} couldn't be updated. Check writing permisions to the server.")
+        logging.error(
+            f"{orig_csv} couldn't be updated. Check writing permisions to the server."
+        )
 
     elif server == "SNIC":
         logging.error("Updating csv files to the server is a work in progress")
-    
+
     elif server == "local":
-        logging.error("Updating csv files to the server is a work in progress")        
+        logging.error("Updating csv files to the server is a work in progress")
 
     else:
-        logging.error(f"{orig_csv} couldn't be updated. Check writing permisions to the server.")
+        logging.error(
+            f"{orig_csv} couldn't be updated. Check writing permisions to the server."
+        )
 
-def upload_movie_server(movie_path: str, f_path: str, db_info_dict: dict, project: project_utils.Project):
+
+def upload_movie_server(
+    movie_path: str, f_path: str, db_info_dict: dict, project: project_utils.Project
+):
     """
     Takes the file path of a movie file and uploads it to the server.
-    
+
     :param movie_path: The local path to the movie file you want to upload
     :type movie_path: str
     :param f_path: The server or storage path of the original movie you want to convert
@@ -237,7 +265,7 @@ def upload_movie_server(movie_path: str, f_path: str, db_info_dict: dict, projec
     """
     # Get the project-specific server
     server = project.server
-    
+
     if server == "AWS":
         # Retrieve the key of the movie of interest
         f_path_key = f_path.split("/").str[:2].str.join("/")
@@ -245,32 +273,30 @@ def upload_movie_server(movie_path: str, f_path: str, db_info_dict: dict, projec
 
         # Upload the movie to AWS
         # upload_file_to_s3(db_info_dict["client"],
-        # bucket=db_info_dict["bucket"], 
-        # key=f_path_key, 
+        # bucket=db_info_dict["bucket"],
+        # key=f_path_key,
         # filename=movie_path)
 
         # logging.info(f"{movie_path} has been added to the server")
- 
+
     elif server == "wildlife_ai":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
 
     elif server == "SNIC":
         logging.error("Uploading the movies to the server is a work in progress")
-    
+
     elif server == "local":
-        logging.error(f"{movie_path} not uploaded to the server as project is local")        
+        logging.error(f"{movie_path} not uploaded to the server as project is local")
 
     else:
         raise ValueError("Specify the server of the project in the project_list.csv.")
-        
-    
 
-        
+
 def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict: dict):
     """
     This function uses the project information and the database information, and returns a dataframe with the
     movie information
-    
+
     :param project: the project object
     :param db_info_dict: a dictionary containing the path to the database and the client to the server
     :type db_info_dict: dict
@@ -282,46 +308,59 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     - exists
     - filename_ext
     """
-    
+
     server = project.server
     bucket_i = project.bucket
     movie_folder = project.movie_folder
     project_name = project.Project_name
-    
+
     if server == "AWS":
         logging.info("Retrieving movies from AWS server")
         # Retrieve info from the bucket
-        server_df = get_matching_s3_keys(client = db_info_dict["client"], 
-                                         bucket = bucket_i, 
-                                         suffix = movie_utils.get_movie_extensions())
+        server_df = get_matching_s3_keys(
+            client=db_info_dict["client"],
+            bucket=bucket_i,
+            suffix=movie_utils.get_movie_extensions(),
+        )
         # Get the fpath(html) from the key
-        server_df["spath"] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"+server_df["Key"].str.replace(' ', '%20').replace('\\', '/')
-        
-    
+        server_df[
+            "spath"
+        ] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/" + server_df[
+            "Key"
+        ].str.replace(
+            " ", "%20"
+        ).replace(
+            "\\", "/"
+        )
+
     elif server == "SNIC":
-        server_df = get_snic_files(client = db_info_dict["client"], folder = movie_folder)
-    
+        server_df = get_snic_files(client=db_info_dict["client"], folder=movie_folder)
+
     elif server == "local":
         if [movie_folder, bucket_i] == ["None", "None"]:
-            logging.info("No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead.")
-            return pd.DataFrame(columns = ["filename"])
+            logging.info(
+                "No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead."
+            )
+            return pd.DataFrame(columns=["filename"])
         else:
             server_files = os.listdir(movie_folder)
             server_paths = [movie_folder + i for i in server_files]
-            server_df = pd.DataFrame(server_paths, columns="spath") 
+            server_df = pd.DataFrame(server_paths, columns="spath")
     elif server == "wildlife_ai":
         # Combine wildlife.ai storage and filenames of the movie examples
         server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
-      
+
         # Get the fpath(html) from the key
         server_df = server_df.rename(columns={"filename": "fpath"})
 
-        server_df["spath"] = "https://www.wildlife.ai/wp-content/uploads/2022/06/" + server_df.fpath.astype(str)
-      
+        server_df["spath"] = (
+            "https://www.wildlife.ai/wp-content/uploads/2022/06/"
+            + server_df.fpath.astype(str)
+        )
+
     else:
         raise ValueError("The server type you selected is not currently supported.")
-    
-    
+
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
 
@@ -329,71 +368,84 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
 
     if project_name == "Spyfish_Aotearoa":
-      # Add missing info for files in the "buv-zooniverse-uploads"
-      movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0])
-    
+        # Add missing info for files in the "buv-zooniverse-uploads"
+        movies_df["fpath"] = movies_df["fpath"].apply(
+            lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0]
+        )
+
     # Merge the server path to the filepath
-    movies_df = movies_df.merge(server_df["spath"], 
-                                left_on=['fpath'],
-                                right_on=['spath'], 
-                                how='left', 
-                                indicator=True)
+    movies_df = movies_df.merge(
+        server_df["spath"],
+        left_on=["fpath"],
+        right_on=["spath"],
+        how="left",
+        indicator=True,
+    )
 
     # Check that movies can be mapped
-    movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
+    movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
 
     # Drop _merge columns to match sql schema
     movies_df = movies_df.drop("_merge", axis=1)
-    
+
     # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df['exists']].reset_index()
-    
+    available_movies_df = movies_df[movies_df["exists"]].reset_index()
+
     # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["spath"].str.split("/").str[-1]
+    available_movies_df["filename_ext"] = (
+        available_movies_df["spath"].str.split("/").str[-1]
+    )
 
     # Add movie folder for SNIC
     if server == "SNIC":
         available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
 
     logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
-    
+
     return available_movies_df
 
 
 def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str):
-    '''
+    """
     Function to get the url of the movie
-    '''
+    """
     server = project.server
     if server == "AWS":
-        movie_key = f_path.replace("%20"," ").split('/',3)[3]
-        movie_url = server_dict['client'].generate_presigned_url('get_object', 
-                                                            Params = {'Bucket': server_dict['bucket'], 
-                                                                      'Key': movie_key}, 
-                                                            ExpiresIn = 86400)
+        movie_key = f_path.replace("%20", " ").split("/", 3)[3]
+        movie_url = server_dict["client"].generate_presigned_url(
+            "get_object",
+            Params={"Bucket": server_dict["bucket"], "Key": movie_key},
+            ExpiresIn=86400,
+        )
         return movie_url
     else:
         return f_path
-     
+
 
 #####################
 # ## AWS functions ###
 # ####################
 
+
 def aws_credentials():
-    # Save your access key for the s3 bucket. 
-    aws_access_key_id = getpass.getpass('Enter the key id for the aws server')
-    aws_secret_access_key = getpass.getpass('Enter the secret access key for the aws server')
-    
+    # Save your access key for the s3 bucket.
+    aws_access_key_id = getpass.getpass("Enter the key id for the aws server")
+    aws_secret_access_key = getpass.getpass(
+        "Enter the secret access key for the aws server"
+    )
+
     return aws_access_key_id, aws_secret_access_key
 
-                
+
 def connect_s3(aws_access_key_id: str, aws_secret_access_key: str):
     # Connect to the s3 bucket
-    client = boto3.client('s3',
-                          aws_access_key_id = aws_access_key_id, 
-                          aws_secret_access_key = aws_secret_access_key)
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
     return client
+
 
 def get_aws_client():
     # Set aws account credentials
@@ -404,7 +456,10 @@ def get_aws_client():
 
     return client
 
-def get_matching_s3_objects(client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""):
+
+def get_matching_s3_objects(
+    client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""
+):
     """
     ## Code modified from alexwlchan (https://alexwlchan.net/2019/07/listing-s3-keys/)
     Generate objects in an S3 bucket.
@@ -416,15 +471,15 @@ def get_matching_s3_objects(client: boto3.client, bucket: str, prefix: str = "",
     :param suffix: Only fetch objects whose keys end with
         this suffix (optional).
     """
-    
+
     paginator = client.get_paginator("list_objects_v2")
 
-    kwargs = {'Bucket': bucket}
+    kwargs = {"Bucket": bucket}
 
     # We can pass the prefix directly to the S3 API.  If the user has passed
     # a tuple or list of prefixes, we go through them one by one.
     if isinstance(prefix, str):
-        prefixes = (prefix, )
+        prefixes = (prefix,)
     else:
         prefixes = prefix
 
@@ -443,7 +498,9 @@ def get_matching_s3_objects(client: boto3.client, bucket: str, prefix: str = "",
                     yield obj
 
 
-def get_matching_s3_keys(client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""):
+def get_matching_s3_keys(
+    client: boto3.client, bucket: str, prefix: str = "", suffix: str = ""
+):
     """
     ## Code from alexwlchan (https://alexwlchan.net/2019/07/listing-s3-keys/)
     Generate the keys in an S3 bucket.
@@ -453,19 +510,22 @@ def get_matching_s3_keys(client: boto3.client, bucket: str, prefix: str = "", su
     :param prefix: Only fetch keys that start with this prefix (optional).
     :param suffix: Only fetch keys that end with this suffix (optional).
     """
-    
+
     # Select the relevant bucket
-    s3_keys = [obj["Key"] for obj in get_matching_s3_objects(client, bucket, prefix, suffix)]
+    s3_keys = [
+        obj["Key"] for obj in get_matching_s3_objects(client, bucket, prefix, suffix)
+    ]
 
     # Set the contents as pandas dataframe
-    contents_s3_pd = pd.DataFrame(s3_keys, columns = ["Key"])
-    
+    contents_s3_pd = pd.DataFrame(s3_keys, columns=["Key"])
+
     return contents_s3_pd
+
 
 def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
     """
     > The function downloads the csv files from the server and saves them in the local directory
-    
+
     :param project_name: str
     :type project_name: str
     :param server_dict: a dictionary containing the server information
@@ -481,37 +541,40 @@ def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
     key = project.key
 
     # Create db_initial_info dict
-    db_initial_info = {
-        "bucket": bucket,
-        "key": key
-    }
+    db_initial_info = {"bucket": bucket, "key": key}
 
-    for i in ['sites', 'movies', 'species', 'surveys']:
+    for i in ["sites", "movies", "species", "surveys"]:
         # Get the server path of the csv
-        server_i_csv = get_matching_s3_keys(server_dict["client"], 
-                                            bucket, 
-                                            prefix = key+"/"+i)['Key'][0]
+        server_i_csv = get_matching_s3_keys(
+            server_dict["client"], bucket, prefix=key + "/" + i
+        )["Key"][0]
 
         # Specify the local path for the csv
-        local_i_csv = str(Path(db_csv_info,Path(server_i_csv).name))
+        local_i_csv = str(Path(db_csv_info, Path(server_i_csv).name))
 
         # Download the csv
-        download_object_from_s3(server_dict["client"],
-                            bucket=bucket,
-                            key=server_i_csv, 
-                            filename=local_i_csv)
+        download_object_from_s3(
+            server_dict["client"], bucket=bucket, key=server_i_csv, filename=local_i_csv
+        )
 
         # Save the local and server paths in the dict
-        local_csv_str = str("local_"+i+"_csv")
-        server_csv_str = str("server_"+i+"_csv")
+        local_csv_str = str("local_" + i + "_csv")
+        server_csv_str = str("server_" + i + "_csv")
 
         db_initial_info[local_csv_str] = Path(local_i_csv)
         db_initial_info[server_csv_str] = server_i_csv
 
     return db_initial_info
-    
-    
-def download_object_from_s3(client: boto3.client, *, bucket: str, key: str, version_id: str = None, filename: str):
+
+
+def download_object_from_s3(
+    client: boto3.client,
+    *,
+    bucket: str,
+    key: str,
+    version_id: str = None,
+    filename: str,
+):
     """
     Download an object from S3 with a progress bar.
 
@@ -533,7 +596,14 @@ def download_object_from_s3(client: boto3.client, *, bucket: str, key: str, vers
     else:
         ExtraArgs = None
 
-    with tqdm(total=object_size, unit="B", unit_scale=True, desc=filename, position=0, leave=True) as pbar:
+    with tqdm(
+        total=object_size,
+        unit="B",
+        unit_scale=True,
+        desc=filename,
+        position=0,
+        leave=True,
+    ) as pbar:
         client.download_file(
             Bucket=bucket,
             Key=key,
@@ -546,19 +616,26 @@ def download_object_from_s3(client: boto3.client, *, bucket: str, key: str, vers
 def upload_file_to_s3(client: boto3.client, *, bucket: str, key: str, filename: str):
     """
     > Upload a file to S3, and show a progress bar if the file is large enough
-    
+
     :param client: The boto3 client to use
     :param bucket: The name of the bucket to upload to
     :param key: The name of the file in S3
     :param filename: The name of the file to upload
     """
-    
+
     # Get the size of the file to upload
     file_size = os.stat(filename).st_size
-    
+
     # Prevent issues with small files (<1MB) and tqdm
     if file_size > 1000000:
-        with tqdm(total=file_size, unit="B", unit_scale=True, desc=filename, position=0, leave=True) as pbar:
+        with tqdm(
+            total=file_size,
+            unit="B",
+            unit_scale=True,
+            desc=filename,
+            position=0,
+            leave=True,
+        ) as pbar:
             client.upload_file(
                 Filename=filename,
                 Bucket=bucket,
@@ -567,16 +644,16 @@ def upload_file_to_s3(client: boto3.client, *, bucket: str, key: str, filename: 
             )
     else:
         client.upload_file(
-                Filename=filename,
-                Bucket=bucket,
-                Key=key,
-            )
-        
+            Filename=filename,
+            Bucket=bucket,
+            Key=key,
+        )
+
 
 def delete_file_from_s3(client: boto3.client, *, bucket: str, key: str):
     """
     > Delete a file from S3.
-    
+
     :param client: boto3.client - the client object that you created in the previous step
     :type client: boto3.client
     :param bucket: The name of the bucket that contains the object to delete
@@ -584,42 +661,42 @@ def delete_file_from_s3(client: boto3.client, *, bucket: str, key: str):
     :param key: The name of the file
     :type key: str
     """
-    client.delete_object(Bucket=bucket,Key=key)        
-        
-        
+    client.delete_object(Bucket=bucket, Key=key)
+
 
 # def retrieve_s3_buckets_info(client, bucket, suffix):
-    
+
 #     # Select the relevant bucket
 #     s3_keys = [obj["Key"] for obj in get_matching_s3_objects(client=client, bucket=bucket, suffix=suffix)]
 
 #     # Set the contents as pandas dataframe
 #     contents_s3_pd = pd.DataFrame(s3_keys)
-    
+
 #     return contents_s3_pd
-        
+
 
 ##############################
 # #######SNIC functions########
 # #############################
 
+
 def snic_credentials():
-    # Save your access key for the SNIC server. 
-    snic_user = getpass.getpass('Enter your username for SNIC server')
-    snic_pass = getpass.getpass('Enter your password for SNIC server')
+    # Save your access key for the SNIC server.
+    snic_user = getpass.getpass("Enter your username for SNIC server")
+    snic_pass = getpass.getpass("Enter your password for SNIC server")
     return snic_user, snic_pass
 
 
 def connect_snic(snic_user: str, snic_pass: str):
     # Connect to the SNIC server and return SSH client
     client = SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.load_system_host_keys()
-    client.connect(hostname="129.16.125.130", 
-                port = 22,
-                username=snic_user,
-                password=snic_pass)
+    client.connect(
+        hostname="129.16.125.130", port=22, username=snic_user, password=snic_pass
+    )
     return client
+
 
 def create_snic_transport(snic_user: str, snic_pass: str):
     # Connect to the SNIC server and return SSH client
@@ -627,6 +704,7 @@ def create_snic_transport(snic_user: str, snic_pass: str):
     t.connect(username=snic_user, password=snic_pass)
     sftp = paramiko.SFTPClient.from_transport(t)
     return sftp
+
 
 def get_snic_client():
     # Set SNIC credentials
@@ -638,17 +716,21 @@ def get_snic_client():
 
     return client, sftp_client
 
+
 def get_snic_files(client: SSHClient, folder: str):
-    """ 
+    """
     Get list of movies from SNIC server using ssh client.
-    
+
     :param client: SSH client (paramiko)
     """
     stdin, stdout, stderr = client.exec_command(f"ls {folder}")
-    snic_df = pd.DataFrame(stdout.read().decode("utf-8").split('\n'), columns=['spath'])
+    snic_df = pd.DataFrame(stdout.read().decode("utf-8").split("\n"), columns=["spath"])
     return snic_df
 
-def download_object_from_snic(sftp_client: SFTPClient, remote_fpath: str, local_fpath: str ='.'):
+
+def download_object_from_snic(
+    sftp_client: SFTPClient, remote_fpath: str, local_fpath: str = "."
+):
     """
     Download an object from SNIC with progress bar.
     """
@@ -659,10 +741,10 @@ def download_object_from_snic(sftp_client: SFTPClient, remote_fpath: str, local_
             self.update(int(a - self.n))  # update pbar with increment
 
     # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+    with TqdmWrap(ascii=True, unit="b", unit_scale=True) as pbar:
         sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
-        
-        
+
+
 def upload_object_to_snic(sftp_client: SFTPClient, local_fpath: str, remote_fpath: str):
     """
     Upload an object to SNIC with progress bar.
@@ -674,13 +756,14 @@ def upload_object_to_snic(sftp_client: SFTPClient, local_fpath: str, remote_fpat
             self.update(int(a - self.n))  # update pbar with increment
 
     # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit='b', unit_scale=True) as pbar:
+    with TqdmWrap(ascii=True, unit="b", unit_scale=True) as pbar:
         sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
-    
 
-###################################        
-# #######Google Drive functions##### 
+
+###################################
+# #######Google Drive functions#####
 # ##################################
+
 
 def download_csv_from_google_drive(file_url: str):
 
@@ -696,24 +779,21 @@ def download_csv_from_google_drive(file_url: str):
 
 
 def download_init_csv(gdrive_id: str, db_csv_info: dict):
-    
+
     # Specify the url of the file to download
     url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
-    
+
     logging.info(f"Retrieving the file from {url_input}")
-    
+
     # Specify the output of the file
-    zip_file = 'db_csv_info.zip'
-    
+    zip_file = "db_csv_info.zip"
+
     # Download the zip file
     gdown.download(url_input, zip_file, quiet=False)
-    
+
     # Unzip the folder with the csv files
-    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+    with zipfile.ZipFile(zip_file, "r") as zip_ref:
         zip_ref.extractall(os.path.dirname(db_csv_info))
-        
-        
+
     # Remove the zipped file
     os.remove(zip_file)
-        
-        

@@ -14,7 +14,11 @@ from panoptes_client import (
 from ast import literal_eval
 
 # util imports
-from kso_utils.koster_utils import process_koster_subjects, clean_duplicated_subjects, combine_annot_from_duplicates
+from kso_utils.koster_utils import (
+    process_koster_subjects,
+    clean_duplicated_subjects,
+    combine_annot_from_duplicates,
+)
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
 import kso_utils.project_utils as project_utils
@@ -25,8 +29,8 @@ logging.getLogger().setLevel(logging.INFO)
 
 
 def zoo_credentials():
-    zoo_user = getpass.getpass('Enter your Zooniverse user')
-    zoo_pass = getpass.getpass('Enter your Zooniverse password')
+    zoo_user = getpass.getpass("Enter your Zooniverse user")
+    zoo_pass = getpass.getpass("Enter your Zooniverse password")
     return zoo_user, zoo_pass
 
 
@@ -39,7 +43,7 @@ def auth_session(username: str, password: str, project_n: int):
     """
     It connects to the Zooniverse with your username and password, and then returns the project number
     you specify
-    
+
     :param username: Your Zooniverse username
     :param password: your Zooniverse password
     :param project_n: The project number of the project you want to download data from
@@ -59,12 +63,15 @@ def auth_session(username: str, password: str, project_n: int):
     except Exception as e:
         logging.error(e)
 
+
 # Function to retrieve information from Zooniverse
-def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_info: str):
+def retrieve_zoo_info(
+    project: project_utils.Project, zoo_project: Project, zoo_info: str
+):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
     frame
-    
+
     :param project: the project object
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
@@ -73,7 +80,9 @@ def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_
     """
     if hasattr(project, "info_df"):
         if project.info_df is not None:
-            print("Zooniverse info retrieved from cache, to force retrieval set project.info_df = None")
+            print(
+                "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
+            )
             return project.info_df
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
@@ -88,7 +97,7 @@ def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_
         export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
 
         if len(export_df) > 0:
-            
+
             # If KSO deal with duplicated subjects
             if project.Project_name == "Koster_Seafloor_Obs":
 
@@ -101,13 +110,15 @@ def retrieve_zoo_info(project: project_utils.Project, zoo_project: Project, zoo_
                     export_df = combine_annot_from_duplicates(export_df, project)
 
         else:
-            raise ValueError("The export is empty. This may be due to a "
-                             "request time out, please try again in 1 minute.")
+            raise ValueError(
+                "The export is empty. This may be due to a "
+                "request time out, please try again in 1 minute."
+            )
 
         # Ensure subject_ids match db format
         if info_n == "classifications":
             export_df["subject_ids"] = export_df["subject_ids"].astype(np.int64)
-                    
+
         # Add df to dictionary
         info_df[info_n] = export_df
         project.info_df = info_df
@@ -122,7 +133,7 @@ def extract_metadata(subj_df: pd.DataFrame):
     > The function takes a dataframe with a column called `metadata` that contains a JSON string. It
     then flattens the JSON string into a dataframe and returns the original dataframe with the
     `metadata` column removed and the flattened dataframe
-    
+
     :param subj_df: The dataframe containing the subject data
     :return: A tuple of two dataframes.
     """
@@ -144,20 +155,22 @@ def extract_metadata(subj_df: pd.DataFrame):
     return subj_df, meta_df
 
 
-def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db_path: str):
-    '''
+def populate_subjects(
+    subjects: pd.DataFrame, project: project_utils.Project, db_path: str
+):
+    """
     Populate the subjects table with the subject metadata
-    
+
     :param subjects: the subjects dataframe
     :param project_path: The path to the projects.csv file
     :param project_name: The name of the Zooniverse project
     :param db_path: the path to the database
-    '''
+    """
 
     project_name = project.Project_name
     server = project.server
     movie_folder = project.movie_folder
-    
+
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
 
@@ -180,16 +193,19 @@ def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db
     subjects = subjects.rename(columns={"subject_id": "id"})
 
     # Extract the html location of the subjects
-    subjects["https_location"] = subjects["locations"].apply(lambda x: literal_eval(x)["0"])
-    
+    subjects["https_location"] = subjects["locations"].apply(
+        lambda x: literal_eval(x)["0"]
+    )
+
     # Set movie_id column to None if no movies are linked to the subject
     if movie_folder == "None" and server in ["local", "SNIC"]:
         subjects["movie_id"] = None
 
     # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
     subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
-                                lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
-    
+        lambda x: x[1] if isinstance(x[1], str) else x[0], 1
+    )
+
     # Set the columns in the right order
     subjects = subjects[
         [
@@ -219,26 +235,33 @@ def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project, db
 
     # Add values to subjects
     db_utils.add_to_table(db_path, "subjects", [tuple(i) for i in subjects.values], 15)
-    
+
     ##### Print how many subjects are in the db
     # Create connection to db
     conn = db_utils.create_connection(db_path)
-    
+
     # Query id and subject type from the subjects table
     subjects_df = pd.read_sql_query("SELECT id, subject_type FROM subjects", conn)
-    frame_subjs = subjects_df[subjects_df["subject_type"]=="frame"].shape[0]
-    clip_subjs = subjects_df[subjects_df["subject_type"]=="clip"].shape[0]
-    
-    print("The database has a total of", frame_subjs,
-          "frame subjects and", clip_subjs,
-          "clip subjects have been updated")
+    frame_subjs = subjects_df[subjects_df["subject_type"] == "frame"].shape[0]
+    clip_subjs = subjects_df[subjects_df["subject_type"] == "clip"].shape[0]
+
+    print(
+        "The database has a total of",
+        frame_subjs,
+        "frame subjects and",
+        clip_subjs,
+        "clip subjects have been updated",
+    )
+
 
 # Relevant for ML and upload frames tutorials
-def populate_agg_annotations(annotations: pd.DataFrame, subj_type: str, project: project_utils.Project):
+def populate_agg_annotations(
+    annotations: pd.DataFrame, subj_type: str, project: project_utils.Project
+):
     """
     It takes in a list of annotations, the subject type, and the project, and adds the annotations to
     the database
-    
+
     :param annotations: a dataframe containing the annotations
     :param subj_type: "clip" or "frame"
     :param project: the project object
@@ -248,7 +271,7 @@ def populate_agg_annotations(annotations: pd.DataFrame, subj_type: str, project:
     db_path = project.db_path
 
     conn = db_utils.create_connection(db_path)
-    
+
     # Query id and subject type from the subjects table
     subjects_df = pd.read_sql_query("SELECT id, frame_exp_sp_id FROM subjects", conn)
 
@@ -264,54 +287,64 @@ def populate_agg_annotations(annotations: pd.DataFrame, subj_type: str, project:
 
     # Update agg_annotations_clip table
     if subj_type == "clip":
-        
+
         # Set the columns in the right order
-        species_df = pd.read_sql_query("SELECT id as species_id, label FROM species", conn)
-        species_df["label"] = species_df["label"].apply(lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper())
-        
-        # Combine annotation and subject information
-        annotations_df = pd.merge(
-            annotations_df,
-            species_df,
-            how="left",
-            on = "label"
+        species_df = pd.read_sql_query(
+            "SELECT id as species_id, label FROM species", conn
         )
-        
-        annotations_df = annotations_df[["species_id", "how_many", "first_seen", "subject_ids"]]
-        annotations_df["species_id"] = annotations_df["species_id"].apply(lambda x: int(x) if not np.isnan(x) else x)
-        
+        species_df["label"] = species_df["label"].apply(
+            lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper()
+        )
+
+        # Combine annotation and subject information
+        annotations_df = pd.merge(annotations_df, species_df, how="left", on="label")
+
+        annotations_df = annotations_df[
+            ["species_id", "how_many", "first_seen", "subject_ids"]
+        ]
+        annotations_df["species_id"] = annotations_df["species_id"].apply(
+            lambda x: int(x) if not np.isnan(x) else x
+        )
+
         # Test table validity
-        db_utils.test_table(annotations_df, "agg_annotations_clip", keys=["subject_ids"])
+        db_utils.test_table(
+            annotations_df, "agg_annotations_clip", keys=["subject_ids"]
+        )
 
         # Add annotations to the agg_annotations_clip table
         db_utils.add_to_table(
-            db_path, "agg_annotations_clip", [(None,) + tuple(i) for i in annotations_df.values], 5
+            db_path,
+            "agg_annotations_clip",
+            [(None,) + tuple(i) for i in annotations_df.values],
+            5,
         )
 
-        
     # Update agg_annotations_frame table
     if subj_type == "frame":
-        
+
         # Select relevant columns
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
-        
+
         # Set the columns in the right order
-        species_df = pd.read_sql_query("SELECT id as species_id, label FROM species", conn)
-        species_df["label"] = species_df["label"].apply(lambda x: x[:-1] if x=="Blue mussels" else x)
-        
-        # Combine annotation and subject information
-        annotations_df = pd.merge(
-            annotations_df,
-            species_df,
-            how="left",
-            on = "label"
+        species_df = pd.read_sql_query(
+            "SELECT id as species_id, label FROM species", conn
         )
-        
-        annotations_df = annotations_df[["species_id", "x", "y", "w", "h", "subject_ids"]].dropna()
-        
+        species_df["label"] = species_df["label"].apply(
+            lambda x: x[:-1] if x == "Blue mussels" else x
+        )
+
+        # Combine annotation and subject information
+        annotations_df = pd.merge(annotations_df, species_df, how="left", on="label")
+
+        annotations_df = annotations_df[
+            ["species_id", "x", "y", "w", "h", "subject_ids"]
+        ].dropna()
+
         # Test table validity
-        
-        db_utils.test_table(annotations_df, "agg_annotations_frame", keys=["species_id"])
+
+        db_utils.test_table(
+            annotations_df, "agg_annotations_frame", keys=["species_id"]
+        )
 
         # Add values to agg_annotations_frame
         db_utils.add_to_table(
@@ -320,8 +353,3 @@ def populate_agg_annotations(annotations: pd.DataFrame, subj_type: str, project:
             [(None,) + tuple(i) for i in annotations_df.values],
             7,
         )
-
-    
-
-
-
