@@ -21,6 +21,8 @@ from IPython.display import HTML, display, clear_output
 import ipywidgets as widgets
 from itables import show
 from PIL import Image as PILImage, ImageDraw
+import imagesize
+from jupyter_bbox_widget import BBoxWidget
 
 # Logging
 logging.basicConfig()
@@ -1013,3 +1015,194 @@ def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: st
             display(a)
 
     subject_widget.observe(on_change, names="value")
+
+def encode_image(filepath):
+    """
+    It takes a filepath to an image, opens the image, reads the bytes, encodes the bytes as base64, and
+    returns the encoded string
+
+    :param filepath: The path to the image file
+    :return: the base64 encoding of the image.
+    """
+    with open(filepath, "rb") as f:
+        image_bytes = f.read()
+    encoded = str(b64encode(image_bytes), "utf-8")
+    return "data:image/jpg;base64," + encoded
+
+def get_annotations_viewer(data_path: str, species_list: list):
+    """
+    It takes a path to a folder containing images and annotations, and a list of species names, and
+    returns a widget that allows you to view the images and their annotations, and to edit the
+    annotations
+
+    :param data_path: the path to the data folder
+    :type data_path: str
+    :param species_list: a list of species names
+    :type species_list: list
+    :return: A VBox widget containing a progress bar and a BBoxWidget.
+    """
+    image_path = os.path.join(data_path, "images")
+    annot_path = os.path.join(data_path, "labels")
+
+    images = sorted(
+        [
+            f
+            for f in os.listdir(image_path)
+            if os.path.isfile(os.path.join(image_path, f))
+        ]
+    )
+    annotations = sorted(
+        [
+            f
+            for f in os.listdir(annot_path)
+            if os.path.isfile(os.path.join(annot_path, f))
+        ]
+    )
+
+    # a progress bar to show how far we got
+    w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
+    # the bbox widget
+    image = os.path.join(image_path, images[0])
+    width, height = imagesize.get(image)
+    label_file = annotations[w_progress.value]
+    bboxes = []
+    labels = []
+    with open(os.path.join(annot_path, label_file), "r") as f:
+        for line in f:
+            s = line.split(" ")
+            labels.append(s[0])
+
+            left = (float(s[1]) - (float(s[3]) / 2)) * width
+            top = (float(s[2]) - (float(s[4]) / 2)) * height
+
+            bboxes.append(
+                {
+                    "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                    "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                    "width": float(s[3]) * width,
+                    "height": float(s[4]) * height,
+                    "label": species_list[int(s[0])],
+                }
+            )
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
+
+    # here we assign an empty list to bboxes but
+    # we could also run a detection model on the file
+    # and use its output for creating inital bboxes
+    w_bbox.bboxes = bboxes
+
+    # combine widgets into a container
+    w_container = widgets.VBox(
+        [
+            w_progress,
+            w_bbox,
+        ]
+    )
+
+    def on_button_clicked(b):
+        w_progress.value = 0
+        image = os.path.join(image_path, images[0])
+        width, height = imagesize.get(image)
+        label_file = annotations[w_progress.value]
+        bboxes = []
+        labels = []
+        with open(os.path.join(annot_path, label_file), "r") as f:
+            for line in f:
+                s = line.split(" ")
+                labels.append(s[0])
+
+                left = (float(s[1]) - (float(s[3]) / 2)) * width
+                top = (float(s[2]) - (float(s[4]) / 2)) * height
+
+                bboxes.append(
+                    {
+                        "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                        "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                        "width": float(s[3]) * width,
+                        "height": float(s[4]) * height,
+                        "label": species_list[int(s[0])],
+                    }
+                )
+        w_bbox.image = encode_image(image)
+
+        # here we assign an empty list to bboxes but
+        # we could also run a detection model on the file
+        # and use its output for creating inital bboxes
+        w_bbox.bboxes = bboxes
+        w_container.children = tuple(list(w_container.children[1:]))
+        b.close()
+
+    # when Skip button is pressed we move on to the next file
+    def on_skip():
+        w_progress.value += 1
+        if w_progress.value == len(annotations):
+            button = widgets.Button(
+                description="Click to restart.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+            if isinstance(w_container.children[0], widgets.Button):
+                w_container.children = tuple(list(w_container.children[1:]))
+            w_container.children = tuple([button] + list(w_container.children))
+            button.on_click(on_button_clicked)
+
+        # open new image in the widget
+        else:
+            image_file = images[w_progress.value]
+            image_p = os.path.join(image_path, image_file)
+            width, height = imagesize.get(image_p)
+            w_bbox.image = encode_image(image_p)
+            label_file = annotations[w_progress.value]
+            bboxes = []
+            with open(os.path.join(annot_path, label_file), "r") as f:
+                for line in f:
+                    s = line.split(" ")
+                    left = (float(s[1]) - (float(s[3]) / 2)) * width
+                    top = (float(s[2]) - (float(s[4]) / 2)) * height
+                    bboxes.append(
+                        {
+                            "x": left,  # (float(s[1])-(float(s[3])/2))*width,
+                            "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                            "width": float(s[3]) * width,
+                            "height": float(s[4]) * height,
+                            "label": species_list[int(s[0])],
+                        }
+                    )
+
+            # here we assign an empty list to bboxes but
+            # we could also run a detection model on the file
+            # and use its output for creating initial bboxes
+            w_bbox.bboxes = bboxes
+
+    w_bbox.on_skip(on_skip)
+
+    # when Submit button is pressed we save current annotations
+    # and then move on to the next file
+    def on_submit():
+        image_file = images[w_progress.value]
+        width, height = imagesize.get(os.path.join(image_path, image_file))
+        # save annotations for current image
+        open(os.path.join(annot_path, label_file), "w").write(
+            "\n".join(
+                [
+                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                        species_list.index(
+                            i["label"]
+                        ),  # single class vs multiple classes
+                        min((i["x"] + i["width"] / 2) / width, 1.0),
+                        min((i["y"] + i["height"] / 2) / height, 1.0),
+                        min(i["width"] / width, 1.0),
+                        min(i["height"] / height, 1.0),
+                    )
+                    for i in w_bbox.bboxes
+                ]
+            )
+        )
+        # move on to the next file
+        on_skip()
+
+    w_bbox.on_submit(on_submit)
+
+    return w_container
