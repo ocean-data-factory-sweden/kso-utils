@@ -303,7 +303,7 @@ def preview_movie(
         # Generate temporary path to the movie select
         if project.server == "SNIC":
             movie_path = movie_utils.get_movie_path(
-                project, db_info_dict, movie_selected["spath"].values[0]
+                project=project, db_info_dict=db_info_dict, f_path=movie_selected["spath"].values[0]
             )
             url = (
                 "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
@@ -311,7 +311,7 @@ def preview_movie(
             )
         else:
             url = movie_utils.get_movie_path(
-                movie_selected["fpath"].values[0], db_info_dict, project
+                f_path=movie_selected["fpath"].values[0], db_info_dict=db_info_dict, project=project
             )
             movie_path = url
         html_code = f"""<html>

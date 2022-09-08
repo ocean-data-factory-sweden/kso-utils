@@ -705,21 +705,21 @@ def createTrackerByName(trackerType: str):
     """
     # Create a tracker based on tracker name
     if trackerType == trackerTypes[0]:
-        tracker = cv2.legacy.TrackerBoosting_create()
+        tracker = cv.legacy.TrackerBoosting_create()
     elif trackerType == trackerTypes[1]:
-        tracker = cv2.legacy.TrackerMIL_create()
+        tracker = cv.legacy.TrackerMIL_create()
     elif trackerType == trackerTypes[2]:
-        tracker = cv2.legacy.TrackerKCF_create()
+        tracker = cv.legacy.TrackerKCF_create()
     elif trackerType == trackerTypes[3]:
-        tracker = cv2.legacy.TrackerTLD_create()
+        tracker = cv.legacy.TrackerTLD_create()
     elif trackerType == trackerTypes[4]:
-        tracker = cv2.legacy.TrackerMedianFlow_create()
+        tracker = cv.legacy.TrackerMedianFlow_create()
     elif trackerType == trackerTypes[5]:
-        tracker = cv2.legacy.TrackerGOTURN_create()
+        tracker = cv.legacy.TrackerGOTURN_create()
     elif trackerType == trackerTypes[6]:
-        tracker = cv2.legacy.TrackerMOSSE_create()
+        tracker = cv.legacy.TrackerMOSSE_create()
     elif trackerType == trackerTypes[7]:
-        tracker = cv2.legacy.TrackerCSRT_create()
+        tracker = cv.legacy.TrackerCSRT_create()
     else:
         tracker = None
         print("Incorrect tracker name")
@@ -778,18 +778,6 @@ def track_objects(
                 )
 
     return t_bbox
-    # draw tracked objects
-    #  for i, newbox in enumerate(boxes):
-    #    p1 = (int(newbox[0]), int(newbox[1]))
-    #    p2 = (int(newbox[0] + newbox[2]), int(newbox[1] + newbox[3]))
-    #    cv2.rectangle(frame, p1, p2, colors[i], 2, 1)
-
-    # show frame
-    # cv2.imshow('MultiTracker', frame.astype('uint8') * 255)
-
-    # quit on ESC button
-    # if cv2.waitKey(1) & 0xFF == 27:  # Esc pressed
-    #  break
 
 
 def main():
