@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import subprocess
 from urllib.parse import urlparse
+from urllib.request import pathname2url
 
 # widget imports
 import ipywidgets as widgets
@@ -307,7 +308,7 @@ def preview_movie(
             )
             url = (
                 "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
-                + movie_path
+                + pathname2url(movie_path)
             )
         else:
             url = movie_utils.get_movie_path(

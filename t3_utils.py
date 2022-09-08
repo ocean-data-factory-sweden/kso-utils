@@ -60,7 +60,7 @@ def check_movie_uploaded(movie_i: str, db_info_dict: dict):
     )
 
     # Save the video filenames of the clips uploaded to Zooniverse
-    videos_uploaded = subjects_df.filename.unique()
+    videos_uploaded = subjects_df.filename.dropna().unique()
 
     # Check if selected movie has already been uploaded
     already_uploaded = any(mv in movie_i for mv in videos_uploaded)
@@ -279,6 +279,9 @@ def check_clip_size(clips_list: list):
     """
 
     # Get list of files with size
+    if clips_list is None:
+        logging.error("No clips found.")
+        return None
     files_with_size = [
         (file_path, os.path.getsize(file_path) / float(1 << 20))
         for file_path in clips_list

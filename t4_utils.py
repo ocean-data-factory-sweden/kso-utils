@@ -386,7 +386,7 @@ def extract_frames(
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
-        url = movie_utils.get_movie_path(project, server_dict, movie)
+        url = movie_utils.get_movie_path(project=project, db_info_dict=server_dict, f_path=movie)
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -678,11 +678,8 @@ def modify_frames(
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames"
 
     # Specify the path of the modified frames
-    frames_to_upload_df["modif_frame_path"] = os.path.join(
-        mod_frames_folder,
-        "modified"
-        + frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)),
-    )
+    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "modified" + 
+    frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
 
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):
