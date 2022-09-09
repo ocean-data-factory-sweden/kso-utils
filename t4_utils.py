@@ -762,7 +762,7 @@ def set_zoo_metadata(
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[
-            ["frame_path", "species_id", "movie_id", "created_on", "siteName"]
+            ["frame_path", "frame_number", "species_id", "movie_id", "created_on", "siteName"]
         ]
 
     elif project_name == "SGU":
