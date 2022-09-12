@@ -37,9 +37,7 @@ import kso_utils.t8_utils as t8
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-out_df = pd.DataFrame()
 
-#
 def choose_species(db_info_dict: dict):
     """
     This function generates a widget to select the species of interest
@@ -128,6 +126,9 @@ def get_species_frames(
         conn,
     )
 
+    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
+    subjects_df["id"] = subjects_df["id"].astype(int)
+
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
         agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id"
@@ -138,33 +139,16 @@ def get_species_frames(
         frames_df["clip_start_time"] + frames_df["first_seen"]
     )
 
-    # Get the filepath and fps info of the original movies
-    f_paths = pd.read_sql_query("SELECT id, filename, fpath, fps FROM movies", conn)
-
     server = project.server
 
     if server == "SNIC" and project.Project_name == "Koster_Seafloor_Obs":
 
+        movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
 
-        f_paths["fpath"] = movie_folder + f_paths["fpath"]
-
-        # Ensure swedish characters don't cause issues
-        f_paths["fpath"] = f_paths["fpath"].apply(k_utils.unswedify)
-
         # Include movies' filepath and fps to the df
-        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
-
-        # Specify if original movies can be found
-        movie_paths = [
-            k_utils.unswedify(str(Path(movie_folder, x)))
-            for x in s_utils.get_snic_files(
-                server_dict["client"], movie_folder
-            ).spath.values
-        ]
-        frames_df["exists"] = frames_df["fpath"].apply(
-            lambda x: True if x in movie_paths else False
-        )
+        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
+        frames_df["fpath"] = frames_df["spath"]
 
         if len(frames_df[~frames_df.exists]) > 0:
             logging.error(
@@ -316,7 +300,7 @@ def check_frames_uploaded(
                 )
 
         else:
-            logging.error(
+            logging.info(
                 "There are no frames uploaded in Zooniverse for the species selected."
             )
 
@@ -374,19 +358,15 @@ def extract_frames(
         + ".jpg"
     )
 
-    # Koster-specific movie name extraction (i.e. make sure that weird naming does not happen))
-    if project_name == "Koster_Seafloor_Obs":
-        movie_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
-        df = df.merge(movie_df, left_on="movie_id", right_on="id", how="left")
-        df = df.rename(columns={"spath": "fpath"})
-
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
         os.mkdir(frames_folder)
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
-        url = movie_utils.get_movie_path(project=project, db_info_dict=server_dict, f_path=movie)
+        url = movie_utils.get_movie_path(
+            project=project, db_info_dict=server_dict, f_path=movie
+        )
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -426,9 +406,10 @@ def get_frames(
     movie_df = s_utils.retrieve_movie_info_from_server(
         project=project, db_info_dict=server_dict
     )
+
     conn = db_utils.create_connection(db_path)
 
-    if len(movie_df) == 0:
+    if project.movie_folder is None:
 
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
@@ -496,7 +477,7 @@ def get_frames(
 
             # Subsample up to desired sample
             if sp_agg_clips_df.shape[0] >= subsample_up_to:
-                logging.info("Subsampling up to", subsample_up_to)
+                logging.info("Subsampling up to " + str(subsample_up_to))
                 sp_agg_clips_df = sp_agg_clips_df.sample(subsample_up_to)
 
             # Populate the db with the aggregated classifications
@@ -678,8 +659,11 @@ def modify_frames(
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames"
 
     # Specify the path of the modified frames
-    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "modified" + 
-    frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
+    frames_to_upload_df["modif_frame_path"] = (
+        mod_frames_folder
+        + "modified"
+        + frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x))
+    )
 
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):
@@ -762,7 +746,14 @@ def set_zoo_metadata(
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[
-            ["frame_path", "frame_number", "species_id", "movie_id", "created_on", "siteName"]
+            [
+                "frame_path",
+                "frame_number",
+                "species_id",
+                "movie_id",
+                "created_on",
+                "siteName",
+            ]
         ]
 
     elif project_name == "SGU":
@@ -770,12 +761,12 @@ def set_zoo_metadata(
 
     elif project_name == "Spyfish_Aotearoa":
         upload_to_zoo = spyfish_utils.spyfish_subject_metadata(df, db_info_dict)
-
     else:
         logging.error("This project is not a supported Zooniverse project.")
 
     # Add information about the type of subject
-    upload_to_zoo["subject_type"] = "frame"
+    upload_to_zoo = upload_to_zoo.copy()
+    upload_to_zoo.loc[:, "subject_type"] = "frame"
     upload_to_zoo = upload_to_zoo.rename(columns={"species_id": "frame_exp_sp_id"})
 
     # Check there are no empty values (prevent issues uploading subjects)

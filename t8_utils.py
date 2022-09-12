@@ -309,12 +309,13 @@ def get_classifications(
     workflow_ids = get_workflow_ids(workflows_df, names)
 
     # Filter classifications of interest
-    classes_df = pd.DataFrame()
+    classes = []
     for id, version in zip(workflow_ids, workflow_versions):
         class_df = class_df[
             (class_df.workflow_id == id) & (class_df.workflow_version >= version)
         ].reset_index(drop=True)
-        classes_df = classes_df.append(class_df)
+        classes.append(class_df)
+    classes_df = pd.concat(classes)
 
     # Add information about the subject
     # Create connection to db
@@ -442,17 +443,13 @@ def aggregrate_classifications(
             agg_users, min_users, agg_obj, agg_iou, agg_iua = agg_params
 
         # Report selected parameters
-        print(
-            "Aggregation parameters are: Agg. threshold",
-            agg_users,
-            ", Min. users",
-            min_users,
-            ", Obj threshold",
-            agg_obj,
-            ", IOU",
-            agg_iou,
-            ", Int. agg.",
-            agg_iua,
+        logging.info(
+            f"Aggregation parameters are: Agg. threshold"
+            f"{agg_users}"
+            f", Min. users"
+            f"{min_users}"
+            f", Obj threshold",
+            "f{agg_obj}," f", IOU, " f"{agg_iou}, " f", Int. agg." f"{agg_iua}",
         )
 
         # Process the raw classifications
@@ -1016,6 +1013,7 @@ def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: st
 
     subject_widget.observe(on_change, names="value")
 
+
 def encode_image(filepath):
     """
     It takes a filepath to an image, opens the image, reads the bytes, encodes the bytes as base64, and
@@ -1028,6 +1026,7 @@ def encode_image(filepath):
         image_bytes = f.read()
     encoded = str(b64encode(image_bytes), "utf-8")
     return "data:image/jpg;base64," + encoded
+
 
 def get_annotations_viewer(data_path: str, species_list: list):
     """

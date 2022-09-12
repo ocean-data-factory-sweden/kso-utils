@@ -19,6 +19,7 @@ from paramiko import SFTPClient, SSHClient
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.project_utils as project_utils
 import kso_utils.movie_utils as movie_utils
+import kso_utils.koster_utils as koster_utils
 import kso_utils.db_utils as db_utils
 
 # Logging
@@ -367,11 +368,12 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
 
-    if project_name == "Spyfish_Aotearoa":
-        # Add missing info for files in the "buv-zooniverse-uploads"
-        movies_df["fpath"] = movies_df["fpath"].apply(
-            lambda x: difflib.get_close_matches(x, server_df["spath"], 1, 0.5)[0]
-        )
+    # Find closest matching filename (may differ due to Swedish character encoding)
+    movies_df["fpath"] = movies_df["fpath"].apply(
+        lambda x: koster_utils.reswedify(x)
+        if koster_utils.reswedify(x) in server_df["spath"].unique()
+        else koster_utils.unswedify(x)
+    )
 
     # Merge the server path to the filepath
     movies_df = movies_df.merge(
@@ -400,7 +402,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     if server == "SNIC":
         available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
 
-    logging.info(f"{available_movies_df.shape[0]} movies are mapped from the server")
+    logging.info(
+        f"{available_movies_df.shape[0]} out of {len(movies_df)} movies are mapped from the server"
+    )
 
     return available_movies_df
 
