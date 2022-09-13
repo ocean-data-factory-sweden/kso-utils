@@ -1,6 +1,7 @@
 # t4 utils
 # base imports
 import os
+import sys
 import sqlite3
 import ffmpeg as ffmpeg_python
 import re
@@ -36,7 +37,6 @@ import kso_utils.t8_utils as t8
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
-
 
 def choose_species(db_info_dict: dict):
     """
@@ -125,15 +125,15 @@ def get_species_frames(
         "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
         conn,
     )
-
-    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
-    subjects_df["id"] = subjects_df["id"].astype(int)
+    
+    agg_clips_df['subject_ids'] = agg_clips_df['subject_ids'].astype(int)
+    subjects_df['id'] = subjects_df['id'].astype(int)
 
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
         agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id"
     ).drop(columns=["id"])
-
+    
     # Identify the second of the original movie when the species first appears
     frames_df["first_seen_movie"] = (
         frames_df["clip_start_time"] + frames_df["first_seen"]
@@ -142,7 +142,7 @@ def get_species_frames(
     server = project.server
 
     if server == "SNIC" and project.Project_name == "Koster_Seafloor_Obs":
-
+        
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
 
@@ -206,9 +206,7 @@ def get_species_frames(
 
     # Identify the ordinal number of the frames expected to be extracted
     if len(frames_df) == 0:
-        logging.error(
-            "No frames left to extract. This may be a Zooniverse issue. Try again in 1 minute."
-        )
+        raise ValueError("No frames. Workflow stopped.")
 
     frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
         lambda x: [
@@ -364,9 +362,7 @@ def extract_frames(
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
-        url = movie_utils.get_movie_path(
-            project=project, db_info_dict=server_dict, f_path=movie
-        )
+        url = movie_utils.get_movie_path(project=project, db_info_dict=server_dict, f_path=movie)
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -659,11 +655,8 @@ def modify_frames(
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames"
 
     # Specify the path of the modified frames
-    frames_to_upload_df["modif_frame_path"] = (
-        mod_frames_folder
-        + "modified"
-        + frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x))
-    )
+    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "modified" + 
+    frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
 
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):
@@ -746,14 +739,7 @@ def set_zoo_metadata(
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[
-            [
-                "frame_path",
-                "frame_number",
-                "species_id",
-                "movie_id",
-                "created_on",
-                "siteName",
-            ]
+            ["frame_path", "frame_number", "species_id", "movie_id", "created_on", "siteName"]
         ]
 
     elif project_name == "SGU":

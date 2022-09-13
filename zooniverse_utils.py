@@ -80,7 +80,7 @@ def retrieve_zoo_info(
     """
     if hasattr(project, "info_df"):
         if project.info_df is not None:
-            print(
+            logging.info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
@@ -88,13 +88,16 @@ def retrieve_zoo_info(
     info_df = {}
 
     for info_n in zoo_info:
-        print("Retrieving", info_n, "from Zooniverse")
+        logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
         export = zoo_project.get_export(info_n)
 
         # Save the info as pandas data frame
-        export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
+        try:
+            export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
+        except pd.errors.ParserError:
+            logging.error("Export retrieval time out, please try again in 1 minute or so.")
 
         if len(export_df) > 0:
 
@@ -122,7 +125,7 @@ def retrieve_zoo_info(
         # Add df to dictionary
         info_df[info_n] = export_df
         project.info_df = info_df
-        print(info_n, "were retrieved successfully")
+        logging.info(f"{info_n} retrieved successfully")
 
     return info_df
 
@@ -173,7 +176,7 @@ def populate_subjects(
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
-
+           
         subjects = process_koster_subjects(subjects, db_path)
 
     else:
@@ -205,6 +208,9 @@ def populate_subjects(
     subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
         lambda x: x[1] if isinstance(x[1], str) else x[0], 1
     )
+    
+    # Fix subjects where clip_start_time is not provided but upl_seconds is
+    subjects["clip_start_time"] = subjects[["clip_start_time", "upl_seconds"]].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
 
     # Set the columns in the right order
     subjects = subjects[
@@ -245,12 +251,12 @@ def populate_subjects(
     frame_subjs = subjects_df[subjects_df["subject_type"] == "frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"] == "clip"].shape[0]
 
-    print(
-        "The database has a total of",
-        frame_subjs,
-        "frame subjects and",
-        clip_subjs,
-        "clip subjects have been updated",
+    logging.info(
+        f"The database has a total of "
+        f"{frame_subjs}"
+        f" frame subjects and "
+        f"{clip_subjs}"
+        f" clip subjects"
     )
 
 
