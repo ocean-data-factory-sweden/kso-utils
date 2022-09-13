@@ -649,14 +649,15 @@ def modify_frames(
     if server == "SNIC":
         folder_name = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/frames/"
         mod_frames_folder = os.path.join(
-            folder_name, "modified_" + "_".join(species_i) + "_frames"
+            folder_name, "modified_" + "_".join(species_i) + "_frames/"
         )
     else:
-        mod_frames_folder = "modified_" + "_".join(species_i) + "_frames"
+        mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
 
     # Specify the path of the modified frames
-    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "modified" + 
+    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "_modified_" + 
     frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
+
 
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):

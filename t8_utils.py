@@ -444,14 +444,17 @@ def aggregrate_classifications(
 
         # Report selected parameters
         logging.info(
-            f"Aggregation parameters are: Agg. threshold"
-            f"{agg_users}"
-            f", Min. users"
-            f"{min_users}"
-            f", Obj threshold",
-            "f{agg_obj}," f", IOU, " f"{agg_iou}, " f", Int. agg." f"{agg_iua}",
+            f"Aggregation parameters are: Agg. threshold "
+            f"{agg_users} "
+            f"Min. users "
+            f"{min_users} "
+            f"Obj threshold "
+            f"{agg_obj} "
+            f"IOU "
+            f"{agg_iou} "
+            f"Int. agg. "
+            f"{agg_iua} "
         )
-
         # Process the raw classifications
         raw_class_df = process_frames(df, project.Project_name)
 
