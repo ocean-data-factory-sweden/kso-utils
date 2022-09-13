@@ -264,7 +264,7 @@ def create_example_clips(
     pool.close()
     pool.join()
 
-    logging.info("Clips extracted succesfully")
+    logging.info("Clips extracted successfully")
     return example_clips
 
 
@@ -762,19 +762,9 @@ def extract_clips(
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
 
-        # Set up modification
-        for transform in modification_details.values():
-            if "filter" in transform:
-                mod_prompt = transform["filter"]
-                full_prompt += mod_prompt
-                full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-
-            else:
-                # Unnest the modification detail dict
-                df = pd.json_normalize(modification_details, sep="_")
-                crf = df.filter(regex="crf$", axis=1).values[0][0]
-                full_prompt += f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-
+        if len(modification_details) == 0:
+            # If no modification is necessary, extract from original footage
+            full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
             # Run the modification
             try:
                 eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
@@ -783,6 +773,28 @@ def extract_clips(
                 logging.info("stdout:", e.stdout.decode("utf8"))
                 logging.info("stderr:", e.stderr.decode("utf8"))
                 raise e
+        else:
+            # Set up modification
+            for transform in modification_details.values():
+                if "filter" in transform:
+                    mod_prompt = transform["filter"]
+                    full_prompt += mod_prompt
+                    full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+
+                else:
+                    # Unnest the modification detail dict
+                    df = pd.json_normalize(modification_details, sep="_")
+                    crf = df.filter(regex="crf$", axis=1).values[0][0]
+                    full_prompt += f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+
+                # Run the modification
+                try:
+                    eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+                    os.chmod(str(output_clip_path), 0o777)
+                except ffmpeg_python.Error as e:
+                    logging.info("stdout:", e.stdout.decode("utf8"))
+                    logging.info("stderr:", e.stderr.decode("utf8"))
+                    raise e
 
         logging.info("Clips extracted successfully")
 
@@ -878,6 +890,10 @@ def create_clips(
     if not os.path.exists(clips_folder):
         os.mkdir(clips_folder)
         os.chmod(str(clips_folder), 0o777)
+    else:
+        shutil.rmtree(clips_folder)
+        os.mkdir(clips_folder)
+        os.chmod(str(clips_folder), 0o777)
 
     logging.info("Extracting clips")
 
@@ -943,6 +959,7 @@ def set_zoo_metadata(
     # (fields that begin with "!" will only be available for volunteers on the Talk section, after classification)
     upload_to_zoo = upload_to_zoo.rename(
         columns={
+            "id": "movie_id",
             "created_on": "#created_on",
             "clip_length": "#clip_length",
             "filename": "#VideoFilename",
@@ -958,6 +975,7 @@ def set_zoo_metadata(
     # Select only relevant columns
     upload_to_zoo = upload_to_zoo[
         [
+            "movie_id",
             "clip_path",
             "upl_seconds",
             "#clip_length",
