@@ -335,7 +335,7 @@ def check_movies_csv(
             .any()
             .any()
         ):
-            raise ValueError("Fps, duration and sampling information is not empty")
+            logging.info("There are no empty entries for fps, duration and sampling information")
 
         else:
             # Create a df with only those rows with missing fps/duration

@@ -111,9 +111,9 @@ def get_col_names(project: Project, local_csv: str):
                 "created_on": "created_on",
                 "fps": "fps",
                 "duration": "duration",
-                "sampling_start": "sampling_start",
-                "sampling_end": "sampling_end",
-                "author": "author",
+                "sampling_start": "SamplingStart",
+                "sampling_end": "SamplingEnd",
+                "author": "Author",
                 "site_id": "site_id",
                 "fpath": "fpath",
             }
