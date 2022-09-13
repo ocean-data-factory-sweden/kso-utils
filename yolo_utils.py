@@ -746,7 +746,7 @@ def frame_aggregation(
         )
     else:
         train_rows = pd.read_sql_query(
-            f"SELECT b.frame_number, b.movie_id, b.filename, a.species_id, a.x_position, a.y_position, a.width, a.height FROM \
+            f"SELECT a.subject_id, b.frame_number, b.movie_id, b.filename, a.species_id, a.x_position, a.y_position, a.width, a.height FROM \
             agg_annotations_frame AS a INNER JOIN subjects AS b ON a.subject_id=b.id WHERE species_id IN {tuple(species_ref)} AND subject_type='frame'",
             conn,
         )
