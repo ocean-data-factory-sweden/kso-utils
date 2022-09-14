@@ -3,12 +3,16 @@ import pandas as pd
 import os
 import paramiko
 import logging
+import wandb
 from paramiko import SSHClient
 from scp import SCPClient
+from pathlib import Path
 
 # widget imports
 from IPython.display import display
+from ipywidgets import Layout
 import ipywidgets as widgets
+from IPython.display import HTML, display, clear_output
 
 # util imports
 import kso_utils.db_utils as db_utils
@@ -16,6 +20,84 @@ import kso_utils.db_utils as db_utils
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
+
+
+def setup_paths(output_folder: str):
+    """
+    It takes the output folder and returns the path to the data file and the path to the hyperparameters
+    file
+    
+    :param output_folder: The folder where the output of the experiment is stored
+    :type output_folder: str
+    :return: The data_path and hyps_path
+    """
+    try:
+        data_path = [
+            str(Path(output_folder, _))
+            for _ in os.listdir(output_folder)
+            if _.endswith(".yaml") and "hyp" not in _
+        ][-1]
+        hyps_path = str(Path(output_folder, "hyp.yaml"))
+        logging.info("Success! Paths to data.yaml and hyps.yaml found.")
+    except Exception as e:
+        logging.error("Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory.")
+    return data_path, hyps_path
+
+
+def choose_experiment_name():
+    """
+    It creates a text box that allows you to enter a name for your experiment
+    :return: The text box widget.
+    """
+    exp_name = widgets.Text(
+        value="exp_name",
+        placeholder="Choose an experiment name",
+        description="Experiment name:",
+        disabled=False,
+        display="flex",
+        flex_flow="column",
+        align_items="stretch",
+        style={"description_width": "initial"},
+    )
+    display(exp_name)
+    return exp_name
+
+
+# Function to compare original to modified frames
+def choose_baseline_model():
+    """
+    It takes a project name and returns a dropdown widget that displays the metrics of the model
+    selected
+
+    :param project_name: The name of the project you want to load the model from
+    :return: The model_widget is being returned.
+    """
+    api = wandb.Api()
+    # weird error fix (initialize api another time)
+    api.runs(path=f"koster/model-registry")
+    api = wandb.Api()
+    collections = [
+        coll
+        for coll in api.artifact_type(
+            type_name="model", project="koster/model-registry"
+        ).collections()
+    ]
+
+    for artifact in collections[0].versions():
+        try:
+            artifact_dir = artifact.download()
+            artifact_file = [
+                str(Path(artifact_dir, "yolov5m.pt"))
+                for i in os.listdir(artifact_dir)
+                if i.endswith(".pt")
+            ][-1]
+            logging.info("Baseline YOLO model successfully downloaded from WANDB")
+        except Exception as e:
+            logging.error(
+                "Failed to download the baseline model. Please ensure you are logged in to WANDB."
+            )
+
+    return artifact_file
 
 
 def transfer_model(
@@ -88,16 +170,18 @@ def choose_train_params():
     :return: the values of the sliders.
     """
     v = widgets.FloatLogSlider(
-        value=3,
+        value=1,
         base=2,
         min=0,  # max exponent of base
         max=10,  # min exponent of base
         step=1,  # exponent step
         description="Batch size:",
+        readout=True,
+        readout_format="d",
     )
 
     z = widgets.IntSlider(
-        value=10,
+        value=1,
         min=0,
         max=1000,
         step=10,
