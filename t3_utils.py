@@ -426,29 +426,33 @@ def modify_clips(
     else:
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{clip_i}')"
+        default_output_prompt = f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
         full_prompt = init_prompt
+        mod_prompt = ""
 
         # Set up modification
         for transform in modification_details.values():
             if "filter" in transform:
-                mod_prompt = transform["filter"]
-                full_prompt += mod_prompt
-                full_prompt += f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-
+                mod_prompt += transform["filter"]
+                # full_prompt += mod_prompt
+                out_prompt = default_output_prompt
             else:
                 # Unnest the modification detail dict
                 df = pd.json_normalize(modification_details, sep="_")
                 crf = df.filter(regex="crf$", axis=1).values[0][0]
-                full_prompt += f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                out_prompt = f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
 
-            # Run the modification
-            try:
-                eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                os.chmod(output_clip_path, 0o777)
-            except ffmpeg_python.Error as e:
-                logging.info("stdout:", e.stdout.decode("utf8"))
-                logging.info("stderr:", e.stderr.decode("utf8"))
-                raise e
+        if len(mod_prompt) > 0:
+            full_prompt += mod_prompt
+        full_prompt += out_prompt
+        # Run the modification
+        try:
+            eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+            os.chmod(output_clip_path, 0o777)
+        except ffmpeg_python.Error as e:
+            logging.info("stdout:", e.stdout.decode("utf8"))
+            logging.info("stderr:", e.stderr.decode("utf8"))
+            raise e
 
     logging.info(f"Clip {clip_i} modified successfully")
 
@@ -1062,6 +1066,21 @@ def set_zoo_metadata(
         )
 
     return upload_to_zoo, sitename, created_on
+
+
+def remove_temp_clips(upload_to_zoo: pd.DataFrame):
+    """
+    > This function takes a dataframe of clips that are ready to be uploaded to the Zooniverse, and
+    removes the temporary clips that were created in the previous step
+
+    :param upload_to_zoo: a dataframe with the following columns:
+    :type upload_to_zoo: pd.DataFrame
+    """
+
+    for temp_clip in upload_to_zoo["clip_path"].unique().tolist():
+        os.remove(temp_clip)
+
+    logging.info("Files removed successfully")
 
 
 def upload_clips_to_zooniverse(
