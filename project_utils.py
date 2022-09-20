@@ -104,7 +104,7 @@ def get_col_names(project: Project, local_csv: str):
         if project_name == "Spyfish_Aotearoa":
             col_names_movies = spyfish_utils.get_spyfish_col_names("movies")
 
-        else:
+        elif project_name == "Koster_Seafloor_Obs":
             # Save the column names of interest in a dict
             col_names_movies = {
                 "filename": "filename",
@@ -114,6 +114,20 @@ def get_col_names(project: Project, local_csv: str):
                 "sampling_start": "SamplingStart",
                 "sampling_end": "SamplingEnd",
                 "author": "Author",
+                "site_id": "site_id",
+                "fpath": "fpath",
+            }
+
+        else:
+            # Save the column names of interest in a dict
+            col_names_movies = {
+                "filename": "filename",
+                "created_on": "created_on",
+                "fps": "fps",
+                "duration": "duration",
+                "sampling_start": "sampling_start",
+                "sampling_end": "sampling_end",
+                "author": "author",
                 "site_id": "site_id",
                 "fpath": "fpath",
             }
