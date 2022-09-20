@@ -428,23 +428,25 @@ def modify_clips(
         init_prompt = f"ffmpeg_python.input('{clip_i}')"
         default_output_prompt = f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
         full_prompt = init_prompt
-        mod_prompt = ""
+        mod_prompt = ''
 
         # Set up modification
         for transform in modification_details.values():
             if "filter" in transform:
                 mod_prompt += transform["filter"]
-                # full_prompt += mod_prompt
-                out_prompt = default_output_prompt
             else:
                 # Unnest the modification detail dict
                 df = pd.json_normalize(modification_details, sep="_")
                 crf = df.filter(regex="crf$", axis=1).values[0][0]
                 out_prompt = f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-
+                
         if len(mod_prompt) > 0:
             full_prompt += mod_prompt
-        full_prompt += out_prompt
+        if out_prompt:
+            full_prompt += out_prompt
+        else:
+            full_prompt += default_output_prompt
+
         # Run the modification
         try:
             eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
@@ -765,40 +767,34 @@ def extract_clips(
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
+        mod_prompt = ''
+        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
 
-        if len(modification_details) == 0:
-            # If no modification is necessary, extract from original footage
-            full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
-            # Run the modification
-            try:
-                eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                os.chmod(str(output_clip_path), 0o777)
-            except ffmpeg_python.Error as e:
-                logging.info("stdout:", e.stdout.decode("utf8"))
-                logging.info("stderr:", e.stderr.decode("utf8"))
-                raise e
-        else:
-            # Set up modification
-            for transform in modification_details.values():
-                if "filter" in transform:
-                    mod_prompt = transform["filter"]
-                    full_prompt += mod_prompt
-                    full_prompt += f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+        # Set up modification
+        for transform in modification_details.values():
+            if "filter" in transform:
+                mod_prompt += transform["filter"]
 
-                else:
-                    # Unnest the modification detail dict
-                    df = pd.json_normalize(modification_details, sep="_")
-                    crf = df.filter(regex="crf$", axis=1).values[0][0]
-                    full_prompt += f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+            else:
+                # Unnest the modification detail dict
+                df = pd.json_normalize(modification_details, sep="_")
+                crf = df.filter(regex="crf$", axis=1).values[0][0]
+                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
 
-                # Run the modification
-                try:
-                    eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-                    os.chmod(str(output_clip_path), 0o777)
-                except ffmpeg_python.Error as e:
-                    logging.info("stdout:", e.stdout.decode("utf8"))
-                    logging.info("stderr:", e.stderr.decode("utf8"))
-                    raise e
+        # Run the modification
+        try:
+            if len(mod_prompt) > 0:
+                full_prompt += mod_prompt
+            if output_prompt:
+                full_prompt += output_prompt
+            else:
+                full_prompt += def_output_prompt
+            eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+            os.chmod(str(output_clip_path), 0o777)
+        except ffmpeg_python.Error as e:
+            logging.info("stdout:", e.stdout.decode("utf8"))
+            logging.info("stderr:", e.stderr.decode("utf8"))
+            raise e
 
         logging.info("Clips extracted successfully")
 
