@@ -370,8 +370,16 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: koster_utils.reswedify(x)
-        if koster_utils.reswedify(x) in server_df["spath"].unique()
+        lambda x: koster_utils.reswedify(x).replace(
+            " ", "%20"
+        ).replace(
+            "\\", "/"
+        )
+        if koster_utils.reswedify(x).replace(
+            " ", "%20"
+        ).replace(
+            "\\", "/"
+        ) in server_df["spath"].unique()
         else koster_utils.unswedify(x)
     )
 
