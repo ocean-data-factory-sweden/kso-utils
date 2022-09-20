@@ -210,7 +210,8 @@ def populate_subjects(
     )
     
     # Fix subjects where clip_start_time is not provided but upl_seconds is
-    subjects["clip_start_time"] = subjects[["clip_start_time", "upl_seconds"]].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
+    if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
+        subjects["clip_start_time"] = subjects[["clip_start_time", "upl_seconds"]].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
 
     # Set the columns in the right order
     subjects = subjects[
