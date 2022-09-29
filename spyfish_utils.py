@@ -47,7 +47,7 @@ def get_spyfish_col_names(table_name: str):
             "sampling_start": "SamplingStart",
             "sampling_end": "SamplingEnd",
             "author": "RecordedBy",
-            "site_id": "SiteID",
+            "SiteID": "SiteID",
             "fpath": "LinkToVideoFile",
         }
         return col_names_movies
