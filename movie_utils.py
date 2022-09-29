@@ -238,7 +238,6 @@ def convert_video(
                 str(movie_path),
                 "-c:v",
                 "h264_nvenc",  # ensures correct codec
-                "-an",  # removes the audio
                 "-crf",
                 "22",  # compresses the video
                 str(conv_fpath),
@@ -257,7 +256,6 @@ def convert_video(
                 str(movie_path),
                 "-c:v",
                 "h264_nvenc",  # ensures correct codec
-                "-an",  # removes the audio
                 str(conv_fpath),
             ]
         )
@@ -270,7 +268,6 @@ def convert_video(
                 str(movie_path),
                 "-c:v",
                 "h264",  # ensures correct codec
-                "-an",  # removes the audio
                 "-crf",
                 "22",  # compresses the video
                 str(conv_fpath),
@@ -285,7 +282,6 @@ def convert_video(
                 str(movie_path),
                 "-c:v",
                 "h264",  # ensures correct codec
-                "-an",  # removes the audio
                 str(conv_fpath),
             ]
         )
