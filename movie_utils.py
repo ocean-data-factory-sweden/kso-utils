@@ -31,7 +31,14 @@ def get_fps_duration(movie_path: str):
     cap = cv2.VideoCapture(movie_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = frame_count / fps
+    
+    # Roadblock to prevent issues with missing movies
+    if int(frame_count)|int(fps) == 0:
+        raise ValueError(
+            f"{movie_path} doesn't have any frames, check the path/link is correct."
+        )
+    else:
+        duration = frame_count / fps
 
     return fps, duration
 
