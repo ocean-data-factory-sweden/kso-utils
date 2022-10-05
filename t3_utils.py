@@ -734,7 +734,33 @@ def extract_clips(
     details of the modification are:
     :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
     """
-    if gpu_available:
+    if not modification_details and gpu_available:
+        # Create clips without any modification
+        subprocess.call(
+            [
+                "ffmpeg",
+                "-hwaccel",
+                "cuda",
+                "-hwaccel_output_format",
+                "cuda",
+                "-ss",
+                str(upl_second_i),
+                "-t",
+                str(clip_length),
+                "-i",
+                movie_path,
+                "-an",  # removes the audio
+                "-c:a",
+                "copy",
+                "-c:v",
+                "h264_nvenc",
+                str(output_clip_path),
+            ]
+        )
+        os.chmod(str(output_clip_path), 0o777)
+
+    
+    elif modification_details and gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
         b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
