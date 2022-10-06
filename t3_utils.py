@@ -973,9 +973,16 @@ def set_zoo_metadata(
     # Query info about the movie of interest
     sitesdf = pd.read_sql_query("SELECT * FROM sites", conn)
 
+    # Rename the id column to match movies df
+    sitesdf = sitesdf.rename(
+        columns={
+            "id": "site_id",
+        }
+    )
+
     # Combine site info to the df
     if "site_id" in df.columns:
-        upload_to_zoo = df.merge(sitesdf, left_on="site_id", right_on="id")
+        upload_to_zoo = df.merge(sitesdf, on="site_id")
         sitename = upload_to_zoo["siteName"].unique()[0]
     else:
         raise ValueError("Sites table empty. Perhaps try to rebuild the initial db.")
@@ -993,7 +1000,7 @@ def set_zoo_metadata(
             "siteName": "#siteName",
         }
     )
-
+    
     # Convert datetime to string to avoid JSON seriazible issues
     upload_to_zoo["#created_on"] = upload_to_zoo["#created_on"].astype(str)
     created_on = upload_to_zoo["#created_on"].unique()[0]
@@ -1087,6 +1094,10 @@ def set_zoo_metadata(
             f"The following columns have NAN values {upload_to_zoo.columns[upload_to_zoo.isna().any()].tolist()}"
         )
 
+    logging.info(
+            f"The metadata for the {upload_to_zoo.shape[0]} subjects is ready."
+        )
+        
     return upload_to_zoo, sitename, created_on
 
 
