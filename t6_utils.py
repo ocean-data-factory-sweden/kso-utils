@@ -20,6 +20,8 @@ import ipywidgets as widgets
 from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
+import yolov5_tracker.track as track
+
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -70,44 +72,65 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
     :return: A dataframe with the following columns: filename, class_id, frame_no, tracker_id
     """
     data_dict = {}
-    for track_file in os.listdir(tracker_dir):
-        if track_file.endswith(".txt"):
-            data_dict[track_file] = []
-            with open(Path(tracker_dir, track_file), "r") as infile:
-                lines = infile.readlines()
-                for line in lines:
-                    vals = line.split(" ")
-                    class_id, frame_no, tracker_id = vals[0], vals[1], vals[2]
-                    data_dict[track_file].append([class_id, frame_no, tracker_id])
-    dlist = [
-        [os.path.splitext(key)[0] + f"_{i[1]}.txt", i[0], i[1], i[2]]
-        for key, value in data_dict.items()
-        for i in value
-    ]
-    detect_df = pd.DataFrame.from_records(
-        dlist, columns=["filename", "class_id", "frame_no", "tracker_id"]
+    if os.path.exists(tracker_dir):
+        track_files = os.listdir(tracker_dir)
+    else:
+        track_files = []
+    if len(track_files) == 0:
+        logging.error("No tracks found.")
+    else:
+        for track_file in track_files:
+            if track_file.endswith(".txt"):
+                data_dict[track_file] = []
+                with open(Path(tracker_dir, track_file), "r") as infile:
+                    lines = infile.readlines()
+                    for line in lines:
+                        vals = line.split(" ")
+                        class_id, frame_no, tracker_id = vals[0], vals[1], vals[2]
+                        data_dict[track_file].append([class_id, frame_no, tracker_id])
+        dlist = [
+            [os.path.splitext(key)[0] + f"_{i[1]}.txt", i[0], i[1], i[2]]
+            for key, value in data_dict.items()
+            for i in value
+        ]
+        detect_df = pd.DataFrame.from_records(
+            dlist, columns=["filename", "class_id", "frame_no", "tracker_id"]
+        )
+        csv_out = Path(eval_dir, "tracking.csv")
+        detect_df.sort_values(
+            by="frame_no",
+            key=lambda x: np.argsort(index_natsorted(detect_df["filename"])),
+        ).to_csv(csv_out, index=False)
+        logging.info("Report created at {}".format(csv_out))
+        return detect_df
+
+
+def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str):
+    model = torch.load(
+        Path(
+            [
+                f
+                for f in Path(artifact_dir).iterdir()
+                if f.is_file() and ".pt" in str(f)
+            ][-1]
+        )
     )
-    csv_out = Path(eval_dir, "tracking.csv")
-    detect_df.sort_values(
-        by="frame_no", key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
-    ).to_csv(csv_out, index=False)
-    logging.info("Report created at {}".format(csv_out))
-    return detect_df
-
-
-def generate_counts(eval_dir: str, tracker_dir: str, model_dir: str):
-    model = torch.load(os.path.join(model_dir, "best.pt"))
     names = {i: model["model"].names[i] for i in range(len(model["model"].names))}
     class_df = generate_csv_report(eval_dir)
     tracker_df = generate_tracking_report(tracker_dir, eval_dir)
-    tracker_df["frame_no"] = tracker_df["frame_no"].astype(int)
-    combined_df = pd.merge(
-        class_df, tracker_df, on=["filename", "frame_no", "class_id"]
-    )
-    combined_df["species_name"] = combined_df["class_id"].apply(lambda x: names[int(x)])
-    print("--- DETECTION REPORT ---")
-    print("--------------------------------")
-    print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
+    if tracker_df is None:
+        logging.error("No tracks to count.")
+    else:
+        tracker_df["frame_no"] = tracker_df["frame_no"].astype(int)
+        combined_df = pd.merge(
+            class_df, tracker_df, on=["filename", "frame_no", "class_id"]
+        )
+        combined_df["species_name"] = combined_df["class_id"].apply(
+            lambda x: names[int(x)]
+        )
+        print("--- DETECTION REPORT ---")
+        print("--------------------------------")
+        print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
 
 
 def track_objects(
@@ -115,7 +138,8 @@ def track_objects(
     artifact_dir: str,
     tracker_folder: str,
     conf_thres: float = 0.5,
-    img_size: int = 720,
+    img_size: tuple = (720, 540),
+    gpu: bool = False,
 ):
     """
     This function takes in the source directory of the video, the artifact directory, the tracker
@@ -137,27 +161,30 @@ def track_objects(
         os.chdir(tracker_folder)
     else:
         logging.error("The tracker folder does not exist. Please try again")
-    shutil.copyfile(os.path.join(artifact_dir, "best.pt"), "best.pt")
-    best_model = "best.pt"
-    try:
-        subprocess.check_output(
-            [
-                f'python track.py --conf-thres {str(conf_thres)}  \
-                                 --save-txt --save-vid --yolo_model {best_model} --source "{source_dir}" \
-                                 --imgsz {str(img_size)} --project {tracker_folder}/runs/track/ \
-                                 --deep_sort_model osnet_x0_5_msmt17'
-            ],
-            shell=True,
-            stderr=subprocess.STDOUT,
+    model_path = [
+        f for f in Path(artifact_dir).iterdir() if f.is_file() and ".pt" in str(f)
+    ][0]
+    best_model = Path(model_path)
+    if not os.path.exists("../yolov5_tracker/weights"):
+        os.mkdir("../yolov5_tracker/weights")
+    if not gpu:
+        track.run(
+            source=source_dir,
+            conf_thres=conf_thres,
+            yolo_weights=best_model,
+            imgsz=img_size,
+            project=Path(f"{tracker_folder}/runs/track/"),
         )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            "command '{}' return with error (code {}): {}".format(
-                e.cmd, e.returncode, e.output
-            )
+    else:
+        track.run(
+            source=source_dir,
+            conf_thres=conf_thres,
+            yolo_weights=best_model,
+            imgsz=img_size,
+            project=Path(f"{tracker_folder}/runs/track/"),
+            device="0",
         )
-    # Go up one directory
-    if "Yolov5_DeepSort_OSNet" in os.getcwd():
+    if "Yolov5" in os.getcwd():
         os.chdir(cwd)
     tracker_root = os.path.join(tracker_folder, "runs", "track")
     latest_tracker = os.path.join(
@@ -370,6 +397,8 @@ def get_data_viewer(data_path: str):
     :return: A function that takes in a parameter k and returns a widget that displays the image at
     index k in the list of images.
     """
+    if "empty_string" in data_path:
+        return None
     imgs = list(filter(lambda fn: fn.lower().endswith(".jpg"), os.listdir(data_path)))
 
     def loadimg(k):
@@ -420,22 +449,28 @@ def get_dataset(project_name: str, model: str):
     validation data.
     """
     api = wandb.Api()
-    run_id = model.split("_")[1]
-    run = api.run(f"koster/{project_name.lower()}/runs/{run_id}")
-    datasets = [
-        artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
-    ]
-    if len(datasets) == 0:
-        logging.error("No datasets are linked to these runs. Please try another run.")
-        return None, None
-    dirs = []
-    for i in range(len(["train", "val"])):
-        artifact = datasets[i]
-        logging.info(f"Downloading {artifact.name} checkpoint...")
-        artifact_dir = artifact.download()
-        logging.info(f"{artifact.name} - Dataset downloaded.")
-        dirs.append(artifact_dir)
-    return dirs
+    if "_" in model:
+        run_id = model.split("_")[1]
+        run = api.run(f"koster/{project_name.lower()}/runs/{run_id}")
+        datasets = [
+            artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
+        ]
+        if len(datasets) == 0:
+            logging.error(
+                "No datasets are linked to these runs. Please try another run."
+            )
+            return "empty_string", "empty_string"
+        dirs = []
+        for i in range(len(["train", "val"])):
+            artifact = datasets[i]
+            logging.info(f"Downloading {artifact.name} checkpoint...")
+            artifact_dir = artifact.download()
+            logging.info(f"{artifact.name} - Dataset downloaded.")
+            dirs.append(artifact_dir)
+        return dirs
+    else:
+        logging.error("Externally trained model. No data available.")
+        return "empty_string", "empty_string"
 
 
 def get_model(model_name: str, project_name: str, download_path: str):
@@ -458,7 +493,7 @@ def get_model(model_name: str, project_name: str, download_path: str):
         ).collections()
     ]
     model = [i for i in collections if i.name == model_name]
-    if len(model) == 1:
+    if len(model) > 0:
         model = model[0]
     else:
         logging.error("No model found")
@@ -489,7 +524,10 @@ def choose_model(project_name: str):
         ]["edges"],
         api.runs(path=f"koster/{project_name.lower()}").objects,
     ):
-        model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
+        if project_name == "model-registry":
+            model_dict[edge["node"]["displayName"]] = edge["node"]["displayName"]
+        else:
+            model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
         model_info["run_" + obj.id + "_model"] = literal_eval(
             edge["node"]["summaryMetrics"]
         )
