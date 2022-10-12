@@ -378,7 +378,7 @@ def gpu_select():
                         "Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS"
                     )  # Install ffmpeg with GPU version
                     subprocess.check_call(
-                        "git clone https://github.com/rokibulislaam/colab-ffmpeg-cuda.git",
+                        "git clone https://github.com/fritolays/colab-ffmpeg-cuda.git",
                         shell=True,
                     )
                     subprocess.check_call(
