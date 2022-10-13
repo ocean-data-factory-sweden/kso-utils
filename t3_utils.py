@@ -1143,7 +1143,7 @@ def upload_clips_to_zooniverse(
 
     subject_set.save()
 
-    logging.info(subject_set_name, "subject set created")
+    logging.info(f"{subject_set_name} subject set created")
 
     # Save the df as the subject metadata
     subject_metadata = upload_to_zoo.set_index("clip_path").to_dict("index")
