@@ -256,8 +256,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
 
             bboxes.append(
                 {
-                    "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                    "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                    "x": left,
+                    "y": top,
                     "width": float(s[3]) * width,
                     "height": float(s[4]) * height,
                     "label": species_list[int(s[0])],
@@ -295,8 +295,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
 
                 bboxes.append(
                     {
-                        "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                        "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                        "x": left,
+                        "y": top,
                         "width": float(s[3]) * width,
                         "height": float(s[4]) * height,
                         "label": species_list[int(s[0])],
@@ -342,8 +342,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     top = (float(s[2]) - (float(s[4]) / 2)) * height
                     bboxes.append(
                         {
-                            "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                            "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                            "x": left,
+                            "y": top,
                             "width": float(s[3]) * width,
                             "height": float(s[4]) * height,
                             "label": species_list[int(s[0])],
@@ -518,19 +518,25 @@ def choose_model(project_name: str):
     api = wandb.Api()
     # weird error fix (initialize api another time)
     api.runs(path=f"koster/{project_name.lower()}")
-    for edge, obj in zip(
-        api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
+    if len(api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
             "runs"
-        ]["edges"],
-        api.runs(path=f"koster/{project_name.lower()}").objects,
-    ):
-        if project_name == "model-registry":
-            model_dict[edge["node"]["displayName"]] = edge["node"]["displayName"]
-        else:
-            model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
-        model_info["run_" + obj.id + "_model"] = literal_eval(
-            edge["node"]["summaryMetrics"]
-        )
+        ]["edges"]) == 0:
+        logging.error("No models currently available for the project.")
+        model_dict = {}
+    else:
+        for edge, obj in zip(
+            api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
+                "runs"
+            ]["edges"],
+            api.runs(path=f"koster/{project_name.lower()}").objects,
+        ):
+            if project_name == "model-registry":
+                model_dict[edge["node"]["displayName"]] = edge["node"]["displayName"]
+            else:
+                model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
+            model_info["run_" + obj.id + "_model"] = literal_eval(
+                edge["node"]["summaryMetrics"]
+            )
     # Add "no movie" option to prevent conflicts
     # models = np.append(list(model_dict.keys()),"No model")
 
