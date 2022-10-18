@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 import subprocess
+import tempfile
 import shutil
 import logging
 import wandb
@@ -149,48 +150,59 @@ def track_objects(
 
     :param source_dir: The directory where the images are stored
     :param artifact_dir: The directory where the model is saved
-    :param tracker_folder: The folder where the Yolov5_DeepSort_OSNet repo is located
+    :param tracker_folder: The folder where tracker runs will be stored
     :param conf_thres: The confidence threshold for the YOLOv5 model
     :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720
     (optional)
     :return: The latest tracker folder
     """
-    # Enter the correct folder
-    if os.path.exists(tracker_folder):
-        cwd = os.getcwd()
-        os.chdir(tracker_folder)
-    else:
+    # Check that tracker folder specified exists
+    if not os.path.exists(tracker_folder):
         logging.error("The tracker folder does not exist. Please try again")
+        return None
+
     model_path = [
         f for f in Path(artifact_dir).iterdir() if f.is_file() and ".pt" in str(f)
-    ][0]
+    ][-1]
+
     best_model = Path(model_path)
-    if not os.path.exists("../yolov5_tracker/weights"):
-        os.mkdir("../yolov5_tracker/weights")
+    main_tracker_folder = Path("../yolov5_tracker").resolve()
+
     if not gpu:
         track.run(
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,
+            strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
+            config_strongsort=Path(main_tracker_folder, "strong_sort/configs/strong_sort.yaml"),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
+            save_vid=True,
+            save_conf=True,
+            save_txt=True,
+            half=True,
         )
     else:
         track.run(
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,
+            strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
+            config_strongsort=Path(main_tracker_folder, "strong_sort/configs/strong_sort.yaml"),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
             device="0",
+            save_vid=True,
+            save_conf=True,
+            save_txt=True,
+            half=True,
         )
-    if "Yolov5" in os.getcwd():
-        os.chdir(cwd)
+
     tracker_root = os.path.join(tracker_folder, "runs", "track")
     latest_tracker = os.path.join(
         tracker_root, sorted(os.listdir(tracker_root))[-1], "tracks"
     )
-    logging.info("Tracking completed succesfully")
+    logging.info(f"Tracking saved succesfully to {latest_tracker}")
     return latest_tracker
 
 
@@ -398,6 +410,7 @@ def get_data_viewer(data_path: str):
     index k in the list of images.
     """
     if "empty_string" in data_path:
+        logging.info("No files.")
         return None
     imgs = list(filter(lambda fn: fn.lower().endswith(".jpg"), os.listdir(data_path)))
 
@@ -617,7 +630,7 @@ def view_file(path: str):
 
     :param path: The path to the file you want to view
     :return: A widget that displays the image or video.
-    """
+    """  
     # Get path of the modified clip selected
     extension = os.path.splitext(path)[1]
     file = open(path, "rb").read()
@@ -626,18 +639,26 @@ def view_file(path: str):
     elif extension.lower() in [".mp4", ".mov", ".avi"]:
         if os.path.exists("linked_content"):
             shutil.rmtree("linked_content")
-        os.mkdir("linked_content")
-        os.symlink(path, "linked_content/" + os.path.basename(path))
-        widget = HTML(
-            f"""
-                    <video width=800 height=400 alt="test" controls>
-                        <source src="linked_content/{os.path.basename(path)}" type="video/{extension.lower().replace(".", "")}">
-                    </video>
-                """
-        )
+        else:
+            try:
+                os.mkdir("linked_content")
+                os.symlink(path, "linked_content/" + os.path.basename(path))
+                widget = HTML(
+                    f"""
+                            <video width=800 height=400 alt="test" controls>
+                                <source src="linked_content/{os.path.basename(path)}" type="video/{extension.lower().replace(".", "")}">
+                            </video>
+                        """
+                )
+            except:
+                logging.error("Cannot write to local files, viewing not currently possible.")
+                widget = widgets.Image()
+                
+        
     else:
         logging.error(
             "File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi."
         )
+        widget.Image()
 
     return widget
