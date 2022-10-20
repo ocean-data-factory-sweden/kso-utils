@@ -27,6 +27,26 @@ import yolov5_tracker.track as track
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+def choose_conf():
+    w = widgets.FloatSlider(
+        value=0.5,
+        min=0,
+        max=1.0,
+        step=0.1,
+        description='Confidence threshold:',
+        disabled=False,
+        continuous_update=False,
+        orientation='horizontal',
+        readout=True,
+        readout_format='.1f',
+        display='flex',
+        flex_flow='column',
+        align_items='stretch', 
+        style= {'description_width': 'initial'}
+    )
+    display(w)
+    return w
+
 
 def generate_csv_report(evaluation_path: str):
     """
@@ -132,6 +152,7 @@ def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str):
         print("--- DETECTION REPORT ---")
         print("--------------------------------")
         print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
+        return combined_df.groupby(["species_name"])["tracker_id"].nunique()
 
 
 def track_objects(
@@ -180,7 +201,6 @@ def track_objects(
             save_vid=True,
             save_conf=True,
             save_txt=True,
-            half=True,
         )
     else:
         track.run(
