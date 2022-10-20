@@ -137,22 +137,18 @@ def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str):
         )
     )
     names = {i: model["model"].names[i] for i in range(len(model["model"].names))}
-    class_df = generate_csv_report(eval_dir)
     tracker_df = generate_tracking_report(tracker_dir, eval_dir)
     if tracker_df is None:
         logging.error("No tracks to count.")
     else:
         tracker_df["frame_no"] = tracker_df["frame_no"].astype(int)
-        combined_df = pd.merge(
-            class_df, tracker_df, on=["filename", "frame_no", "class_id"]
-        )
-        combined_df["species_name"] = combined_df["class_id"].apply(
+        tracker_df["species_name"] = tracker_df["class_id"].apply(
             lambda x: names[int(x)]
         )
-        print("--- DETECTION REPORT ---")
+        print("------- DETECTION REPORT -------")
         print("--------------------------------")
-        print(combined_df.groupby(["species_name"])["tracker_id"].nunique())
-        return combined_df.groupby(["species_name"])["tracker_id"].nunique()
+        print(tracker_df.groupby(["species_name"])["tracker_id"].nunique())
+        return tracker_df.groupby(["species_name"])["tracker_id"].nunique()
 
 
 def track_objects(
