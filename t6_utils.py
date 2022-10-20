@@ -27,6 +27,18 @@ import yolov5_tracker.track as track
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+def set_config(conf_thres: float, model: str, eval_dir: str):
+    config = wandb.config
+    config.confidence_threshold = conf_thres
+    config.model_name = model
+    config.evaluation_directory = eval_dir
+    return config
+
+def add_data_wandb(path: str, name: str, run):
+    my_data = wandb.Artifact(name, type="raw_data")
+    my_data.add_dir(path)
+    run.log_artifact(my_data)
+
 def choose_conf():
     w = widgets.FloatSlider(
         value=0.5,
@@ -48,7 +60,7 @@ def choose_conf():
     return w
 
 
-def generate_csv_report(evaluation_path: str):
+def generate_csv_report(evaluation_path: str, wandb_log: bool = False):
     """
     > We read the labels from the `labels` folder, and create a dictionary with the filename as the key,
     and the list of labels as the value. We then convert this dictionary to a dataframe, and write it to
@@ -78,6 +90,8 @@ def generate_csv_report(evaluation_path: str):
         by="frame_no", key=lambda x: np.argsort(index_natsorted(detect_df["filename"]))
     ).to_csv(csv_out, index=False)
     logging.info("Report created at {}".format(csv_out))
+    if wandb_log:
+        wandb.log({"predictions": wandb.Table(dataframe=detect_df)})
     return detect_df
 
 
@@ -126,7 +140,7 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
         return detect_df
 
 
-def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str):
+def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_log: bool = False):
     model = torch.load(
         Path(
             [
@@ -148,8 +162,10 @@ def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str):
         print("------- DETECTION REPORT -------")
         print("--------------------------------")
         print(tracker_df.groupby(["species_name"])["tracker_id"].nunique())
-        return tracker_df.groupby(["species_name"])["tracker_id"].nunique()
-
+        final_df = tracker_df.groupby(["species_name"])["tracker_id"].nunique().to_frame().reset_index()
+        if wandb_log:
+            wandb.log({"tracking_counts": wandb.Table(dataframe=final_df)})
+        return final_df
 
 def track_objects(
     source_dir: str,
