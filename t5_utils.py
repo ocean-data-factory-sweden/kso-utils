@@ -1,6 +1,7 @@
 # base imports
 import pandas as pd
 import os
+import yaml
 import paramiko
 import logging
 import wandb
@@ -10,9 +11,7 @@ from pathlib import Path
 
 # widget imports
 from IPython.display import display
-from ipywidgets import Layout
 import ipywidgets as widgets
-from IPython.display import HTML, display, clear_output
 
 # util imports
 import kso_utils.db_utils as db_utils
@@ -26,7 +25,7 @@ def setup_paths(output_folder: str):
     """
     It takes the output folder and returns the path to the data file and the path to the hyperparameters
     file
-    
+
     :param output_folder: The folder where the output of the experiment is stored
     :type output_folder: str
     :return: The data_path and hyps_path
@@ -38,9 +37,21 @@ def setup_paths(output_folder: str):
             if _.endswith(".yaml") and "hyp" not in _
         ][-1]
         hyps_path = str(Path(output_folder, "hyp.yaml"))
+        
+        # Rewrite main path to images and labels
+        with open(data_path, "r") as yamlfile:
+            cur_yaml = yaml.safe_load(yamlfile) 
+            cur_yaml["path"] = output_folder
+
+        if cur_yaml:
+            with open(data_path, "w") as yamlfile:
+                yaml.safe_dump(cur_yaml, yamlfile)
+
         logging.info("Success! Paths to data.yaml and hyps.yaml found.")
     except Exception as e:
-        logging.error("Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory.")
+        logging.error(
+            f"{e}, Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory."
+        )
     return data_path, hyps_path
 
 
@@ -63,14 +74,10 @@ def choose_experiment_name():
     return exp_name
 
 
-# Function to compare original to modified frames
 def choose_baseline_model():
     """
-    It takes a project name and returns a dropdown widget that displays the metrics of the model
-    selected
-
-    :param project_name: The name of the project you want to load the model from
-    :return: The model_widget is being returned.
+    It downloads the latest version of the baseline model from WANDB
+    :return: The path to the baseline model.
     """
     api = wandb.Api()
     # weird error fix (initialize api another time)
@@ -83,7 +90,7 @@ def choose_baseline_model():
         ).collections()
     ]
 
-    for artifact in collections[0].versions():
+    for artifact in collections[-1].versions():
         try:
             artifact_dir = artifact.download()
             artifact_file = [
@@ -118,13 +125,6 @@ def transfer_model(
     :param password: the password for the user you're using to connect to the server
     :type password: str
     """
-    # api = wandb.Api()
-    # collection = [
-    #    coll for coll in api.artifact_type(type_name='model', project=project_name).collections()
-    # ][-1]
-    # artifact = api.artifact(f"{project_name}/" + collection.name + ":latest")
-    # Download the artifact's contents
-    # artifact_dir = artifact.download()
     ssh = SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.load_system_host_keys()
