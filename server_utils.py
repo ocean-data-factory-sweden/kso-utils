@@ -64,6 +64,29 @@ def connect_to_server(project: project_utils.Project):
 
     return server_dict
 
+def get_ml_data(project: project_utils.Project):
+    """
+    It downloads the training data from Google Drive.
+    Currently only applies to the Template Project as other projects do not have prepared
+    training data.
+    
+    :param project: The project object that contains all the information about the project
+    :type project: project_utils.Project
+    """
+    if project.ml_folder is not None and not os.path.exists(project.ml_folder):
+        # Download the folder containing the training data
+        if project.server == "TEMPLATE":
+            gdrive_id = "1xknKGcMnHJXu8wFZTAwiKuR3xCATKco9"
+            ml_folder = project.ml_folder
+
+            # Download template training files from Gdrive
+            download_gdrive(gdrive_id, ml_folder)
+            logging.info("Template data downloaded successfully")
+        else:
+            logging.info("No download method implemented for this data")
+    else:
+        logging.info("No prepared data to be downloaded.")
+
 
 def get_db_init_info(project: project_utils.Project, server_dict: dict):
     """
@@ -97,7 +120,7 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
                 server_dict, db_initial_info, db_csv_info
             )
 
-    elif server in ["local", "SNIC"]:
+    elif server in ["LOCAL", "SNIC"]:
 
         csv_folder = db_csv_info
 
@@ -152,13 +175,13 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
                 "Insufficient information to build the database. Please fix the path to csv files."
             )
 
-    elif server == "wildlife_ai":
+    elif server == "TEMPLATE":
 
         # Specify the id of the folder with csv files of the template project
         gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
 
         # Download template csv files from Gdrive
-        db_initial_info = download_init_csv(gdrive_id, db_csv_info)
+        db_initial_info = download_gdrive(gdrive_id, db_csv_info)
 
         for file in Path(db_csv_info).rglob("*.csv"):
             if "sites" in file.name:
@@ -196,7 +219,7 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict):
 
     else:
         raise ValueError(
-            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and local."
+            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
         )
 
     # Add project-specific db_path
@@ -233,7 +256,7 @@ def update_csv_server(
             filename=str(db_info_dict[updated_csv]),
         )
 
-    elif server == "wildlife_ai":
+    elif server == "TEMPLATE":
         logging.error(
             f"{orig_csv} couldn't be updated. Check writing permisions to the server."
         )
@@ -241,7 +264,7 @@ def update_csv_server(
     elif server == "SNIC":
         logging.error("Updating csv files to the server is a work in progress")
 
-    elif server == "local":
+    elif server == "LOCAL":
         logging.error("Updating csv files to the server is a work in progress")
 
     else:
@@ -280,13 +303,13 @@ def upload_movie_server(
 
         # logging.info(f"{movie_path} has been added to the server")
 
-    elif server == "wildlife_ai":
+    elif server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
 
     elif server == "SNIC":
         logging.error("Uploading the movies to the server is a work in progress")
 
-    elif server == "local":
+    elif server == "LOCAL":
         logging.error(f"{movie_path} not uploaded to the server as project is local")
 
     else:
@@ -337,7 +360,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     elif server == "SNIC":
         server_df = get_snic_files(client=db_info_dict["client"], folder=movie_folder)
 
-    elif server == "local":
+    elif server == "LOCAL":
         if [movie_folder, bucket_i] == ["None", "None"]:
             logging.info(
                 "No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead."
@@ -347,7 +370,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
             server_files = os.listdir(movie_folder)
             server_paths = [movie_folder + i for i in server_files]
             server_df = pd.DataFrame(server_paths, columns="spath")
-    elif server == "wildlife_ai":
+    elif server == "TEMPLATE":
         # Combine wildlife.ai storage and filenames of the movie examples
         server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
 
@@ -790,22 +813,22 @@ def download_csv_from_google_drive(file_url: str):
     return dfs
 
 
-def download_init_csv(gdrive_id: str, db_csv_info: dict):
+def download_gdrive(gdrive_id: str, folder_name: str):
 
     # Specify the url of the file to download
-    url_input = "https://drive.google.com/uc?id=" + str(gdrive_id)
+    url_input = "https://drive.google.com/uc?&confirm=s5vl&id=" + str(gdrive_id)
 
     logging.info(f"Retrieving the file from {url_input}")
 
     # Specify the output of the file
-    zip_file = "db_csv_info.zip"
+    zip_file = f"{folder_name}.zip"
 
     # Download the zip file
     gdown.download(url_input, zip_file, quiet=False)
 
-    # Unzip the folder with the csv files
+    # Unzip the folder with the files
     with zipfile.ZipFile(zip_file, "r") as zip_ref:
-        zip_ref.extractall(os.path.dirname(db_csv_info))
+        zip_ref.extractall(os.path.dirname(folder_name))
 
     # Remove the zipped file
     os.remove(zip_file)

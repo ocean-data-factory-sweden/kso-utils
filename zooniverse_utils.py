@@ -201,7 +201,7 @@ def populate_subjects(
     )
 
     # Set movie_id column to None if no movies are linked to the subject
-    if movie_folder == "None" and server in ["local", "SNIC"]:
+    if movie_folder == "None" and server in ["LOCAL", "SNIC"]:
         subjects["movie_id"] = None
 
     # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips

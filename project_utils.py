@@ -25,6 +25,7 @@ class Project:
     csv_folder: str = None
     movie_folder: str = None
     photo_folder: str = None
+    ml_folder: str = None
 
 
 def find_project(project_name: str = ""):
