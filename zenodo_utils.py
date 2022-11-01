@@ -41,9 +41,9 @@ def add_metadata_zenodo_upload(access_token: str, deposition_id: str,
              'description': description,
              'creators': [{'name': name,
                            'affiliation': affiliation} for name, affiliation in creators_dict.items()],
-             'communities': [{'identifier':'odf-sweden'},
+             'communities': [{'identifier':'odf-sweden'}],
              'notes': 'Attribution notice: The code used to generate this model can be found '
-                      'at https://github.com/ocean-data-factory-sweden/koster_data_management']
+                      'at https://github.com/ocean-data-factory-sweden/koster_data_management'
          }
      }
     headers = {"Content-Type": "application/json"}
