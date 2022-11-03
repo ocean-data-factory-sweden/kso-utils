@@ -1061,6 +1061,10 @@ def get_annotations_viewer(data_path: str, species_list: list):
         ]
     )
 
+    if any([len(images), len(annotations)]) == 0:
+        logging.error("No annotations to display")
+        return None
+
     # a progress bar to show how far we got
     w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
     # the bbox widget

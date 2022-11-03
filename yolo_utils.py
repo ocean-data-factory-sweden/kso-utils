@@ -13,7 +13,6 @@ import pandas as pd
 import logging
 import datetime
 import PIL
-import imagesize
 import requests
 
 from functools import partial
@@ -26,7 +25,6 @@ from collections.abc import Callable
 from kso_utils.db_utils import create_connection
 from kso_utils.koster_utils import unswedify
 from kso_utils.server_utils import retrieve_movie_info_from_server, get_movie_url
-from kso_utils.t4_utils import get_species_ids
 import kso_utils.project_utils as project_utils
 
 # Logging
@@ -323,7 +321,7 @@ def frame_aggregation(
     :type class_list: list
     :param img_size: tuple, the size of the images to be used for training
     :type img_size: tuple
-    :param out_format: str = "yolo",, defaults to yolo
+    :param out_format: str = "yolo", defaults to yolo
     :type out_format: str (optional)
     :param remove_nulls: Remove null annotations from the dataset, defaults to True
     :type remove_nulls: bool (optional)
@@ -345,35 +343,33 @@ def frame_aggregation(
     # Select the aggregated classifications from the species of interest
     train_rows = agg_df
 
+    # Rename columns if in different format
+    train_rows = train_rows.rename(columns={"x": "x_position",
+                               "y": "y_position",
+                               "w": "width",
+                               "h": "height" }).copy()
+
     # Remove null annotations
     if remove_nulls:
         train_rows = train_rows.dropna(
-            subset=["x_position", "y_position", "width", "height"]
-        )
+            subset=["x_position", "y_position", "width", "height"],
+        ).copy()
 
+    # Check if any frames are left after removing null values
     if len(train_rows) == 0:
         logging.error("No frames left. Please adjust aggregation parameters.")
 
-    # Get movie info from server
-    movie_df = retrieve_movie_info_from_server(
-        project=project, db_info_dict=db_info_dict
-    )
-
     # Create output folder
-    if not os.path.isdir(out_path):
-        os.mkdir(Path(out_path))
+    if os.path.isdir(out_path):
+        shutil.rmtree(out_path)
+    os.mkdir(out_path)
 
     # Set up directory structure
     img_dir = Path(out_path, "images")
     label_dir = Path(out_path, "labels")
 
     # Create image and label directories
-    if os.path.isdir(img_dir):
-        shutil.rmtree(img_dir)
     os.mkdir(img_dir)
-
-    if os.path.isdir(label_dir):
-        shutil.rmtree(label_dir)
     os.mkdir(label_dir)
 
     # Create timestamped koster yaml file with model configuration
@@ -381,7 +377,7 @@ def frame_aggregation(
 
     # Write config file
     data = dict(
-        path=str(Path(out_path)),
+        path=out_path,
         train="train.txt",
         val="valid.txt",
         nc=len(class_list),
@@ -437,16 +433,44 @@ def frame_aggregation(
     species_df = pd.read_sql_query("SELECT id, label FROM species", conn)
     species_df["clean_label"] = species_df.label.apply(clean_species_name)
 
+    # Add species_id to train_rows
+    if not "species_id" in train_rows.columns:
+        train_rows["species_id"] = train_rows["label"].apply(lambda x: 
+                                                       species_df[species_df.label == x].id.values[0],
+                                                       1)
+        train_rows.drop(columns=['label'], axis=1, inplace=True)
+
     sp_id2mod_id = {
         species_df[species_df.clean_label == species_list[i]].id.values[0]: i
         for i in range(len(species_list))
     }
 
+    # Get movie info from server
+    movie_df = retrieve_movie_info_from_server(
+        project=project, db_info_dict=db_info_dict
+    )
+
     # If at least one movie is linked to the project
     logging.info(f"There are {len(movie_df)} movies")
 
-    if len(movie_df) > 0 and not pd.isnull(train_rows["frame_number"]).any():
+    if len(movie_df) > 0:
+        if "frame_number" in train_rows.columns and not pd.isnull(train_rows["frame_number"]).any():
+            movie_bool = True
+        else:
+            logging.info("There are movies available, but the subject metadata does not contain frame "
+                         "numbers and will therefore not be used.")
+            movie_bool = False
+    link_bool = "https_location" in train_rows.columns
+    image_bool = project.photo_folder is not None
+    
+    if not all([movie_bool, link_bool, image_bool]):
+        logging.error("No source of footage for aggregation found. Please check your metadata "
+                      "and project setup before running this function again.")
+        return None
 
+    if movie_bool:
+
+        # Get movie path on the server
         train_rows["movie_path"] = train_rows.merge(
             movie_df, left_on="movie_id", right_on="id", how="left"
         )["spath"]
@@ -455,6 +479,7 @@ def frame_aggregation(
             lambda x: get_movie_url(project, db_info_dict, x)
         )
 
+        # Read each movie for efficient frame access
         video_dict = {}
         for i in tqdm(train_rows["movie_path"].unique()):
             try:
@@ -465,51 +490,97 @@ def frame_aggregation(
                 except KeyError:
                     logging.warning("Missing file" + f"{i}")
 
-        # Ensure column order
-        train_rows = train_rows[
-            [
+        # Create full rows
+        train_rows = train_rows.sort_values(
+            by=["movie_path", "frame_number"], ascending=True
+        )
+
+        # Ensure key fields wrt movies are available
+        key_fields = [
+            "species_id",
+            "frame_number",
+            "movie_path",
+            "x_position",
+            "y_position",
+            "width",
+            "height",
+        ]
+
+    else:
+        if link_bool:
+            key_fields = [
+                "subject_ids",
                 "species_id",
-                "frame_number",
-                "movie_path",
                 "x_position",
                 "y_position",
                 "width",
                 "height",
             ]
-        ]
+        else:
+            key_fields = [
+                "species_id",
+                "filename",
+                "x_position",
+                "y_position",
+                "width",
+                "height",
+            ]
 
-        new_rows = []
-        bboxes = {}
-        tboxes = {}
+    # Get relevant fields from dataframe (before groupby)
+    train_rows = train_rows[key_fields]
 
-        # Create full rows
-        train_rows = train_rows.sort_values(
-            by=["movie_path", "frame_number"], ascending=True
+    group_fields = (
+        ["subject_ids", "species_id"]
+        if link_bool
+        else (
+            ["movie_path", "frame_number", "species_id"]
+            if movie_bool
+            else ["filename", "species_id"]
         )
-        for name, group in tqdm(
-            train_rows.groupby(["movie_path", "frame_number", "species_id"])
-        ):
-            movie_path, frame_number, species_id = name[:3]
-            named_tuple = tuple([species_id, frame_number, movie_path])
+    )
 
+    new_rows = []
+    bboxes = {}
+    tboxes = {}
+
+    for name, group in tqdm(train_rows.groupby(group_fields)):
+        grouped_fields = name[: len(group_fields)]
+        if not movie_bool:
+            # Get the filenames of the images
+            filename = (
+                agg_df[agg_df.subject_ids == grouped_fields[0]]["https_location"].iloc[
+                    0
+                ]
+                if link_bool
+                else project.photo_folder + grouped_fields[0]
+            )
+            named_tuple = tuple([grouped_fields[1], filename])
+        else:
+            # Get movie_path and frame_number
+            rev_fields = grouped_fields.reverse()
+            named_tuple = tuple([rev_fields])
+
+        if movie_bool:
             final_name = name[0] if name[0] in video_dict else unswedify(name[0])
-            if frame_number > len(video_dict[final_name]):
+
+            if grouped_fields[1] > len(video_dict[final_name]):
                 logging.warning(
                     f"Frame out of range for video of length {len(video_dict[final_name])}"
                 )
-                frame_number = frame_number // 2
+
             if final_name in video_dict:
                 bboxes[named_tuple], tboxes[named_tuple] = [], []
-                bboxes[named_tuple].extend(tuple(i[3:]) for i in group.values)
-                movie_h = video_dict[final_name][0].shape[1]
-                movie_w = video_dict[final_name][0].shape[0]
+                bboxes[named_tuple].extend(
+                    tuple(i[len(grouped_fields) :]) for i in group.values
+                )
+                movie_w, movie_h = video_dict[final_name][0].shape
 
                 for box in bboxes[named_tuple]:
                     new_rows.append(
                         (
-                            species_id,
-                            frame_number,
-                            movie_path,
+                            grouped_fields[-1],
+                            grouped_fields[1],
+                            grouped_fields[0],
                             movie_h,
                             movie_w,
                         )
@@ -521,24 +592,47 @@ def frame_aggregation(
                     tboxes[named_tuple].extend(
                         track_objects(
                             video_dict[final_name],
-                            species_id,
+                            grouped_fields[-1],
                             bboxes[named_tuple],
-                            frame_number,
-                            frame_number + n_tracked_frames,
+                            grouped_fields[1],
+                            grouped_fields[1] + n_tracked_frames,
                         )
                     )
                     for box in tboxes[named_tuple]:
                         new_rows.append(
                             (
-                                species_id,
-                                frame_number + box[0],
-                                movie_path,
-                                video_dict[final_name][frame_number].shape[1],
-                                video_dict[final_name][frame_number].shape[0],
+                                grouped_fields[-1],
+                                grouped_fields[1] + box[0],
+                                grouped_fields[-1],
+                                video_dict[final_name][grouped_fields[1]].shape[1],
+                                video_dict[final_name][grouped_fields[1]].shape[0],
                             )
                             + box[1:]
                         )
+        else:
+            # Track intermediate frames
+            bboxes[named_tuple] = []
+            bboxes[named_tuple].extend(
+                tuple(i[len(grouped_fields) :]) for i in group.values
+            )
 
+            for box in bboxes[named_tuple]:
+                new_rows.append(
+                    (
+                        grouped_fields[-1],  # species_id
+                        filename,
+                        Image.open(requests.get(filename, stream=True).raw).size[0]
+                        if link_bool
+                        else PIL.Image.open(filename).size[0],
+                        Image.open(requests.get(filename, stream=True).raw).size[1]
+                        if link_bool
+                        else PIL.Image.open(filename).size[1],
+                    )
+                    + box
+                )
+
+    ### Final export step
+    if movie_bool:
         # Export full rows
         full_rows = pd.DataFrame(
             new_rows,
@@ -554,243 +648,94 @@ def frame_aggregation(
                 "h",
             ],
         )
+        f_group_fields = ["frame_number", "filename"]
+    else:
+        full_rows = pd.DataFrame(
+            new_rows,
+            columns=[
+                "species_id",
+                "filename",
+                "f_w",
+                "f_h",
+                "x",
+                "y",
+                "w",
+                "h",
+            ],
+        )
+        f_group_fields = ["filename"]
 
-        for name, groups in tqdm(
-            full_rows.groupby(["frame_number", "filename"]),
-            desc="Saving frames...",
-            colour="green",
-        ):
+    # Find indices of important fields
+    col_list = list(full_rows.columns)
+    fw_pos, fh_pos, x_pos, y_pos, w_pos, h_pos, speciesid_pos = (
+        col_list.index("f_w"),
+        col_list.index("f_h"),
+        col_list.index("x"),
+        col_list.index("y"),
+        col_list.index("w"),
+        col_list.index("h"),
+        col_list.index("species_id"),
+    )
+
+    for name, groups in tqdm(
+        full_rows.groupby(f_group_fields),
+        desc="Saving frames...",
+        colour="green",
+    ):
+        if movie_bool:
             file, ext = os.path.splitext(name[1])
             file_base = os.path.basename(file)
-            # Added condition to avoid bounding boxes outside of maximum size of frame + added 0 class id when working with single class
-            if out_format == "yolo":
-                open(f"{out_path}/labels/{file_base}_frame_{name[0]}.txt", "w").write(
+            file_out = f"{out_path}/labels/{file_base}_frame_{name[0]}.txt"
+            img_out = f"{out_path}/images/{file_base}_frame_{name[0]}.jpg"
+        else:
+            file, ext = os.path.splitext(name)
+            file_base = os.path.basename(file)
+            file_out = f"{out_path}/labels/{file_base}.txt"
+            img_out = f"{out_path}/images/{file_base}.jpg"
+
+        # Added condition to avoid bounding boxes outside of maximum size of frame + added 0 class id when working with single class
+        if out_format == "yolo":
+            if len(groups.values) == 1 and str(groups.values[0][-1]) == "nan":
+                # Empty files
+                open(file_out, "w")
+            else:
+                groups = [i for i in groups.values if str(i[-1]) != "nan"]
+                open(file_out, "w").write(
                     "\n".join(
                         [
                             "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
                                 0
                                 if len(class_list) == 1
                                 else sp_id2mod_id[
-                                    i[0]
+                                    i[speciesid_pos]
                                 ],  # single class vs multiple classes
-                                min((i[5] + i[7] / 2) / i[3], 1.0),
-                                min((i[6] + i[8] / 2) / i[4], 1.0),
-                                min(i[7] / i[3], 1.0),
-                                min(i[8] / i[4], 1.0),
+                                min((i[x_pos] + i[w_pos] / 2) / i[fw_pos], 1.0),
+                                min((i[y_pos] + i[h_pos] / 2) / i[fh_pos], 1.0),
+                                min(i[w_pos] / i[fw_pos], 1.0),
+                                min(i[h_pos] / i[fh_pos], 1.0),
                             )
-                            for i in groups.values
+                            for i in groups
                         ]
                     )
                 )
 
-            # Save frames to image files
+        # Save frames to image files
+        if movie_bool:
             save_name = name[1] if name[1] in video_dict else unswedify(name[1])
             if save_name in video_dict:
                 Image.fromarray(video_dict[save_name][name[0]][:, :, [2, 1, 0]]).save(
-                    f"{out_path}/images/{file_base}_frame_{name[0]}.jpg"
+                    img_out
                 )
-    else:
-        if project.server == "SNIC":
-            train_rows = train_rows[
-                [
-                    "subject_id",
-                    "species_id",
-                    "x_position",
-                    "y_position",
-                    "width",
-                    "height",
-                ]
-            ]
-
-            new_rows = []
-            bboxes = {}
-            tboxes = {}
-
-            if len(agg_df) > 0:
-                agg_df = pd.merge(
-                    agg_df, train_rows, left_on="subject_ids", right_on="subject_id"
-                )
-
-            for name, group in tqdm(train_rows.groupby(["subject_id", "species_id"])):
-                subject_id, species_id = name[:2]
-                filename = agg_df[agg_df.subject_ids == subject_id][
-                    "https_location"
-                ].iloc[0]
-                named_tuple = tuple([species_id, filename])
-
-                # Track intermediate frames
-                bboxes[named_tuple] = []
-                bboxes[named_tuple].extend(tuple(i[2:]) for i in group.values)
-
-                for box in bboxes[named_tuple]:
-                    new_rows.append(
-                        (
-                            species_id,
-                            filename,
-                            Image.open(requests.get(filename, stream=True).raw).size[0],
-                            Image.open(requests.get(filename, stream=True).raw).size[1],
-                        )
-                        + box
-                    )
-
-            full_rows = pd.DataFrame(
-                new_rows,
-                columns=[
-                    "species_id",
-                    "filename",
-                    "f_w",
-                    "f_h",
-                    "x",
-                    "y",
-                    "w",
-                    "h",
-                ],
-            )
-
-            col_list = list(full_rows.columns)
-            fw_pos, fh_pos, x_pos, y_pos, w_pos, h_pos, speciesid_pos = (
-                col_list.index("f_w"),
-                col_list.index("f_h"),
-                col_list.index("x"),
-                col_list.index("y"),
-                col_list.index("w"),
-                col_list.index("h"),
-                col_list.index("species_id"),
-            )
-
-            # Export full rows
-            for name, groups in full_rows.groupby(["filename"]):
-                file, ext = os.path.splitext(name)
-                file_base = os.path.basename(file)
-                # Added condition to avoid bounding boxes outside of maximum size of frame + added 0 class id when working with single class
-                if out_format == "yolo":
-                    if len(groups.values) == 1 and str(groups.values[0][-1]) == "nan":
-                        open(f"{out_path}/labels/{file_base}.txt", "w")
-                    else:
-                        groups = [i for i in groups.values if str(i[-1]) != "nan"]
-                        open(f"{out_path}/labels/{file_base}.txt", "w").write(
-                            "\n".join(
-                                [
-                                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                                        0
-                                        if len(class_list) == 1
-                                        else sp_id2mod_id[
-                                            i[speciesid_pos]
-                                        ],  # single class vs multiple classes
-                                        min((i[x_pos] + i[w_pos] / 2) / i[fw_pos], 1.0),
-                                        min((i[y_pos] + i[h_pos] / 2) / i[fh_pos], 1.0),
-                                        min(i[w_pos] / i[fw_pos], 1.0),
-                                        min(i[h_pos] / i[fh_pos], 1.0),
-                                    )
-                                    for i in groups
-                                ]
-                            )
-                        )
-
-                # Save frames to image files
-                save_name = name
-                Image.fromarray(
-                    np.asarray(Image.open(requests.get(save_name, stream=True).raw))
-                ).save(f"{out_path}/images/{file_base}.jpg")
-
         else:
-            train_rows = train_rows[
-                [
-                    "species_id",
-                    "filename",
-                    "x_position",
-                    "y_position",
-                    "width",
-                    "height",
-                ]
-            ]
-
-            new_rows = []
-            bboxes = {}
-            tboxes = {}
-
-            for name, group in tqdm(train_rows.groupby(["filename", "species_id"])):
-                filename, species_id = name[:2]
-                filename = project.photo_folder + filename
-                named_tuple = tuple([species_id, filename])
-
-                # Track intermediate frames
-                bboxes[named_tuple] = []
-                bboxes[named_tuple].extend(tuple(i[2:]) for i in group.values)
-
-                for box in bboxes[named_tuple]:
-                    new_rows.append(
-                        (
-                            species_id,
-                            filename,
-                            PIL.Image.open(filename).size[0],
-                            PIL.Image.open(filename).size[1],
-                        )
-                        + box
-                    )
-
-            full_rows = pd.DataFrame(
-                new_rows,
-                columns=[
-                    "species_id",
-                    "filename",
-                    "f_w",
-                    "f_h",
-                    "x",
-                    "y",
-                    "w",
-                    "h",
-                ],
-            )
-
-            col_list = list(full_rows.columns)
-            fw_pos, fh_pos, x_pos, y_pos, w_pos, h_pos, speciesid_pos = (
-                col_list.index("f_w"),
-                col_list.index("f_h"),
-                col_list.index("x"),
-                col_list.index("y"),
-                col_list.index("w"),
-                col_list.index("h"),
-                col_list.index("species_id"),
-            )
-
-            # Export full rows
-            for name, groups in full_rows.groupby(["filename"]):
-                file, ext = os.path.splitext(name)
-                file_base = os.path.basename(file)
-                # Added condition to avoid bounding boxes outside of maximum size of frame + added 0 class id when working with single class
-                if out_format == "yolo":
-                    if len(groups.values) == 1 and str(groups.values[0][-1]) == "nan":
-                        open(f"{out_path}/labels/{file_base}.txt", "w")
-                    else:
-                        groups = [i for i in groups.values if str(i[-1]) != "nan"]
-                        open(f"{out_path}/labels/{file_base}.txt", "w").write(
-                            "\n".join(
-                                [
-                                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                                        0
-                                        if len(class_list) == 1
-                                        else sp_id2mod_id[
-                                            i[speciesid_pos]
-                                        ],  # single class vs multiple classes
-                                        min((i[x_pos] + i[w_pos] / 2) / i[fw_pos], 1.0),
-                                        min((i[y_pos] + i[h_pos] / 2) / i[fh_pos], 1.0),
-                                        min(i[w_pos] / i[fw_pos], 1.0),
-                                        min(i[h_pos] / i[fh_pos], 1.0),
-                                    )
-                                    for i in groups
-                                ]
-                            )
-                        )
-
-                # Save frames to image files
-                save_name = name
-                Image.fromarray(np.asarray(PIL.Image.open(save_name))).save(
-                    f"{out_path}/images/{file_base}.jpg"
-                )
+            if link_bool:
+                image_output = Image.open(requests.get(name, stream=True).raw)
+            else:
+                image_output = np.asarray(PIL.Image.open(name))
+            Image.fromarray(np.asarray(image_output)).save(img_out)
 
     logging.info("Frames extracted successfully")
 
+    # Check that at least some frames remain after aggregation
     if len(full_rows) == 0:
         raise Exception(
             "No frames found for the selected species. Please retry with a different configuration."
@@ -829,10 +774,10 @@ def createTrackerByName(trackerType: str):
         tracker = cv.legacy.TrackerCSRT_create()
     else:
         tracker = None
-        print("Incorrect tracker name")
-        print("Available trackers are:")
+        logging.info("Incorrect tracker name")
+        logging.info("Available trackers are:")
         for t in trackerTypes:
-            print(t)
+            logging.info(t)
 
     return tracker
 
