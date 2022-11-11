@@ -32,7 +32,7 @@ def find_project(project_name: str = ""):
     """Find project information using
     project csv path and project name"""
     # Specify the path to the list of projects
-    project_path = "kso_utils/db_starter/projects_list.csv"
+    project_path = "../kso_utils/db_starter/projects_list.csv"
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     # Check path to the list of projects is a csv
@@ -60,7 +60,7 @@ def add_project(project_info: dict = {}):
     """Add new project information to
     project csv using a project_info dictionary
     """
-    project_path = "kso_utils/db_starter/projects_list.csv"
+    project_path = "../kso_utils/db_starter/projects_list.csv"
     snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     if not os.path.exists(project_path) and os.path.exists(snic_path):
