@@ -58,13 +58,13 @@ def get_project_info(projects_csv: str, project_name: str, info_interest: str):
     return project_info
 
 
-def choose_project(projects_csv: str = "../db_starter/projects_list.csv"):
+def choose_project(projects_csv: str = "db_starter/projects_list.csv"):
     """
     > This function takes a csv file with a list of projects and returns a dropdown menu with the
     projects listed
 
-    :param projects_csv: str = "../db_starter/projects_list.csv", defaults to
-    ../db_starter/projects_list.csv
+    :param projects_csv: str = "db_starter/projects_list.csv", defaults to
+    db_starter/projects_list.csv
     :type projects_csv: str (optional)
     :return: A dropdown widget with the project names as options.
     """

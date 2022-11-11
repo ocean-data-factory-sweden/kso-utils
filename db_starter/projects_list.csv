@@ -1,0 +1,8 @@
+Project_name,Zooniverse_number,db_path,server,bucket,key,csv_folder,movie_folder,photo_folder,ml_folder
+Template project,9754,template_project.db,TEMPLATE,None,None,db_csv_info,None,None,ml-template-data
+Koster_Seafloor_Obs,9747,/usr/src/app/db_starter/koster_lab.db,SNIC,None,None,/usr/src/app/db_starter/csv_Koster_Seafloor_Obs/,/cephyr/NOBACKUP/groups/snic2021-6-9/koster_movies/,None,None
+Spyfish_Aotearoa,14054,spyfish_aot.db,AWS,marine-buv,init_db_doc_buv,db_spyfish_csv,None,None,None
+SGU,9747,/usr/src/app/db_starter/sgu.db,LOCAL,None,None,/usr/src/app/db_starter/csv_SGU/,None,/cephyr/NOBACKUP/groups/snic2021-6-9/KSO_SGU_pz/sgu_samples/,None
+Medins,9747,/usr/src/app/db_starter/medins.db,LOCAL,None,None,/usr/src/app/db_starter/csv_Medins/,None,None,None
+GU,9747,/usr/src/app/db_starter/gu.db,LOCAL,None,None,/usr/src/app/db_starter/csv_GU/,None,None,None
+model-registry,None,None,None,None,None,None,None,None,None
