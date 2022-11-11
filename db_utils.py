@@ -2,10 +2,10 @@
 import os
 import sqlite3
 import logging
-import db_starter.schema as schema
 import pandas as pd
 
 # util imports
+import kso_utils.db_starter.schema as schema
 import kso_utils.koster_utils as koster_utils
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.sgu_utils as sgu_utils

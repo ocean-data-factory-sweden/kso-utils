@@ -9,7 +9,6 @@ import gdown
 import zipfile
 import boto3
 import paramiko
-import difflib
 import logging
 from tqdm import tqdm
 from pathlib import Path
