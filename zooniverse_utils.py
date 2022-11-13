@@ -192,6 +192,26 @@ def populate_subjects(
 
             subjects = process_spyfish_subjects(subjects, db_path)
 
+        # If project template standardise subject info
+        if project_name == "Template project":
+          # Rename columns to match the db format
+            subjects = subjects.rename(
+                columns={
+                    "#VideoFilename": "filename",
+                    "upl_seconds": "clip_start_time",
+                    "#frame_number": "frame_number",
+                    "Subject_type": "subject_type",
+                }
+            )
+
+            # Create columns to match schema if they don't exist
+            subjects['frame_exp_sp_id'] = subjects.get('frame_exp_sp_id', np.nan)
+            subjects['frame_number'] = subjects.get('frame_number', np.nan)
+            
+            # Calculate the clip_end_time
+            subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
+
+
     # Set subject_id information as id
     subjects = subjects.rename(columns={"subject_id": "id"})
 
@@ -205,9 +225,10 @@ def populate_subjects(
         subjects["movie_id"] = None
 
     # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-    subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
-        lambda x: x[1] if isinstance(x[1], str) else x[0], 1
-    )
+    if "Subject_type" in subjects.columns:
+        subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
+            lambda x: x[1] if isinstance(x[1], str) else x[0], 1
+        )
     
     # Fix subjects where clip_start_time is not provided but upl_seconds is
     if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
