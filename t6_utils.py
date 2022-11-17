@@ -194,9 +194,8 @@ def track_objects(
         logging.error("The tracker folder does not exist. Please try again")
         return None
 
-    model_path = [
-        f for f in Path(artifact_dir).iterdir() if f.is_file() and ".pt" in str(f)
-    ][-1]
+    model_path = [f for f in Path(artifact_dir).iterdir() if f.is_file() and '.pt' in str(f) and
+                   'osnet' not in str(f)][0]
 
     best_model = Path(model_path)
     main_tracker_folder = Path("../yolov5_tracker").resolve()
