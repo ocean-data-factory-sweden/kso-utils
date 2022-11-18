@@ -12,7 +12,7 @@ import logging
 import random
 import threading
 from multiprocessing.pool import ThreadPool as Pool
-from multiprocessing import Process
+import multiprocessing as mp
 
 # widget imports
 from tqdm import tqdm
@@ -933,7 +933,7 @@ def create_clips(
         # Read each movie and extract the clips
         for index, row in potential_start_df.iloc[i : i + pool_size].iterrows():
             # Extract the videos and store them in the folder
-            p = Process(
+            p = mp.Process(
                 target=extract_clips,
                 args=(
                     movie_path,
