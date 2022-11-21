@@ -44,7 +44,7 @@ def find_project(project_name: str = ""):
 
     # If list of projects doesn't exist retrieve it from github
     elif not os.path.exists(project_path):
-        github_path = "https://github.com/ocean-data-factory-sweden/koster_data_management/blob/main/db_starter/projects_list.csv?raw=true"
+        github_path = "https://github.com/ocean-data-factory-sweden/kso-data-management/blob/main/db_starter/projects_list.csv?raw=true"
         read_file = pd.read_csv(github_path)
         read_file.to_csv(project_path, index=None)
 
