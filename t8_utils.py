@@ -599,7 +599,7 @@ def aggregrate_classifications(
         agg_class_df = agg_class_df.groupby(
             ["subject_ids", "https_location", "subject_type", "label"], as_index=False
         )
-        agg_class_df = pd.DataFrame(agg_class_df[["how_many", "first_seen"]].median())
+        agg_class_df = pd.DataFrame(agg_class_df[["how_many", "first_seen"]].median().round(0))
 
     # Add username info to raw class
     raw_class_df = pd.merge(
