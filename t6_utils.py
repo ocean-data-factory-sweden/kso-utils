@@ -27,6 +27,7 @@ import yolov5_tracker.track as track
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
 def set_config(conf_thres: float, model: str, eval_dir: str):
     config = wandb.config
     config.confidence_threshold = conf_thres
@@ -34,10 +35,12 @@ def set_config(conf_thres: float, model: str, eval_dir: str):
     config.evaluation_directory = eval_dir
     return config
 
+
 def add_data_wandb(path: str, name: str, run):
     my_data = wandb.Artifact(name, type="raw_data")
     my_data.add_dir(path)
     run.log_artifact(my_data)
+
 
 def choose_conf():
     w = widgets.FloatSlider(
@@ -45,16 +48,16 @@ def choose_conf():
         min=0,
         max=1.0,
         step=0.1,
-        description='Confidence threshold:',
+        description="Confidence threshold:",
         disabled=False,
         continuous_update=False,
-        orientation='horizontal',
+        orientation="horizontal",
         readout=True,
-        readout_format='.1f',
-        display='flex',
-        flex_flow='column',
-        align_items='stretch', 
-        style= {'description_width': 'initial'}
+        readout_format=".1f",
+        display="flex",
+        flex_flow="column",
+        align_items="stretch",
+        style={"description_width": "initial"},
     )
     display(w)
     return w
@@ -140,7 +143,9 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
         return detect_df
 
 
-def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_log: bool = False):
+def generate_counts(
+    eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_log: bool = False
+):
     model = torch.load(
         Path(
             [
@@ -162,10 +167,16 @@ def generate_counts(eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_lo
         print("------- DETECTION REPORT -------")
         print("--------------------------------")
         print(tracker_df.groupby(["species_name"])["tracker_id"].nunique())
-        final_df = tracker_df.groupby(["species_name"])["tracker_id"].nunique().to_frame().reset_index()
+        final_df = (
+            tracker_df.groupby(["species_name"])["tracker_id"]
+            .nunique()
+            .to_frame()
+            .reset_index()
+        )
         if wandb_log:
             wandb.log({"tracking_counts": wandb.Table(dataframe=final_df)})
         return final_df
+
 
 def track_objects(
     source_dir: str,
@@ -195,8 +206,10 @@ def track_objects(
         return None
 
     model_path = [
-        f for f in Path(artifact_dir).iterdir() if f.is_file() and ".pt" in str(f)
-    ][-1]
+        f
+        for f in Path(artifact_dir).iterdir()
+        if f.is_file() and ".pt" in str(f) and "osnet" not in str(f)
+    ][0]
 
     best_model = Path(model_path)
     main_tracker_folder = Path("../yolov5_tracker").resolve()
@@ -207,7 +220,9 @@ def track_objects(
             conf_thres=conf_thres,
             yolo_weights=best_model,
             strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
-            config_strongsort=Path(main_tracker_folder, "strong_sort/configs/strong_sort.yaml"),
+            config_strongsort=Path(
+                main_tracker_folder, "strong_sort/configs/strong_sort.yaml"
+            ),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
             save_vid=True,
@@ -220,7 +235,9 @@ def track_objects(
             conf_thres=conf_thres,
             yolo_weights=best_model,
             strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
-            config_strongsort=Path(main_tracker_folder, "strong_sort/configs/strong_sort.yaml"),
+            config_strongsort=Path(
+                main_tracker_folder, "strong_sort/configs/strong_sort.yaml"
+            ),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
             device="0",
@@ -482,7 +499,7 @@ def draw_box(path: str):
     return im
 
 
-def get_dataset(project_name: str, model: str):
+def get_dataset(project_name: str, model: str, team_name: str = "koster"):
     """
     It takes in a project name and a model name, and returns the paths to the train and val datasets
 
@@ -496,7 +513,7 @@ def get_dataset(project_name: str, model: str):
     api = wandb.Api()
     if "_" in model:
         run_id = model.split("_")[1]
-        run = api.run(f"koster/{project_name.lower()}/runs/{run_id}")
+        run = api.run(f"{team_name}/{project_name.lower()}/runs/{run_id}")
         datasets = [
             artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
         ]
@@ -518,7 +535,9 @@ def get_dataset(project_name: str, model: str):
         return "empty_string", "empty_string"
 
 
-def get_model(model_name: str, project_name: str, download_path: str):
+def get_model(
+    model_name: str, project_name: str, download_path: str, team_name: str = "koster"
+):
     """
     It downloads the latest model checkpoint from the specified project and model name
 
@@ -531,10 +550,17 @@ def get_model(model_name: str, project_name: str, download_path: str):
     :return: The path to the downloaded model checkpoint.
     """
     api = wandb.Api()
+    try:
+        api.artifact_type(
+            type_name="model", project=f"{team_name}/{project_name.lower()}"
+        ).collections()
+    except Exception as e:
+        logging.error(f"No model collections found. No artifacts have been logged. {e}")
+        return None
     collections = [
         coll
         for coll in api.artifact_type(
-            type_name="model", project=f"koster/{project_name.lower()}"
+            type_name="model", project=f"{team_name}/{project_name.lower()}"
         ).collections()
     ]
     model = [i for i in collections if i.name == model_name]
@@ -542,7 +568,9 @@ def get_model(model_name: str, project_name: str, download_path: str):
         model = model[0]
     else:
         logging.error("No model found")
-    artifact = api.artifact(f"koster/{project_name.lower()}/" + model.name + ":latest")
+    artifact = api.artifact(
+        f"{team_name}/{project_name.lower()}/" + model.name + ":latest"
+    )
     logging.info("Downloading model checkpoint...")
     artifact_dir = artifact.download(root=download_path)
     logging.info("Checkpoint downloaded.")
@@ -550,7 +578,7 @@ def get_model(model_name: str, project_name: str, download_path: str):
 
 
 # Function to compare original to modified frames
-def choose_model(project_name: str):
+def choose_model(project_name: str, team_name: str = "koster"):
     """
     It takes a project name and returns a dropdown widget that displays the metrics of the model
     selected
@@ -562,18 +590,23 @@ def choose_model(project_name: str):
     model_info = {}
     api = wandb.Api()
     # weird error fix (initialize api another time)
-    api.runs(path=f"koster/{project_name.lower()}")
-    if len(api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
-            "runs"
-        ]["edges"]) == 0:
+    api.runs(path=f"{team_name}/{project_name.lower()}")
+    if (
+        len(
+            api.runs(path=f"{team_name}/{project_name.lower()}").last_response[
+                "project"
+            ]["runs"]["edges"]
+        )
+        == 0
+    ):
         logging.error("No models currently available for the project.")
         model_dict = {}
     else:
         for edge, obj in zip(
-            api.runs(path=f"koster/{project_name.lower()}").last_response["project"][
-                "runs"
-            ]["edges"],
-            api.runs(path=f"koster/{project_name.lower()}").objects,
+            api.runs(path=f"{team_name}/{project_name.lower()}").last_response[
+                "project"
+            ]["runs"]["edges"],
+            api.runs(path=f"{team_name}/{project_name.lower()}").objects,
         ):
             if project_name == "model-registry":
                 model_dict[edge["node"]["displayName"]] = edge["node"]["displayName"]
@@ -662,7 +695,7 @@ def view_file(path: str):
 
     :param path: The path to the file you want to view
     :return: A widget that displays the image or video.
-    """  
+    """
     # Get path of the modified clip selected
     extension = os.path.splitext(path)[1]
     file = open(path, "rb").read()
@@ -683,10 +716,11 @@ def view_file(path: str):
                         """
                 )
             except:
-                logging.error("Cannot write to local files, viewing not currently possible.")
+                logging.error(
+                    "Cannot write to local files, viewing not currently possible."
+                )
                 widget = widgets.Image()
-                
-        
+
     else:
         logging.error(
             "File format not supported. Supported formats: jpeg, png, jpg, mp4, mov, avi."
