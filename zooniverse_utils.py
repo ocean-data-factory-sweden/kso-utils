@@ -13,6 +13,7 @@ from panoptes_client import (
 )
 from ast import literal_eval
 
+
 # util imports
 from kso_utils.koster_utils import (
     process_koster_subjects,
@@ -66,7 +67,7 @@ def auth_session(username: str, password: str, project_n: int):
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(
-    project: project_utils.Project, zoo_project: Project, zoo_info: str
+    project: project_utils.Project, zoo_project: Project, zoo_info: str, generate: bool = False
 ):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
@@ -76,8 +77,10 @@ def retrieve_zoo_info(
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
     :type zoo_info: str
+    :param generate: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
     :return: A dictionary of dataframes.
     """
+
     if hasattr(project, "info_df"):
         if project.info_df is not None:
             logging.info(
@@ -91,7 +94,7 @@ def retrieve_zoo_info(
         logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
-        export = zoo_project.get_export(info_n)
+        export = zoo_project.get_export(info_n, generate=generate)
 
         # Save the info as pandas data frame
         try:
