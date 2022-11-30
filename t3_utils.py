@@ -12,6 +12,7 @@ import logging
 import random
 import threading
 from multiprocessing.pool import ThreadPool as Pool
+import multiprocessing as mp
 
 # widget imports
 from tqdm import tqdm
@@ -928,11 +929,11 @@ def create_clips(
             f"Modifying {i} to {i+pool_size} out of {potential_start_df.shape[0]}"
         )
 
-        threadlist = []
+        processlist = []
         # Read each movie and extract the clips
         for index, row in potential_start_df.iloc[i : i + pool_size].iterrows():
             # Extract the videos and store them in the folder
-            t = threading.Thread(
+            p = mp.Process(
                 target=extract_clips,
                 args=(
                     movie_path,
@@ -943,11 +944,11 @@ def create_clips(
                     gpu_available,
                 ),
             )
-            threadlist.append(t)
-            t.start()
+            processlist.append(p)
+            p.start()
 
-        for tr in threadlist:
-            tr.join()
+        for pr in processlist:
+            pr.join()
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(modification_details)
