@@ -39,7 +39,7 @@ out_df = pd.DataFrame()
 
 def select_sheet_range(db_info_dict: dict, orig_csv: str):
     """
-    > This function loads the csv file of interest into a pandas dataframe and enables users to pick a range of (rows) to display
+    > This function loads the csv file of interest into a pandas dataframe and enables users to pick a range of rows and columns to display
 
     :param db_info_dict: a dictionary with the following keys:
     :param orig_csv: the original csv file name
@@ -50,7 +50,7 @@ def select_sheet_range(db_info_dict: dict, orig_csv: str):
     # Load the csv with the information of interest
     df = pd.read_csv(db_info_dict[orig_csv])
 
-    df_range = widgets.SelectionRangeSlider(
+    df_range_rows = widgets.SelectionRangeSlider(
         options=range(0, len(df.index) + 1),
         index=(0, len(df.index)),
         description="Rows to display",
@@ -59,29 +59,48 @@ def select_sheet_range(db_info_dict: dict, orig_csv: str):
         style={"description_width": "initial"},
     )
 
-    display(df_range)
-
-    return df, df_range
+    display(df_range_rows)
 
 
-def open_csv(df: pd.DataFrame, df_range: widgets.Widget):
+    df_range_columns = widgets.SelectMultiple(
+        options=df.columns,
+        description="Columns",
+        disabled=False,
+        layout=Layout(width="50%", padding="35px"))
+
+    display(df_range_columns)
+
+
+    return df, df_range_rows, df_range_columns
+
+
+def open_csv(df: pd.DataFrame,
+             df_range_rows: widgets.Widget,
+             df_range_columns: widgets.Widget):
     """
-    > This function loads the dataframe with the information of interest, filters the range of rows selected and then loads the dataframe into
+    > This function loads the dataframe with the information of interest, filters the range of rows and columns selected and then loads the dataframe into
     an ipysheet
 
     :param df: a pandas dataframe of the information of interest:
-    :param df_range: the range widget selection :
+    :param df_range_rows: the rows range widget selection:
+    :param df_range_columns: the columns range widget selection:
     :return: A (subset) dataframe with the information of interest and the same data in an interactive sheet
     """
     # Extract the first and last row to display
-    range_start = int(df_range.label[0])
-    range_end = int(df_range.label[1])
+    range_start = int(df_range_rows.label[0])
+    range_end = int(df_range_rows.label[1])
+
+    # Extract the first and last columns to display
+    column_start = str(df_range_columns.label[0])
+    column_end = str(df_range_columns.label[-1])
 
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
+    logging.info(f"Displaying {column_start} to {column_end}")
 
-    # Filter the dataframe based on the selection
-    df_filtered = df.filter(items=range(range_start, range_end), axis=0)
+    # Filter the dataframe based on the selection: rows and columns
+    df_filtered_row = df.filter(items=range(range_start, range_end), axis=0)
+    df_filtered = df_filtered_row.filter(items=list(df_range_columns.label), axis=1)
 
     # Load the df as ipysheet
     sheet = ipysheet.from_dataframe(df_filtered)
