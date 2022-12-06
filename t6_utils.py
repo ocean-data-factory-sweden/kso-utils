@@ -22,6 +22,7 @@ from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
 import yolov5_tracker.track as track
+from yolov5.utils import torch_utils
 
 # Logging
 logging.basicConfig()
@@ -240,7 +241,7 @@ def track_objects(
             ),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
-            device="0",
+            device=torch_utils.select_device(""),
             save_vid=True,
             save_conf=True,
             save_txt=True,

@@ -10,7 +10,7 @@ from scp import SCPClient
 from pathlib import Path
 
 # widget imports
-from IPython.display import display
+from IPython.display import display, clear_output
 import ipywidgets as widgets
 
 # util imports
@@ -37,10 +37,10 @@ def setup_paths(output_folder: str):
             if _.endswith(".yaml") and "hyp" not in _
         ][-1]
         hyps_path = str(Path(output_folder, "hyp.yaml"))
-        
+
         # Rewrite main path to images and labels
         with open(data_path, "r") as yamlfile:
-            cur_yaml = yaml.safe_load(yamlfile) 
+            cur_yaml = yaml.safe_load(yamlfile)
             cur_yaml["path"] = output_folder
 
         if cur_yaml:
@@ -74,7 +74,7 @@ def choose_experiment_name():
     return exp_name
 
 
-def choose_baseline_model():
+def choose_baseline_model(download_path: str):
     """
     It downloads the latest version of the baseline model from WANDB
     :return: The path to the baseline model.
@@ -90,21 +90,44 @@ def choose_baseline_model():
         ).collections()
     ]
 
-    for artifact in collections[-1].versions():
-        try:
-            artifact_dir = artifact.download()
-            artifact_file = [
-                str(Path(artifact_dir, "yolov5m.pt"))
-                for i in os.listdir(artifact_dir)
-                if i.endswith(".pt")
-            ][-1]
-            logging.info("Baseline YOLO model successfully downloaded from WANDB")
-        except Exception as e:
-            logging.error(
-                "Failed to download the baseline model. Please ensure you are logged in to WANDB."
-            )
+    model_dict = {}
+    for artifact in collections:
+        model_dict[artifact.name] = artifact
 
-    return artifact_file
+    model_widget = widgets.Dropdown(
+        options=[(name, model) for name, model in model_dict.items()],
+        description="Select model:",
+        ensure_option=False,
+        disabled=False,
+        layout=widgets.Layout(width="50%"),
+        style={"description_width": "initial"},
+    )
+
+    main_out = widgets.Output()
+    display(model_widget, main_out)
+
+    def on_change(change):
+        with main_out:
+            clear_output()
+            try:
+                for af in model_dict[change["new"].name].versions():
+                    artifact_dir = af.download(download_path)
+                    artifact_file = [
+                        str(Path(artifact_dir, "yolov5m.pt"))
+                        for i in os.listdir(artifact_dir)
+                        if i.endswith(".pt")
+                    ][-1]
+                    logging.info(
+                        f"Baseline {af.name} successfully downloaded from WANDB"
+                    )
+                    model_widget.artifact_path = artifact_file
+            except Exception as e:
+                logging.error(
+                    "Failed to download the baseline model. Please ensure you are logged in to WANDB."
+                )
+
+    model_widget.observe(on_change, names="value")
+    return model_widget
 
 
 def transfer_model(
