@@ -66,7 +66,7 @@ def auth_session(username: str, password: str, project_n: int):
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(
-    project: project_utils.Project, zoo_project: Project, zoo_info: str
+    project: project_utils.Project, zoo_project: Project, zoo_info: str, generate_export: bool = False
 ):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
@@ -76,6 +76,7 @@ def retrieve_zoo_info(
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
     :type zoo_info: str
+    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
     :return: A dictionary of dataframes.
     """
     if hasattr(project, "info_df"):
@@ -84,14 +85,9 @@ def retrieve_zoo_info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
-    # Create an empty dictionary to host the dfs of interest
-    info_df = {}
-
-    for info_n in zoo_info:
-        logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
-        export = zoo_project.get_export(info_n)
+        export = zoo_project.get_export(info_n, generate=generate_export)
 
         # Save the info as pandas data frame
         try:
