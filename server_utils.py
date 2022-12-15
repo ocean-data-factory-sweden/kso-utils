@@ -261,8 +261,12 @@ def update_csv_server(
         )
 
     elif server == "SNIC":
-        logging.error("Updating csv files to the server is a work in progress")
-
+        #logging.error("Updating csv files to the server is a work in progress")
+        upload_object_to_snic(sftp_client=db_info_dict['sftp_client'], 
+                              local_fpath=db_info_dict[updated_csv], 
+                              remote_fpath=db_info_dict[orig_csv],
+                             )
+        
     elif server == "LOCAL":
         logging.error("Updating csv files to the server is a work in progress")
 
