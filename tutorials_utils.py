@@ -188,12 +188,12 @@ def select_retrieve_info():
     """
 
     def generate_export(retrieve_option):
-        if retrieve_option == "last available information":
-            logging.info("Retrieving the last available information")
+        if retrieve_option == "No, just download the last available information":
+            #logging.info("Retrieving the last available information")
             generate = False
             
-        elif retrieve_option == "latest information":
-            logging.info("Generating new export to retrieve the latest information")
+        elif retrieve_option == "Yes":
+            #logging.info("Generating new export to retrieve the most up-to-date Zooniverse information")
             generate = True
     
         return generate
@@ -202,16 +202,19 @@ def select_retrieve_info():
     latest_info = interactive(
         generate_export,
         retrieve_option=widgets.RadioButtons(
-            options=['last available information', 'latest information'],
-            value='last available information', 
+            options=['Yes', 'No, just download the last available information'],
+            value='No, just download the last available information', 
             layout={'width': 'max-content'}, 
-            description='Select the information you want to retrieve:',
+            description='Do you want to request the most up-to-date Zooniverse information?',
             disabled=False,
             style= {'description_width': 'initial'}
         ),
     )
 
+    
     display(latest_info)
+    display(HTML("""<font size="2px">If yes, a new data export will be requested and generated with the latest information of Zooniverse (this may take some time)<br>
+    Otherwise, the latest available export will be downloaded (some recent information may be missing!!).</font>"""))
 
     return latest_info
 

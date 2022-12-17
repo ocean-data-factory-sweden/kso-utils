@@ -85,9 +85,15 @@ def retrieve_zoo_info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
+    
+    # Create an empty dictionary to host the dfs of interest
+    info_df = {}
+
+    for info_n in zoo_info:
+        logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
-        export = zoo_project.get_export(info_n, generate=generate_export)
+        export = zoo_project.get_export(info_n, generate=generate_export,  wait=True, wait_timeout=3600)
 
         # Save the info as pandas data frame
         try:
