@@ -262,9 +262,16 @@ def update_csv_server(
 
     elif server == "SNIC":
         #logging.error("Updating csv files to the server is a work in progress")
+        
+        #TODO: orig_csv and updted_csv as filenames, create full path for upload_object_to_snic with project.csv_folder.
+        
+        #Use below definition for production, commented not for development
+        #local_fpath = project.csv_folder + updated_csv 
+        local_fpath = '/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/local_dir_dev/' + updated_csv
+        remote_fpath = '/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/server_dir_dev/' + orig_csv
         upload_object_to_snic(sftp_client=db_info_dict['sftp_client'], 
-                              local_fpath=db_info_dict[updated_csv], 
-                              remote_fpath=db_info_dict[orig_csv],
+                              local_fpath=local_fpath, 
+                              remote_fpath=remote_fpath,
                              )
         
     elif server == "LOCAL":

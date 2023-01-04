@@ -10,6 +10,7 @@ import ipywidgets as widgets
 from ipywidgets import interactive, Layout, HBox
 from IPython.display import display
 import asyncio
+import ipysheet
 
 # util imports
 import kso_utils.movie_utils as movie_utils
@@ -1726,6 +1727,88 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
         # Remove temporary movie
         print("Movies csv file succesfully updated in the server.")
 
+def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
+    import ffmpeg
+    from pathlib import Path
+    number_of_movies = len(movie_list)
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    new_movie_rows_sheet = ipysheet.sheet(rows=number_of_movies,columns=movies_df.shape[1], column_headers=movies_df.columns.tolist())
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    for index, movie in enumerate(movie_list):
+        remote_fpath = Path(r"/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie[1])
+        if os.path.exists(remote_fpath):
+            print("filename " + str(movie[1]) + " already exists on SNIC, try again with a new file")
+            return
+        else:
+            #process video
+            stem = "processed"
+            p = Path(movie[0])
+            processed_video_path =p.with_name(f'{p.stem}_{stem}{p.suffix}').name
+            print("movie to be uploaded: " + processed_video_path)
+            stream = ffmpeg.input(p)
+            stream = ffmpeg.output(stream, processed_video_path, crf=22, pix_fmt='yuv420p', vcodec='libx264')
+            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True, overwrite_output=True)
+    
+            server_utils.upload_object_to_snic(db_info_dict["sftp_client"], str(processed_video_path), str(remote_fpath))
+            print("movie uploaded\n")
+        fps, duration = movie_utils.get_fps_duration(movie[0])
+        movie_id = str(max(movies_df["movie_id"])+1)
+        ipysheet.cell(index,0, movie_id);
+        ipysheet.cell(index,1,movie[1]);
+        ipysheet.cell(index,2,"-");
+        ipysheet.cell(index,3,"-");
+        ipysheet.cell(index,4,"-");
+        ipysheet.cell(index,5,fps);
+        ipysheet.cell(index,6,duration);
+        ipysheet.cell(index,7,"-");
+        ipysheet.cell(index,8,"-");
+    print("All movies uploaded:\n")    
+    print("Complete this sheet by filling the missing info on the movie you just uploaded")
+    display(new_movie_rows_sheet)
+
+    return new_movie_rows_sheet
+
+def add_new_rows_to_csv(db_info_dict: dict, new_movie_rows_sheet):
+
+    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    new_movie_rows_df = ipysheet.to_dataframe(new_movie_rows_sheet)
+    df_with_new_rows = pd.concat([movies_df,new_movie_rows_df], ignore_index=True) 
+    return df_with_new_rows
+
+
+def choose_new_videos_to_upload():
+    import ipywidgets as widgets
+    #print(widgets.Button.on_click.__doc__)
+    from IPython.display import display
+    from ipyfilechooser import FileChooser
+    from IPython.display import clear_output
+
+    movie_list=[]
+
+    fc = FileChooser()
+    print("Choose the file that you want to upload: ")
+    display(fc)
+
+    button_add = widgets.Button(description="Add selected file")
+    output_add = widgets.Output()
+
+    print("Showing paths to the selected movies:\nRerun cell to reset\n--------------")
+
+    display(button_add, output_add)
+
+    def on_button_add_clicked(b):
+        with output_add:
+            if fc.selected is not None:
+                movie_list.append([fc.selected,fc.selected_filename])
+                print(fc.selected)
+                fc.reset()
+
+    #        for movie in movie_list:
+    #            print(movie[0])
+    #        print("--------------")
+
+    button_add.on_click(on_button_add_clicked)
+    return movie_list
 
 # # Select site and date of the video
 # def select_SiteID(db_initial_info):
