@@ -4,13 +4,16 @@ import pandas as pd
 import subprocess
 import datetime
 import logging
+import ffmpeg
+from pathlib import Path
 
 # widget imports
 import ipywidgets as widgets
 from ipywidgets import interactive, Layout, HBox
-from IPython.display import display
+from IPython.display import display, clear_output
 import asyncio
 import ipysheet
+from ipyfilechooser import FileChooser
 
 # util imports
 import kso_utils.movie_utils as movie_utils
@@ -1727,465 +1730,119 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
         # Remove temporary movie
         print("Movies csv file succesfully updated in the server.")
 
+
 def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
-    import ffmpeg
-    from pathlib import Path
+    """
+    It uploads the new movies to the SNIC server and creates new rows to be updated
+    with movie metadata and saved into movies.csv
+
+    :param db_info_dict: a dictionary with the following keys:
+    :param movie_list: list of new movies that are to be added to movies.csv
+    """
+    # Get number of new movies to be added
     number_of_movies = len(movie_list)
+    # Get current movies
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-    new_movie_rows_sheet = ipysheet.sheet(rows=number_of_movies,columns=movies_df.shape[1], column_headers=movies_df.columns.tolist())
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    # Set up a new row for each new movie
+    new_movie_rows_sheet = ipysheet.sheet(
+        rows=number_of_movies,
+        columns=movies_df.shape[1],
+        column_headers=movies_df.columns.tolist(),
+    )
     for index, movie in enumerate(movie_list):
         remote_fpath = Path(r"/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie[1])
         if os.path.exists(remote_fpath):
-            print("filename " + str(movie[1]) + " already exists on SNIC, try again with a new file")
+            logging.info(
+                "Filename "
+                + str(movie[1])
+                + " already exists on SNIC, try again with a new file"
+            )
             return
         else:
-            #process video
+            # process video
             stem = "processed"
             p = Path(movie[0])
-            processed_video_path =p.with_name(f'{p.stem}_{stem}{p.suffix}').name
-            print("movie to be uploaded: " + processed_video_path)
+            processed_video_path = p.with_name(f"{p.stem}_{stem}{p.suffix}").name
+            logging.info("Movie to be uploaded: " + processed_video_path)
             stream = ffmpeg.input(p)
-            stream = ffmpeg.output(stream, processed_video_path, crf=22, pix_fmt='yuv420p', vcodec='libx264')
-            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True, overwrite_output=True)
-    
-            server_utils.upload_object_to_snic(db_info_dict["sftp_client"], str(processed_video_path), str(remote_fpath))
-            print("movie uploaded\n")
+            stream = ffmpeg.output(
+                stream,
+                processed_video_path,
+                crf=22,
+                pix_fmt="yuv420p",
+                vcodec="libx264",
+            )
+            ffmpeg.run(
+                stream, capture_stdout=True, capture_stderr=True, overwrite_output=True
+            )
+
+            server_utils.upload_object_to_snic(
+                db_info_dict["sftp_client"],
+                str(processed_video_path),
+                str(remote_fpath),
+            )
+            logging.info("movie uploaded\n")
+        # Fetch movie metadata that can be calculated from movie file
         fps, duration = movie_utils.get_fps_duration(movie[0])
-        movie_id = str(max(movies_df["movie_id"])+1)
-        ipysheet.cell(index,0, movie_id);
-        ipysheet.cell(index,1,movie[1]);
-        ipysheet.cell(index,2,"-");
-        ipysheet.cell(index,3,"-");
-        ipysheet.cell(index,4,"-");
-        ipysheet.cell(index,5,fps);
-        ipysheet.cell(index,6,duration);
-        ipysheet.cell(index,7,"-");
-        ipysheet.cell(index,8,"-");
-    print("All movies uploaded:\n")    
-    print("Complete this sheet by filling the missing info on the movie you just uploaded")
+        movie_id = str(max(movies_df["movie_id"]) + 1)
+        ipysheet.cell(index, 0, movie_id)
+        ipysheet.cell(index, 1, movie[1])
+        ipysheet.cell(index, 2, "-")
+        ipysheet.cell(index, 3, "-")
+        ipysheet.cell(index, 4, "-")
+        ipysheet.cell(index, 5, fps)
+        ipysheet.cell(index, 6, duration)
+        ipysheet.cell(index, 7, "-")
+        ipysheet.cell(index, 8, "-")
+    logging.info("All movies uploaded:\n")
+    logging.info(
+        "Complete this sheet by filling the missing info on the movie you just uploaded"
+    )
     display(new_movie_rows_sheet)
 
     return new_movie_rows_sheet
 
+
 def add_new_rows_to_csv(db_info_dict: dict, new_movie_rows_sheet):
+    """
+    Save new rows into existing movies csv by concatenating old and new rows
+    """
 
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
     new_movie_rows_df = ipysheet.to_dataframe(new_movie_rows_sheet)
-    df_with_new_rows = pd.concat([movies_df,new_movie_rows_df], ignore_index=True) 
+    df_with_new_rows = pd.concat([movies_df, new_movie_rows_df], ignore_index=True)
     return df_with_new_rows
 
 
 def choose_new_videos_to_upload():
-    import ipywidgets as widgets
-    #print(widgets.Button.on_click.__doc__)
-    from IPython.display import display
-    from ipyfilechooser import FileChooser
-    from IPython.display import clear_output
 
-    movie_list=[]
+    """
+    Simple widget for uploading videos from a file browser.
+    returns the list of movies to be added.
+    TODO: Support multi-select file uploads
+    """
+
+    movie_list = []
 
     fc = FileChooser()
-    print("Choose the file that you want to upload: ")
+    logging.info("Choose the file that you want to upload: ")
     display(fc)
 
     button_add = widgets.Button(description="Add selected file")
     output_add = widgets.Output()
 
-    print("Showing paths to the selected movies:\nRerun cell to reset\n--------------")
+    logging.info(
+        "Showing paths to the selected movies:\nRerun cell to reset\n--------------"
+    )
 
     display(button_add, output_add)
 
     def on_button_add_clicked(b):
         with output_add:
             if fc.selected is not None:
-                movie_list.append([fc.selected,fc.selected_filename])
-                print(fc.selected)
+                movie_list.append([fc.selected, fc.selected_filename])
+                logging.info(fc.selected)
                 fc.reset()
-
-    #        for movie in movie_list:
-    #            print(movie[0])
-    #        print("--------------")
 
     button_add.on_click(on_button_add_clicked)
     return movie_list
-
-# # Select site and date of the video
-# def select_SiteID(db_initial_info):
-
-#     # Read csv as pd
-#     sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
-
-#     # Existing sites
-#     exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
-
-#     site_widget = widgets.Dropdown(
-#                 options = exisiting_sites,
-#                 description = 'Site ID:',
-#                 disabled = False,
-#                 layout=Layout(width='50%'),
-#                 style = {'description_width': 'initial'}
-#             )
-# #     display(site_widget)
-
-#     return site_widget
-
-# # Function to preview the movie
-# def preview_aws_movie(db_info_dict, movie_key):
-
-#     # Generate temporary path to the movie select
-#     movie_url = db_info_dict['client'].generate_presigned_url('get_object',
-#                                                             Params = {'Bucket': db_info_dict['bucket'],
-#                                                                       'Key': movie_key},
-#                                                             ExpiresIn = 400)
-
-#     return HTML(f"""<video src={movie_url} width=800 controls/>""")
-
-# # Function to select the movie to preview
-# def movies_to_preview(available_movies_df):
-#     movie_to_preview_widget = widgets.Dropdown(
-#                 options = available_movies_df.unique().tolist(),
-#                 description = 'Movie to preview:',
-#                 disabled = False,
-#                 layout=Layout(width='50%'),
-#                 style = {'description_width': 'initial'}
-#             )
-# #     display(movie_to_preview_widget)
-
-#     return movie_to_preview_widget
-
-
-# def select_date_site(db_info_dict, survey_i, upload_method = "local"):
-
-#     ###### Save the name of the survey
-#     # Load the csv with with sites and survey choices
-#     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-
-#     if isinstance(survey_i.result, dict):
-#         # Save the responses as a new row for the survey csv file
-#         new_survey_row_dict = {key: (value.value if hasattr(value, 'value') else value.result if isinstance(value.result, int) else value.result.value) for key, value in survey_i.result.items()}
-#         new_survey_row = pd.DataFrame.from_records(new_survey_row_dict, index=[0])
-
-
-#     else:
-#         # Read surveys csv
-#         surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
-
-#         # Return the name of the survey
-#         survey_name = survey_i.result.value
-
-#         # Save the SurveyID that match the survey name
-#         new_survey_row = surveys_df[surveys_df["SurveyName"]==survey_name].reset_index(drop=True)
-
-
-#     # Save the year of the survey
-# #         survey_year = new_survey_row["SurveyStartDate"].values[0].strftime("%Y")
-#     survey_year = new_survey_row["SurveyStartDate"].dt.year.values[0]
-
-#     # Get prepopulated fields for the survey
-#     new_survey_row[["ShortFolder"]] = choices_df[choices_df["MarineReserve"]==new_survey_row.LinkToMarineReserve.values[0]][["ShortFolder"]].values[0]
-
-#     # Save the "server filename" of the survey
-#     short_marine_reserve = new_survey_row["ShortFolder"].values[0]
-
-#     # Save the "server filename" of the survey
-#     survey_server_name = short_marine_reserve + "-buv-" + str(survey_year) + "/"
-
-#     # Save the beginning of the survey
-#     survey_start = pd.Timestamp(new_survey_row["SurveyStartDate"].values[0]).to_pydatetime()
-
-#     # Retrieve deployments info from the survey of interest
-#     deployments_server_name = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-#                                                             Prefix=survey_server_name,
-#                                                             Delimiter='/')
-#     # Convert info to dataframe
-#     deployments_server_name = pd.DataFrame.from_dict(deployments_server_name['CommonPrefixes'])
-
-#     # Define function to select folder with go-pro files
-#     def deployment_exist(site, date):
-#         # Specify the name of the folder of the deployment
-#         deployment_site_folder = survey_server_name + site + "/"
-
-#         # Save eventdate as str
-#         date_str = date.strftime("%d_%m_%Y")
-
-#         # Specify the name of the file of the deployment
-#         deployment_date_site = site+"_"+date_str
-
-#         # If deployment_date_site selected exists...
-#         if deployment_site_folder in deployments_server_name['Prefix'].to_list():
-#             # Retrieve files within the folder of interest
-#             files_in_deployment_dict = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-#                                                                     Prefix=deployment_site_folder)
-
-#             # Convert info to dataframe
-#             files_in_deployment = pd.DataFrame.from_dict(files_in_deployment_dict['Contents'])
-#             print("The deployment has the following files:","\n", files_in_deployment.Key.to_list())
-
-#             if len(files_in_deployment["Key"].unique())>1:
-#                 # Launch a dropdown to display the video of interest
-#                 movie_display = interactive(preview_aws_movie,
-#                                             db_info_dict = db_info_dict,
-#                                             movie_key = movies_to_preview(files_in_deployment["Key"])
-#                                             )
-
-#             else:
-#                 movie_key = files_in_deployment["Key"].unique()[0]
-#                 movie_display = preview_aws_movie(
-#                     db_info_dict = db_info_dict,
-#                     movie_key = movie_key
-#                 )
-
-
-#             display(movie_display)
-
-
-#         # If deployment_date_site selected exists...
-#         if deployment_date_site in deployments_server_name['Prefix'].to_list():
-
-#             # Widget to verify the video is correct
-#             w1 = interactive(sel_subfolder,
-#                              survey_folder = widgets.Dropdown(
-#                                  options = deployments_server_name['Prefix'].to_list(),
-#                                  description = 'Select the folder of the survey to process:',
-#                                  disabled = False,
-#                                  layout=Layout(width='90%'),
-#                                  style = {'description_width': 'initial'}
-#                              )
-#                             )
-# #             display(w1)
-
-#             return w1
-
-
-#         else:
-#             print(deployment_date_site, "is not in the server.")
-
-#             if upload_method == "Colab":
-#                 fc = widgets.Text(
-#                       description='Write the path to the files:',
-#                       disabled=False,
-#                       layout=Layout(width='95%'),
-#                       style = {'description_width': 'initial'}
-#                   )
-# #                 display(fc)
-
-#                 return fc
-
-#             else:
-#                 # Widget to select the local folder of interest
-#                 fc = FileChooser('/')
-#                 fc.title = '<b>Select the local folder with the deployment videos</b>'
-#                 # Switch to folder-only mode
-#                 fc.show_only_dirs = True
-# #                 display(fc)
-
-#                 return fc
-
-
-#     # Display the options
-#     w = interactive(deployment_exist,
-#                     site = select_SiteID(db_info_dict),
-#                     date = select_eventdate(survey_start),
-#                    )
-
-# #     display(w)
-
-#     return w
-
-# datetime.date(2020,1,1)
-
-
-# # # Select site and date of the video
-# # def select_SiteID(db_initial_info):
-
-# #     # Read csv as pd
-# #     sitesdf = pd.read_csv(db_initial_info["local_sites_csv"])
-
-# #     # Existing sites
-# #     exisiting_sites = sitesdf.sort_values("SiteID").SiteID.unique()
-
-# #     site_widget = widgets.Dropdown(
-# #                 options = exisiting_sites,
-# #                 description = 'Site ID:',
-# #                 disabled = False,
-# #                 layout=Layout(width='50%'),
-# #                 style = {'description_width': 'initial'}
-# #             )
-# #     display(site_widget)
-
-# #     return site_widget
-
-
-# # def select_eventdate():
-# #     # Select the date
-# #     date_widget = widgets.DatePicker(
-# #         description='Deployment or event date:',
-# #         disabled=False,
-# #         layout=Layout(width='50%'),
-# #         style = {'description_width': 'initial'}
-# #     )
-# #     display(date_widget)
-
-# #     return date_widget
-
-# def select_go_pro_folder(db_info_dict):
-#     # Define function to select folder with go-pro files
-#     def f(server_or_locally):
-#         # If cloud slected...
-#         if server_or_locally == 'Cloud':
-#             # Define function for cloud option to select subfolder within the survey folder
-#             def sel_subfolder(survey_folder):
-#                 # Retrieve info from the survey folders in the cloud
-#                 survey_subfolders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-#                                                                         Prefix=survey_folder,
-#                                                                         Delimiter='/')
-
-#                 # Convert info to dataframe
-#                 survey_subfolders = pd.DataFrame.from_dict(survey_subfolders['CommonPrefixes'])
-
-#                 # Widget to select the local folder of interest
-#                 survey_subfolder = widgets.Dropdown(
-#                                         options = survey_subfolders.Prefix.unique(),
-#                                         description = 'Select the folder of the deployment to process:',
-#                                         disabled = False,
-#                                         layout=Layout(width='80%'),
-#                                         style = {'description_width': 'initial'}
-#                 )
-#                 display(survey_subfolder)
-
-#                 return survey_subfolder
-
-#             # Retrieve info from the survey folders in the cloud
-#             survey_folders = db_info_dict["client"].list_objects(Bucket=db_info_dict["bucket"],
-#                                                                 Prefix="",
-#                                                                 Delimiter='/')
-
-#             # Convert info to dataframe
-#             survey_folders = pd.DataFrame.from_dict(survey_folders['CommonPrefixes'])
-
-#             # Widget to select the survey folder of interest
-#             w1 = interactive(sel_subfolder,
-#                              survey_folder = widgets.Dropdown(
-#                                  options = survey_folders.Prefix.unique(),
-#                                  description = 'Select the folder of the survey to process:',
-#                                  disabled = False,
-#                                  layout=Layout(width='90%'),
-#                                  style = {'description_width': 'initial'}
-#                              )
-#                             )
-#             display(w1)
-
-#             return w1
-
-
-#         # If local slected...
-#         if server_or_locally == 'Local':
-#             # Widget to select the local folder of interest
-#             fc = FileChooser('/')
-#             fc.title = '<b>Select the local folder with the Go-pro videos</b>'
-#             # Switch to folder-only mode
-#             fc.show_only_dirs = True
-#             display(fc)
-
-#             return fc
-
-
-#     # Display the options
-#     w = interactive(f,
-#                     server_or_locally = widgets.Dropdown(
-#                         options = ['Local','Cloud'],
-#                         description = 'Select files stored on the cloud or locally:',
-#                         disabled = False,
-#                         layout=Layout(width='90%'),
-#                         style = {'description_width': 'initial'}
-#                     )
-#                    )
-
-#     display(w)
-
-#     return w
-
-# def select_go_pro_files(go_pro_folder, db_info_dict):
-#     if go_pro_folder.kwargs['server_or_locally']=="Cloud":
-#         # Retrieve info from the survey folders in the cloud
-#         go_pro_files_i = server_utils.get_matching_s3_keys(client = db_info_dict["client"],
-#                                                bucket = db_info_dict["bucket"],
-#                                                prefix = go_pro_folder.result.result.value)
-
-#         go_pro_files_i = go_pro_files_i.Key.unique()
-
-#     else:
-#         go_pro_files_i = [os.path.join(go_pro_folder.result.selected, movie) for movie in os.listdir(go_pro_folder.result.selected)]
-
-#     # Specify the formats of the movies to select
-#     movie_formats = movie_utils.get_movie_extensions()
-
-#     # Select only movie files
-#     go_pro_movies_i = [s for s in go_pro_files_i if any(xs in s for xs in movie_formats)]
-
-#     print("The movies selected are:")
-#     print(*go_pro_movies_i, sep='\n')
-
-#     return go_pro_movies_i
-
-
-# # Function to download go pro videos, concatenate them and upload the concatenated videos to aws
-# def concatenate_go_pro_videos(db_info_dict, SiteID, EventDate, go_pro_folder, go_pro_files):
-
-#     # Save eventdate as str
-#     EventDate_str = EventDate.isoformat().replace("-","_")
-
-#     # Specify the name of the deployment
-#     deployment_name = SiteID+"_"+EventDate_str
-
-
-#     if go_pro_folder.kwargs['server_or_locally']=="Cloud":
-#         concat_folder = "concat_video"
-#         local_go_pro_files = [i.split('/', 2)[-1] for i in go_pro_files]
-
-#         print("Downloading the go_pro files")
-#         # Download the movies from the S3
-#         for movie_key in tqdm(go_pro_files, total=len(go_pro_files)):
-#             local_filename = local_go_pro_files[go_pro_files.index(movie_key)]
-#             if not os.path.exists(local_filename):
-#                 server_utils.download_object_from_s3(client = db_info_dict["client"],
-#                                                 bucket = db_info_dict["bucket"],
-#                                                 key = movie_key,
-#                                                 filename = local_filename)
-#         go_pro_files = local_go_pro_files
-
-#     else:
-#         # Specify temp folder to host the concat video
-#         concat_folder = go_pro_folder.result.selected+"concat_video"
-
-
-#     # Specify the filename and path for the concatenated movie
-#     filename = deployment_name+".MP4"
-#     concat_video = os.path.join(concat_folder,filename)
-
-#     # Save list as text file
-#     textfile = open("a_file.txt", "w")
-#     for go_pro_file in go_pro_files:
-#         textfile.write("file '"+ go_pro_file + "'"+ "\n")
-#     textfile.close()
-
-
-#     if not os.path.exists(concat_folder):
-#         os.mkdir(concat_folder)
-
-#     if not os.path.exists(concat_video):
-#         print("Concatenating ", concat_video)
-
-#         # Concatenate the videos
-#         subprocess.call(["ffmpeg",
-#                          "-f", "concat",
-#                          "-safe", "0",
-#                          "-i", "a_file.txt",
-#                          "-c", "copy",
-#                          concat_video])
-
-#         print(concat_video, "concatenated successfully")
-
-#     # Delete the text file
-#     os.remove("a_file.txt")
