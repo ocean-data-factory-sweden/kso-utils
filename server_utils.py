@@ -63,12 +63,13 @@ def connect_to_server(project: project_utils.Project):
 
     return server_dict
 
+
 def get_ml_data(project: project_utils.Project):
     """
     It downloads the training data from Google Drive.
     Currently only applies to the Template Project as other projects do not have prepared
     training data.
-    
+
     :param project: The project object that contains all the information about the project
     :type project: project_utils.Project
     """
@@ -261,12 +262,23 @@ def update_csv_server(
         )
 
     elif server == "SNIC":
-        #logging.error("Updating csv files to the server is a work in progress")
-        upload_object_to_snic(sftp_client=db_info_dict['sftp_client'], 
-                              local_fpath=db_info_dict[updated_csv], 
-                              remote_fpath=db_info_dict[orig_csv],
-                             )
-        
+        # TODO: orig_csv and updated_csv as filenames, create full path for upload_object_to_snic with project.csv_folder.
+        # Use below definition for production, commented not for development
+        # local_fpath = project.csv_folder + updated_csv
+        # Special implementation with two dummy folders for SNIC case since local and server
+        # are essentially the same for now.
+        local_fpath = (
+            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/local_dir_dev/" + updated_csv
+        )
+        remote_fpath = (
+            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/server_dir_dev/" + orig_csv
+        )
+        upload_object_to_snic(
+            sftp_client=db_info_dict["sftp_client"],
+            local_fpath=local_fpath,
+            remote_fpath=remote_fpath,
+        )
+
     elif server == "LOCAL":
         logging.error("Updating csv files to the server is a work in progress")
 
@@ -396,16 +408,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: koster_utils.reswedify(x).replace(
-            " ", "%20"
-        ).replace(
-            "\\", "/"
-        )
-        if koster_utils.reswedify(x).replace(
-            " ", "%20"
-        ).replace(
-            "\\", "/"
-        ) in server_df["spath"].unique()
+        lambda x: koster_utils.reswedify(x).replace(" ", "%20").replace("\\", "/")
+        if koster_utils.reswedify(x).replace(" ", "%20").replace("\\", "/")
+        in server_df["spath"].unique()
         else koster_utils.unswedify(x)
     )
 
