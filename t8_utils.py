@@ -311,10 +311,10 @@ def get_classifications(
     # Filter classifications of interest
     classes = []
     for id, version in zip(workflow_ids, workflow_versions):
-        class_df = class_df[
+        class_df_id = class_df[
             (class_df.workflow_id == id) & (class_df.workflow_version >= version)
         ].reset_index(drop=True)
-        classes.append(class_df)
+        classes.append(class_df_id)
     classes_df = pd.concat(classes)
 
     # Add information about the subject
