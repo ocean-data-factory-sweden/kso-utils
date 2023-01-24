@@ -179,21 +179,45 @@ def connect_zoo_project(project: project_utils.Project):
 def select_retrieve_info():
     """
     Display a widget that allows to select whether to retrieve the last available information,
-    or to request the latest information. 
+    or to request the latest information. In the latter case, a boolean determining whether
+    it is necessary to generate a new export will be set to True, and in the first case it is
+    set to False. 
 
-    :return: the widget object
+    :return: an interactive widget object with the value of the boolean
+                
     """
 
-    latest_info= widgets.RadioButtons(
-    options=['last available information', 'latest information'],
-    value='last available information', 
-    layout={'width': 'max-content'}, 
-    description='Select the information you want to retrieve:',
-    disabled=False,
-    style= {'description_width': 'initial'}
+    def generate_export(retrieve_option):
+        if retrieve_option == "No, just download the last available information":
+            #logging.info("Retrieving the last available information")
+            generate = False
+            
+        elif retrieve_option == "Yes":
+            #logging.info("Generating new export to retrieve the most up-to-date Zooniverse information")
+            generate = True
+    
+        return generate
+
+        
+    latest_info = interactive(
+        generate_export,
+        retrieve_option=widgets.RadioButtons(
+            options=['Yes', 'No, just download the last available information'],
+            value='No, just download the last available information', 
+            layout={'width': 'max-content'}, 
+            description='Do you want to request the most up-to-date Zooniverse information?',
+            disabled=False,
+            style= {'description_width': 'initial'}
+        ),
     )
 
+    
     display(latest_info)
+    display(HTML("""<font size="2px">If yes, a new data export will be requested and generated with the latest information of Zooniverse (this may take some time)<br>
+    Otherwise, the latest available export will be downloaded (some recent information may be missing!!).<br><br>
+    If the waiting time for the generation of a new data export ends, the last available information will be retrieved. However, that information <br>
+    will probably correspond to the newly generated export.
+    </font>"""))
 
     return latest_info
 
@@ -203,7 +227,7 @@ def retrieve__populate_zoo_info(
     db_info_dict: dict,
     zoo_project: Project,
     zoo_info: str,
-    generate: bool = False
+    generate_export: bool = False
 ):
     """
     It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database
@@ -213,7 +237,8 @@ def retrieve__populate_zoo_info(
     :param db_info_dict: a dictionary containing the path to the database and the name of the database
     :param zoo_project: The name of the Zooniverse project you created
     :param zoo_info: a string containing the information of the Zooniverse project
-    :param generate: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
+    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
+
     :return: The zoo_info_dict is being returned.
     """
 
@@ -222,9 +247,10 @@ def retrieve__populate_zoo_info(
             "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
         )
     else:
+
         # Retrieve and store the information of subjects uploaded to zooniverse
         zoo_info_dict = zooniverse_utils.retrieve_zoo_info(
-            project, zoo_project, zoo_info, generate
+            project, zoo_project, zoo_info, generate_export
         )
 
         # Populate the sql with subjects uploaded to Zooniverse
