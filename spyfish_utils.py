@@ -382,7 +382,7 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
 
     # Drop movie_ids from subjects to avoid issues
     subjects = subjects.drop(columns="movie_id")
-    
+
     # Reference the movienames with the id movies table
     subjects = pd.merge(subjects, movies_df, how="left", on="filename")
 

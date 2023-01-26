@@ -25,7 +25,8 @@ import kso_utils.tutorials_utils as t_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-out_df = pd.DataFrame()
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
 
 ####################################################
 ############### SURVEY FUNCTIONS ###################
@@ -1750,7 +1751,7 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         column_headers=movies_df.columns.tolist(),
     )
     for index, movie in enumerate(movie_list):
-        remote_fpath = Path(r"/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/" + movie[1])
+        remote_fpath = Path(f"{snic_path}/tmp_dir/" + movie[1])
         if os.path.exists(remote_fpath):
             logging.info(
                 "Filename "

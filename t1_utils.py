@@ -61,22 +61,21 @@ def select_sheet_range(db_info_dict: dict, orig_csv: str):
 
     display(df_range_rows)
 
-
     df_range_columns = widgets.SelectMultiple(
         options=df.columns,
         description="Columns",
         disabled=False,
-        layout=Layout(width="50%", padding="35px"))
+        layout=Layout(width="50%", padding="35px"),
+    )
 
     display(df_range_columns)
-
 
     return df, df_range_rows, df_range_columns
 
 
-def open_csv(df: pd.DataFrame,
-             df_range_rows: widgets.Widget,
-             df_range_columns: widgets.Widget):
+def open_csv(
+    df: pd.DataFrame, df_range_rows: widgets.Widget, df_range_columns: widgets.Widget
+):
     """
     > This function loads the dataframe with the information of interest, filters the range of rows and columns selected and then loads the dataframe into
     an ipysheet
@@ -354,7 +353,9 @@ def check_movies_csv(
             .any()
             .any()
         ):
-            logging.info("There are no empty entries for fps, duration and sampling information")
+            logging.info(
+                "There are no empty entries for fps, duration and sampling information"
+            )
 
         else:
             # Create a df with only those rows with missing fps/duration

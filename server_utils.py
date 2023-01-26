@@ -25,6 +25,9 @@ import kso_utils.db_utils as db_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
 ######################################
 # ###### Common server functions ######
 # #####################################
@@ -267,12 +270,8 @@ def update_csv_server(
         # local_fpath = project.csv_folder + updated_csv
         # Special implementation with two dummy folders for SNIC case since local and server
         # are essentially the same for now.
-        local_fpath = (
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/local_dir_dev/" + updated_csv
-        )
-        remote_fpath = (
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/server_dir_dev/" + orig_csv
-        )
+        local_fpath = f"{snic_path}/tmp_dir/local_dir_dev/" + updated_csv
+        remote_fpath = f"{snic_path}/tmp_dir/server_dir_dev/" + orig_csv
         upload_object_to_snic(
             sftp_client=db_info_dict["sftp_client"],
             local_fpath=local_fpath,

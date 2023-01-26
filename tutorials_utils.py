@@ -175,22 +175,23 @@ def connect_zoo_project(project: project_utils.Project):
 
     return project
 
-#Select the information to retrieve
+
+# Select the information to retrieve
 def select_retrieve_info():
     """
     Display a widget that allows to select whether to retrieve the last available information,
-    or to request the latest information. 
+    or to request the latest information.
 
     :return: the widget object
     """
 
-    latest_info= widgets.RadioButtons(
-    options=['last available information', 'latest information'],
-    value='last available information', 
-    layout={'width': 'max-content'}, 
-    description='Select the information you want to retrieve:',
-    disabled=False,
-    style= {'description_width': 'initial'}
+    latest_info = widgets.RadioButtons(
+        options=["last available information", "latest information"],
+        value="last available information",
+        layout={"width": "max-content"},
+        description="Select the information you want to retrieve:",
+        disabled=False,
+        style={"description_width": "initial"},
     )
 
     display(latest_info)
@@ -203,7 +204,7 @@ def retrieve__populate_zoo_info(
     db_info_dict: dict,
     zoo_project: Project,
     zoo_info: str,
-    generate: bool = False
+    generate: bool = False,
 ):
     """
     It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database

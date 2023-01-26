@@ -344,10 +344,9 @@ def frame_aggregation(
     train_rows = agg_df
 
     # Rename columns if in different format
-    train_rows = train_rows.rename(columns={"x": "x_position",
-                               "y": "y_position",
-                               "w": "width",
-                               "h": "height" }).copy()
+    train_rows = train_rows.rename(
+        columns={"x": "x_position", "y": "y_position", "w": "width", "h": "height"}
+    ).copy()
 
     # Remove null annotations
     if remove_nulls:
@@ -435,10 +434,10 @@ def frame_aggregation(
 
     # Add species_id to train_rows
     if not "species_id" in train_rows.columns:
-        train_rows["species_id"] = train_rows["label"].apply(lambda x: 
-                                                       species_df[species_df.label == x].id.values[0],
-                                                       1)
-        train_rows.drop(columns=['label'], axis=1, inplace=True)
+        train_rows["species_id"] = train_rows["label"].apply(
+            lambda x: species_df[species_df.label == x].id.values[0], 1
+        )
+        train_rows.drop(columns=["label"], axis=1, inplace=True)
 
     sp_id2mod_id = {
         species_df[species_df.clean_label == species_list[i]].id.values[0]: i
@@ -454,18 +453,25 @@ def frame_aggregation(
     logging.info(f"There are {len(movie_df)} movies")
 
     if len(movie_df) > 0:
-        if "frame_number" in train_rows.columns and not pd.isnull(train_rows["frame_number"]).any():
+        if (
+            "frame_number" in train_rows.columns
+            and not pd.isnull(train_rows["frame_number"]).any()
+        ):
             movie_bool = True
         else:
-            logging.info("There are movies available, but the subject metadata does not contain frame "
-                         "numbers and will therefore not be used.")
+            logging.info(
+                "There are movies available, but the subject metadata does not contain frame "
+                "numbers and will therefore not be used."
+            )
             movie_bool = False
     link_bool = "https_location" in train_rows.columns
     image_bool = project.photo_folder is not None
-    
+
     if not all([movie_bool, link_bool, image_bool]):
-        logging.error("No source of footage for aggregation found. Please check your metadata "
-                      "and project setup before running this function again.")
+        logging.error(
+            "No source of footage for aggregation found. Please check your metadata "
+            "and project setup before running this function again."
+        )
         return None
 
     if movie_bool:

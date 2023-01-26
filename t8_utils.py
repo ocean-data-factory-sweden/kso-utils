@@ -28,6 +28,9 @@ from jupyter_bbox_widget import BBoxWidget
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
 #### Set up ####
 def choose_agg_parameters(subject_type: str):
     """
@@ -599,7 +602,9 @@ def aggregrate_classifications(
         agg_class_df = agg_class_df.groupby(
             ["subject_ids", "https_location", "subject_type", "label"], as_index=False
         )
-        agg_class_df = pd.DataFrame(agg_class_df[["how_many", "first_seen"]].median().round(0))
+        agg_class_df = pd.DataFrame(
+            agg_class_df[["how_many", "first_seen"]].median().round(0)
+        )
 
     # Add username info to raw class
     raw_class_df = pd.merge(
@@ -879,7 +884,7 @@ def view_subject(subject_id: int, class_df: pd.DataFrame, subject_type: str):
         if os.access(".", os.W_OK):
             temp_image_path = "temp.jpg"
         else:
-            temp_image_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/temp.jpg"
+            temp_image_path = f"{snic_path}/tmp_dir/temp.jpg"
 
         if os.path.exists(temp_image_path):
             os.remove(temp_image_path)

@@ -13,6 +13,9 @@ import kso_utils.spyfish_utils as spyfish_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
 
 @dataclass
 class Project:
@@ -33,7 +36,6 @@ def find_project(project_name: str = ""):
     project csv path and project name"""
     # Specify the path to the list of projects
     project_path = "../kso_utils/db_starter/projects_list.csv"
-    snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     # Check path to the list of projects is a csv
     if os.path.exists(project_path) and not project_path.endswith(".csv"):
@@ -61,7 +63,6 @@ def add_project(project_info: dict = {}):
     project csv using a project_info dictionary
     """
     project_path = "../kso_utils/db_starter/projects_list.csv"
-    snic_path = "/cephyr/NOBACKUP/groups/snic2021-6-9/"
 
     if not os.path.exists(project_path) and os.path.exists(snic_path):
         project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
