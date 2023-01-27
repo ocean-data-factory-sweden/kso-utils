@@ -75,7 +75,7 @@ def choose_project(projects_csv: str = "../kso_utils/db_starter/projects_list.cs
 
     # If list of projects doesn't exist retrieve it from github
     if not os.path.exists(projects_csv):
-        projects_csv = "https://github.com/ocean-data-factory-sweden/kso-data-management/blob/main/db_starter/projects_list.csv?raw=true"
+        projects_csv = "https://github.com/ocean-data-factory-sweden/kso_utils/blob/main/db_starter/projects_list.csv?raw=true"
 
     projects_df = pd.read_csv(projects_csv)
 
@@ -127,9 +127,17 @@ def initiate_db(project: project_utils.Project):
         - server_i_dict
         - db_initial_info
     """
+    
+    # Check if template project
+    if project.Project_name == "model-registry":
+        return {}
 
     # Get project specific info
     server_i_dict, db_initial_info = get_project_details(project)
+    
+    # Check if server and db info
+    if (len(server_i_dict) == 0 and len(db_initial_info) == 0):
+        return {}
 
     # Initiate the sql db
     db_utils.init_db(db_initial_info["db_path"])
