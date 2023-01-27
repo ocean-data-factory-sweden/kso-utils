@@ -55,7 +55,9 @@ def find_project(project_name: str = ""):
                     logging.info(f"{project_name} loaded succesfully")
                     return row
         except exceptions.CsvValueError:
-            logging.error(f"This project {project_name} does not contain any csv information. Please select another.")
+            logging.error(
+                f"This project {project_name} does not contain any csv information. Please select another."
+            )
 
 
 def add_project(project_info: dict = {}):
