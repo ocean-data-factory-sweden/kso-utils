@@ -61,22 +61,21 @@ def select_sheet_range(db_info_dict: dict, orig_csv: str):
 
     display(df_range_rows)
 
-
     df_range_columns = widgets.SelectMultiple(
         options=df.columns,
         description="Columns",
         disabled=False,
-        layout=Layout(width="50%", padding="35px"))
+        layout=Layout(width="50%", padding="35px"),
+    )
 
     display(df_range_columns)
-
 
     return df, df_range_rows, df_range_columns
 
 
-def open_csv(df: pd.DataFrame,
-             df_range_rows: widgets.Widget,
-             df_range_columns: widgets.Widget):
+def open_csv(
+    df: pd.DataFrame, df_range_rows: widgets.Widget, df_range_columns: widgets.Widget
+):
     """
     > This function loads the dataframe with the information of interest, filters the range of rows and columns selected and then loads the dataframe into
     an ipysheet
@@ -91,8 +90,14 @@ def open_csv(df: pd.DataFrame,
     range_end = int(df_range_rows.label[1])
 
     # Extract the first and last columns to display
-    column_start = str(df_range_columns.label[0])
-    column_end = str(df_range_columns.label[-1])
+    if not len(df_range_columns.label) == 0:
+        column_start = str(df_range_columns.label[0])
+        column_end = str(df_range_columns.label[-1])
+        col_list = list(df_range_columns.label)
+    else:
+        column_start = df.columns[0]
+        column_end = df.columns[-1]
+        col_list = df.columns
 
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
@@ -100,7 +105,7 @@ def open_csv(df: pd.DataFrame,
 
     # Filter the dataframe based on the selection: rows and columns
     df_filtered_row = df.filter(items=range(range_start, range_end), axis=0)
-    df_filtered = df_filtered_row.filter(items=list(df_range_columns.label), axis=1)
+    df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
 
     # Load the df as ipysheet
     sheet = ipysheet.from_dataframe(df_filtered)
@@ -251,7 +256,7 @@ def map_site(db_info_dict: dict, project: project_utils.Project):
     :param project: The project object
     :return: A map with all the sites plotted on it.
     """
-    if project.server == "SNIC":
+    if project.server in ["SNIC", "LOCAL"]:
         # Set initial location to Gothenburg
         init_location = [57.708870, 11.974560]
 
@@ -354,7 +359,9 @@ def check_movies_csv(
             .any()
             .any()
         ):
-            logging.info("There are no empty entries for fps, duration and sampling information")
+            logging.info(
+                "There are no empty entries for fps, duration and sampling information"
+            )
 
         else:
             # Create a df with only those rows with missing fps/duration

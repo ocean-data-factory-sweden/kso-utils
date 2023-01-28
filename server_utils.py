@@ -25,6 +25,9 @@ import kso_utils.db_utils as db_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
 ######################################
 # ###### Common server functions ######
 # #####################################
@@ -39,6 +42,10 @@ def connect_to_server(project: project_utils.Project):
     :return: A dictionary with the client and sftp_client
     """
     # Get project-specific server info
+    if project is None or not hasattr(project, 'server'):
+        logging.error("No server information found, edit projects_list.csv")
+        return {}
+    
     server = project.server
 
     # Create an empty dictionary to host the server connections
@@ -88,7 +95,7 @@ def get_ml_data(project: project_utils.Project):
         logging.info("No prepared data to be downloaded.")
 
 
-def get_db_init_info(project: project_utils.Project, server_dict: dict):
+def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
     """
     This function downloads the csv files from the server and returns a dictionary with the paths to the
     csv files
@@ -267,12 +274,8 @@ def update_csv_server(
         # local_fpath = project.csv_folder + updated_csv
         # Special implementation with two dummy folders for SNIC case since local and server
         # are essentially the same for now.
-        local_fpath = (
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/local_dir_dev/" + updated_csv
-        )
-        remote_fpath = (
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/server_dir_dev/" + orig_csv
-        )
+        local_fpath = f"{snic_path}/tmp_dir/local_dir_dev/" + updated_csv
+        remote_fpath = f"{snic_path}/tmp_dir/server_dir_dev/" + orig_csv
         upload_object_to_snic(
             sftp_client=db_info_dict["sftp_client"],
             local_fpath=local_fpath,
@@ -384,7 +387,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         else:
             server_files = os.listdir(movie_folder)
             server_paths = [movie_folder + i for i in server_files]
-            server_df = pd.DataFrame(server_paths, columns="spath")
+            server_df = pd.Series(server_paths, name="spath").to_frame()
     elif server == "TEMPLATE":
         # Combine wildlife.ai storage and filenames of the movie examples
         server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
@@ -415,10 +418,11 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     )
 
     # Merge the server path to the filepath
+    server_df['spath_fileonly'] = server_df['spath'].apply(lambda x: os.path.basename(x), 1)
     movies_df = movies_df.merge(
-        server_df["spath"],
+        server_df,
         left_on=["fpath"],
-        right_on=["spath"],
+        right_on=["spath_fileonly"],
         how="left",
         indicator=True,
     )

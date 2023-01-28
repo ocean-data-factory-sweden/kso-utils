@@ -68,7 +68,10 @@ def auth_session(username: str, password: str, project_n: int):
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(
-    project: project_utils.Project, zoo_project: Project, zoo_info: str, generate_export: bool = False
+    project: project_utils.Project,
+    zoo_project: Project,
+    zoo_info: str,
+    generate_export: bool = False,
 ):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
@@ -188,7 +191,7 @@ def populate_subjects(
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
-           
+
         subjects = process_koster_subjects(subjects, db_path)
 
     else:
@@ -206,7 +209,7 @@ def populate_subjects(
 
         # If project template standardise subject info
         if project_name == "Template project":
-          # Rename columns to match the db format
+            # Rename columns to match the db format
             subjects = subjects.rename(
                 columns={
                     "#VideoFilename": "filename",
@@ -217,12 +220,13 @@ def populate_subjects(
             )
 
             # Create columns to match schema if they don't exist
-            subjects['frame_exp_sp_id'] = subjects.get('frame_exp_sp_id', np.nan)
-            subjects['frame_number'] = subjects.get('frame_number', np.nan)
-            
-            # Calculate the clip_end_time
-            subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
+            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
+            subjects["frame_number"] = subjects.get("frame_number", np.nan)
 
+            # Calculate the clip_end_time
+            subjects["clip_end_time"] = (
+                subjects["clip_start_time"] + subjects["#clip_length"]
+            )
 
     # Set subject_id information as id
     subjects = subjects.rename(columns={"subject_id": "id"})
@@ -241,10 +245,12 @@ def populate_subjects(
         subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
             lambda x: x[1] if isinstance(x[1], str) else x[0], 1
         )
-    
+
     # Fix subjects where clip_start_time is not provided but upl_seconds is
     if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
-        subjects["clip_start_time"] = subjects[["clip_start_time", "upl_seconds"]].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
+        subjects["clip_start_time"] = subjects[
+            ["clip_start_time", "upl_seconds"]
+        ].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
 
     # Set the columns in the right order
     subjects = subjects[

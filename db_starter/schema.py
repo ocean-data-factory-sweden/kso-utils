@@ -23,6 +23,16 @@ site_id integer NULL,
 fpath text NULL,
 UNIQUE (filename),
 FOREIGN KEY (site_id) REFERENCES sites (id)
+);
+
+CREATE TABLE IF NOT EXISTS photos
+(
+id integer PRIMARY KEY,
+filename text NOT NULL,
+PhotoPosition int NULL,
+siteName text NULL,
+SurveyID int NULL,
+UNIQUE (filename)
 ); 
 
 CREATE TABLE IF NOT EXISTS subjects

@@ -32,6 +32,9 @@ import kso_utils.project_utils as project_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
 
 ############################################################
 ######## Create some clip examples #########################
@@ -223,9 +226,7 @@ def create_example_clips(
     # Specify the temp folder to host the clips
     output_clip_folder = movie_i + "_clips"
     if server == "SNIC":
-        clips_folder = os.path.join(
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/", output_clip_folder
-        )
+        clips_folder = os.path.join(f"{snic_path}/tmp_dir/", output_clip_folder)
     else:
         clips_folder = output_clip_folder
 
@@ -429,7 +430,7 @@ def modify_clips(
         init_prompt = f"ffmpeg_python.input('{clip_i}')"
         default_output_prompt = f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
         full_prompt = init_prompt
-        mod_prompt = ''
+        mod_prompt = ""
 
         # Set up modification
         for transform in modification_details.values():
@@ -440,7 +441,7 @@ def modify_clips(
                 df = pd.json_normalize(modification_details, sep="_")
                 crf = df.filter(regex="crf$", axis=1).values[0][0]
                 out_prompt = f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-                
+
         if len(mod_prompt) > 0:
             full_prompt += mod_prompt
         if out_prompt:
@@ -490,9 +491,7 @@ def create_modified_clips(
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
     if server == "SNIC":
-        mod_clips_folder = os.path.join(
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir", mod_clip_folder
-        )
+        mod_clips_folder = os.path.join(f"{snic_path}/tmp_dir", mod_clip_folder)
     else:
         mod_clips_folder = mod_clip_folder
 
@@ -760,7 +759,6 @@ def extract_clips(
         )
         os.chmod(str(output_clip_path), 0o777)
 
-    
     elif modification_details and gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
@@ -794,7 +792,7 @@ def extract_clips(
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
-        mod_prompt = ''
+        mod_prompt = ""
         def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
 
         # Set up modification
@@ -892,9 +890,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     temp_clip_folder = movie_i + "_zooniverseclips"
     if server == "SNIC":
-        clips_folder = os.path.join(
-            "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/", temp_clip_folder
-        )
+        clips_folder = os.path.join(f"{snic_path}/tmp_dir/", temp_clip_folder)
     else:
         clips_folder = temp_clip_folder
 
@@ -1001,7 +997,7 @@ def set_zoo_metadata(
             "siteName": "#siteName",
         }
     )
-    
+
     # Convert datetime to string to avoid JSON seriazible issues
     upload_to_zoo["#created_on"] = upload_to_zoo["#created_on"].astype(str)
     created_on = upload_to_zoo["#created_on"].unique()[0]
@@ -1095,10 +1091,8 @@ def set_zoo_metadata(
             f"The following columns have NAN values {upload_to_zoo.columns[upload_to_zoo.isna().any()].tolist()}"
         )
 
-    logging.info(
-            f"The metadata for the {upload_to_zoo.shape[0]} subjects is ready."
-        )
-        
+    logging.info(f"The metadata for the {upload_to_zoo.shape[0]} subjects is ready.")
+
     return upload_to_zoo, sitename, created_on
 
 

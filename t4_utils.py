@@ -38,6 +38,10 @@ import kso_utils.t8_utils as t8
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# Specify volume allocated by SNIC
+snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+
+
 def choose_species(db_info_dict: dict):
     """
     This function generates a widget to select the species of interest
@@ -125,15 +129,15 @@ def get_species_frames(
         "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
         conn,
     )
-    
-    agg_clips_df['subject_ids'] = agg_clips_df['subject_ids'].astype(int)
-    subjects_df['id'] = subjects_df['id'].astype(int)
+
+    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
+    subjects_df["id"] = subjects_df["id"].astype(int)
 
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
         agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id"
     ).drop(columns=["id"])
-    
+
     # Identify the second of the original movie when the species first appears
     frames_df["first_seen_movie"] = (
         frames_df["clip_start_time"] + frames_df["first_seen"]
@@ -142,7 +146,7 @@ def get_species_frames(
     server = project.server
 
     if server == "SNIC" and project.Project_name == "Koster_Seafloor_Obs":
-        
+
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
 
@@ -362,7 +366,9 @@ def extract_frames(
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
-        url = movie_utils.get_movie_path(project=project, db_info_dict=server_dict, f_path=movie)
+        url = movie_utils.get_movie_path(
+            project=project, db_info_dict=server_dict, f_path=movie
+        )
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -409,7 +415,7 @@ def get_frames(
 
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
-            df = FileChooser("/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir")
+            df = FileChooser(f"{snic_path}/tmp_dir")
         else:
             df = FileChooser(".")
         df.title = "<b>Select frame folder location</b>"
@@ -440,7 +446,7 @@ def get_frames(
 
         # Select the temp location to store frames before uploading them to Zooniverse
         if project.server == "SNIC":
-            df = FileChooser("/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir")
+            df = FileChooser(f"{snic_path}/tmp_dir")
         else:
             df = FileChooser(".")
         df.title = "<b>Choose location to store frames</b>"
@@ -647,7 +653,7 @@ def modify_frames(
 
     # Specify the folder to host the modified clips
     if server == "SNIC":
-        folder_name = "/cephyr/NOBACKUP/groups/snic2021-6-9/tmp_dir/frames/"
+        folder_name = f"{snic_path}/tmp_dir/frames/"
         mod_frames_folder = os.path.join(
             folder_name, "modified_" + "_".join(species_i) + "_frames/"
         )
@@ -655,9 +661,11 @@ def modify_frames(
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
 
     # Specify the path of the modified frames
-    frames_to_upload_df["modif_frame_path"] = (mod_frames_folder + "_modified_" + 
-    frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x)))
-
+    frames_to_upload_df["modif_frame_path"] = (
+        mod_frames_folder
+        + "_modified_"
+        + frames_to_upload_df["frame_path"].apply(lambda x: os.path.basename(x))
+    )
 
     # Remove existing modified clips
     if os.path.exists(mod_frames_folder):
@@ -740,7 +748,14 @@ def set_zoo_metadata(
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[
-            ["frame_path", "frame_number", "species_id", "movie_id", "created_on", "siteName"]
+            [
+                "frame_path",
+                "frame_number",
+                "species_id",
+                "movie_id",
+                "created_on",
+                "siteName",
+            ]
         ]
 
     elif project_name == "SGU":

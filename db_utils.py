@@ -1,5 +1,6 @@
 # base imports
 import os
+import csv
 import sqlite3
 import logging
 import pandas as pd
@@ -217,8 +218,8 @@ def process_test_csv(
     df.rename(columns={"Author": "author"}, inplace=True)
     df = df[[c for c in field_names if c in df.columns]]
 
-    # Roadblock to prevent empty rows
-    test_table(df, csv_i, df.columns)
+    # Roadblock to prevent empty rows in id_columns
+    test_table(df, csv_i, [df.columns[0]])
 
     return csv_i, df
 
