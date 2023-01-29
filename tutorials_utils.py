@@ -127,16 +127,16 @@ def initiate_db(project: project_utils.Project):
         - server_i_dict
         - db_initial_info
     """
-    
+
     # Check if template project
     if project.Project_name == "model-registry":
         return {}
 
     # Get project specific info
     server_i_dict, db_initial_info = get_project_details(project)
-    
+
     # Check if server and db info
-    if (len(server_i_dict) == 0 and len(db_initial_info) == 0):
+    if len(server_i_dict) == 0 and len(db_initial_info) == 0:
         return {}
 
     # Initiate the sql db

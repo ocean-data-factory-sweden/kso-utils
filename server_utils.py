@@ -42,10 +42,10 @@ def connect_to_server(project: project_utils.Project):
     :return: A dictionary with the client and sftp_client
     """
     # Get project-specific server info
-    if project is None or not hasattr(project, 'server'):
+    if project is None or not hasattr(project, "server"):
         logging.error("No server information found, edit projects_list.csv")
         return {}
-    
+
     server = project.server
 
     # Create an empty dictionary to host the server connections
@@ -418,7 +418,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     )
 
     # Merge the server path to the filepath
-    server_df['spath_fileonly'] = server_df['spath'].apply(lambda x: os.path.basename(x), 1)
+    server_df["spath_fileonly"] = server_df["spath"].apply(
+        lambda x: os.path.basename(x), 1
+    )
     movies_df = movies_df.merge(
         server_df,
         left_on=["fpath"],
