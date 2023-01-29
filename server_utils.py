@@ -386,8 +386,8 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
             return pd.DataFrame(columns=["filename"])
         else:
             server_files = os.listdir(movie_folder)
-            server_paths = [movie_folder + i for i in server_files]
-            server_df = pd.Series(server_paths, name="spath").to_frame()
+            # server_paths = [movie_folder + i for i in server_files]
+            server_df = pd.Series(server_files, name="spath").to_frame()
     elif server == "TEMPLATE":
         # Combine wildlife.ai storage and filenames of the movie examples
         server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
@@ -418,17 +418,15 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     )
 
     # Merge the server path to the filepath
-    server_df["spath_fileonly"] = server_df["spath"].apply(
-        lambda x: os.path.basename(x), 1
-    )
     movies_df = movies_df.merge(
         server_df,
         left_on=["fpath"],
-        right_on=["spath_fileonly"],
+        right_on=["spath"],
         how="left",
         indicator=True,
     )
 
+    
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
 
