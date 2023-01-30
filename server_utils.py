@@ -428,7 +428,6 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         indicator=True,
     )
 
-    
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
 
