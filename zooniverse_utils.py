@@ -10,9 +10,10 @@ import numpy as np
 from panoptes_client import (
     Project,
     Panoptes,
+    panoptes
+    
 )
 from ast import literal_eval
-
 
 # util imports
 from kso_utils.koster_utils import (
@@ -70,7 +71,7 @@ def retrieve_zoo_info(
     project: project_utils.Project,
     zoo_project: Project,
     zoo_info: str,
-    generate: bool = False,
+    generate_export: bool = False,
 ):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
@@ -80,16 +81,16 @@ def retrieve_zoo_info(
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
     :type zoo_info: str
-    :param generate: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
+    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
     :return: A dictionary of dataframes.
     """
-
     if hasattr(project, "info_df"):
         if project.info_df is not None:
             logging.info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
+    
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
@@ -97,15 +98,21 @@ def retrieve_zoo_info(
         logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
-        export = zoo_project.get_export(info_n, generate=generate)
+        if generate_export:
+            try:
+                export = zoo_project.get_export(info_n, generate=generate_export,  wait=True, wait_timeout=1800)
+            except panoptes.PanoptesAPIException:
+                logging.error("Export generation time out, retrieving the last available information...")
+                export = zoo_project.get_export(info_n, generate=False)
+        else:
+            export = zoo_project.get_export(info_n, generate=generate_export)
 
         # Save the info as pandas data frame
         try:
             export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
         except pd.errors.ParserError:
-            logging.error(
-                "Export retrieval time out, please try again in 1 minute or so."
-            )
+            logging.error("Export retrieval time out, please try again in 1 minute or so.")
+            export_df={}
 
         if len(export_df) > 0:
 
