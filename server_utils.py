@@ -386,7 +386,6 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
             return pd.DataFrame(columns=["filename"])
         else:
             server_files = os.listdir(movie_folder)
-            # server_paths = [movie_folder + i for i in server_files]
             server_df = pd.Series(server_files, name="spath").to_frame()
     elif server == "TEMPLATE":
         # Combine wildlife.ai storage and filenames of the movie examples
@@ -399,6 +398,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
             "https://www.wildlife.ai/wp-content/uploads/2022/06/"
             + server_df.fpath.astype(str)
         )
+
+        # Remove fpath values
+        server_df.drop(columns=["fpath"], axis=1, inplace=True)
 
     else:
         raise ValueError("The server type you selected is not currently supported.")
