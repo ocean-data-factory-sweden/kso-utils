@@ -7,12 +7,7 @@ import pandas as pd
 import json
 import logging
 import numpy as np
-from panoptes_client import (
-    Project,
-    Panoptes,
-    panoptes
-    
-)
+from panoptes_client import Project, Panoptes, panoptes
 from ast import literal_eval
 
 # util imports
@@ -90,7 +85,7 @@ def retrieve_zoo_info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
-    
+
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
@@ -100,9 +95,13 @@ def retrieve_zoo_info(
         # Get the information of interest from Zooniverse
         if generate_export:
             try:
-                export = zoo_project.get_export(info_n, generate=generate_export,  wait=True, wait_timeout=1800)
+                export = zoo_project.get_export(
+                    info_n, generate=generate_export, wait=True, wait_timeout=1800
+                )
             except panoptes.PanoptesAPIException:
-                logging.error("Export generation time out, retrieving the last available information...")
+                logging.error(
+                    "Export generation time out, retrieving the last available information..."
+                )
                 export = zoo_project.get_export(info_n, generate=False)
         else:
             export = zoo_project.get_export(info_n, generate=generate_export)
@@ -111,8 +110,10 @@ def retrieve_zoo_info(
         try:
             export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
         except pd.errors.ParserError:
-            logging.error("Export retrieval time out, please try again in 1 minute or so.")
-            export_df={}
+            logging.error(
+                "Export retrieval time out, please try again in 1 minute or so."
+            )
+            export_df = {}
 
         if len(export_df) > 0:
 

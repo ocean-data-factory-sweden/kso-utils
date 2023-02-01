@@ -58,7 +58,9 @@ def setup_paths(output_folder: str, model_type: str):
         logging.info("Paths do not need to be changed for this model type.")
         return output_folder, None
     else:
-        logging.info("This functionality is currently unavailable for the chosen model type.")
+        logging.info(
+            "This functionality is currently unavailable for the chosen model type."
+        )
         return None, None
 
 
@@ -80,6 +82,7 @@ def choose_experiment_name():
     display(exp_name)
     return exp_name
 
+
 def choose_model_type():
     """
     It creates a dropdown box that allows you to choose a model type
@@ -88,10 +91,21 @@ def choose_model_type():
     model_type = widgets.Dropdown(
         value=1,
         description="Required model type:",
-        options=[("Object Detection (e.g. identifying individuals in an image using rectangles)", 1),
-                 ("Image Classification (e.g. assign a class or label to an entire image)", 2),
-                 ("Instance Segmentation (e.g. fit a suitable mask on top of identified objects)", 3),
-                 ("Custom model (currently only Faster RCNN)", 4)],
+        options=[
+            (
+                "Object Detection (e.g. identifying individuals in an image using rectangles)",
+                1,
+            ),
+            (
+                "Image Classification (e.g. assign a class or label to an entire image)",
+                2,
+            ),
+            (
+                "Instance Segmentation (e.g. fit a suitable mask on top of identified objects)",
+                3,
+            ),
+            ("Custom model (currently only Faster RCNN)", 4),
+        ],
         disabled=False,
         display="flex",
         flex_flow="column",
@@ -248,6 +262,7 @@ def choose_train_params():
     box = widgets.HBox([v, z])
     display(box)
     return v, z
+
 
 def choose_eval_params():
     """
