@@ -32,6 +32,18 @@ logging.getLogger().setLevel(logging.INFO)
 
 
 def set_config(conf_thres: float, model: str, eval_dir: str):
+    """
+    `set_config` takes in a confidence threshold, model name, and evaluation directory and returns a
+    configuration object.
+    
+    :param conf_thres: This is the confidence threshold for the bounding boxes
+    :type conf_thres: float
+    :param model: The name of the model you want to use
+    :type model: str
+    :param eval_dir: The directory where the evaluation images are stored
+    :type eval_dir: str
+    :return: The config object is being returned.
+    """
     config = wandb.config
     config.confidence_threshold = conf_thres
     config.model_name = model
@@ -39,13 +51,31 @@ def set_config(conf_thres: float, model: str, eval_dir: str):
     return config
 
 def get_team_name(project_name: str):
+    """
+    > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
+    
+    :param project_name: The name of the project you want to get the data from
+    :type project_name: str
+    :return: The team name is being returned.
+    """
+
     if project_name == "Spyfish_Aotearoa":
         return "wildlife-ai"
     else:
-        "koster"
+        return "koster"
 
 
 def add_data_wandb(path: str, name: str, run):
+    """
+    > The function `add_data_wandb` takes a path to a directory, a name for the directory, and a run
+    object, and adds the directory to the run as an artifact
+    
+    :param path: the path to the directory you want to upload
+    :type path: str
+    :param name: The name of the artifact
+    :type name: str
+    :param run: The run object that you get from calling wandb.init()
+    """
     my_data = wandb.Artifact(name, type="raw_data")
     my_data.add_dir(path)
     run.log_artifact(my_data)

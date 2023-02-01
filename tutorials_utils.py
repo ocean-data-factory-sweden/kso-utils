@@ -83,6 +83,21 @@ def choose_footage(project: project_utils.Project, start_path: str = ".", folder
         return fc
 
 def write_urls_to_file(movie_list: list, filepath: str = "/tmp/temp.txt"):
+    """
+    > This function takes a list of movie urls and writes them to a file
+    so that they can be passed to the detect method of the ML models
+    
+    :param movie_list: list
+    :type movie_list: list
+    :param filepath: The path to the file to write the urls to, defaults to /tmp/temp.txt
+    :type filepath: str (optional)
+    :return: The filepath of the file that was written to.
+    """
+    try:
+      iter(movie_list)
+    except TypeError:
+      logging.error("No source movies found in selected path or path is empty. Please fix the previous selection")
+      return
     with open(filepath, 'w') as fp:
         fp.write('\n'.join(movie_list))
     return filepath
