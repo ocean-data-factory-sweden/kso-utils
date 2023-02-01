@@ -28,18 +28,19 @@ import kso_utils.tutorials_utils as t_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
 def process_source(source):
     """
     If the source is a string, write the string to a file and return the file name. If the source is a
     list, return the list. If the source is neither, return None
-    
+
     :param source: The source of the data. This can be a URL, a file, or a list of URLs or files
     :return: the value of the source variable.
     """
     try:
         source.value
         return write_urls_to_file(source.value)
-    except AttributeError: 
+    except AttributeError:
         try:
             source.selected
             return source.selected
@@ -54,14 +55,20 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     display(fc)
     return fc
 
-def choose_footage(project: project_utils.Project, start_path: str = ".", folder_type: str = ""):
+
+def choose_footage(
+    project: project_utils.Project, start_path: str = ".", folder_type: str = ""
+):
     if project.server == "AWS":
         db_info_dict = t_utils.initiate_db(project)
         available_movies_df = server_utils.retrieve_movie_info_from_server(
             project=project, db_info_dict=db_info_dict
         )
-        movie_dict = {name: movie_utils.get_movie_path(f_path, db_info_dict, project) for name, f_path in available_movies_df[["filename", "fpath"]].values}
-    
+        movie_dict = {
+            name: movie_utils.get_movie_path(f_path, db_info_dict, project)
+            for name, f_path in available_movies_df[["filename", "fpath"]].values
+        }
+
         movie_widget = widgets.SelectMultiple(
             options=[(name, movie) for name, movie in movie_dict.items()],
             description="Select movie(s):",
@@ -73,7 +80,7 @@ def choose_footage(project: project_utils.Project, start_path: str = ".", folder
 
         display(movie_widget)
         return movie_widget
-    
+
     else:
 
         # Specify the output folder
@@ -82,11 +89,12 @@ def choose_footage(project: project_utils.Project, start_path: str = ".", folder
         display(fc)
         return fc
 
+
 def write_urls_to_file(movie_list: list, filepath: str = "/tmp/temp.txt"):
     """
     > This function takes a list of movie urls and writes them to a file
     so that they can be passed to the detect method of the ML models
-    
+
     :param movie_list: list
     :type movie_list: list
     :param filepath: The path to the file to write the urls to, defaults to /tmp/temp.txt
@@ -94,12 +102,14 @@ def write_urls_to_file(movie_list: list, filepath: str = "/tmp/temp.txt"):
     :return: The filepath of the file that was written to.
     """
     try:
-      iter(movie_list)
+        iter(movie_list)
     except TypeError:
-      logging.error("No source movies found in selected path or path is empty. Please fix the previous selection")
-      return
-    with open(filepath, 'w') as fp:
-        fp.write('\n'.join(movie_list))
+        logging.error(
+            "No source movies found in selected path or path is empty. Please fix the previous selection"
+        )
+        return
+    with open(filepath, "w") as fp:
+        fp.write("\n".join(movie_list))
     return filepath
 
 
@@ -257,38 +267,40 @@ def select_retrieve_info():
     or to request the latest information.
 
     :return: an interactive widget object with the value of the boolean
-                
+
     """
 
     def generate_export(retrieve_option):
         if retrieve_option == "No, just download the last available information":
             generate = False
-            
+
         elif retrieve_option == "Yes":
             generate = True
-    
+
         return generate
 
-        
     latest_info = interactive(
         generate_export,
         retrieve_option=widgets.RadioButtons(
-            options=['Yes', 'No, just download the last available information'],
-            value='No, just download the last available information', 
-            layout={'width': 'max-content'}, 
-            description='Do you want to request the most up-to-date Zooniverse information?',
+            options=["Yes", "No, just download the last available information"],
+            value="No, just download the last available information",
+            layout={"width": "max-content"},
+            description="Do you want to request the most up-to-date Zooniverse information?",
             disabled=False,
-            style= {'description_width': 'initial'}
+            style={"description_width": "initial"},
         ),
     )
 
-    
     display(latest_info)
-    display(HTML("""<font size="2px">If yes, a new data export will be requested and generated with the latest information of Zooniverse (this may take some time)<br>
+    display(
+        HTML(
+            """<font size="2px">If yes, a new data export will be requested and generated with the latest information of Zooniverse (this may take some time)<br>
     Otherwise, the latest available export will be downloaded (some recent information may be missing!!).<br><br>
     If the waiting time for the generation of a new data export ends, the last available information will be retrieved. However, that information <br>
     will probably correspond to the newly generated export.
-    </font>"""))
+    </font>"""
+        )
+    )
 
     return latest_info
 
@@ -298,7 +310,7 @@ def retrieve__populate_zoo_info(
     db_info_dict: dict,
     zoo_project: Project,
     zoo_info: str,
-    generate_export: bool = False
+    generate_export: bool = False,
 ):
     """
     It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database

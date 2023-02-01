@@ -35,7 +35,7 @@ def set_config(conf_thres: float, model: str, eval_dir: str):
     """
     `set_config` takes in a confidence threshold, model name, and evaluation directory and returns a
     configuration object.
-    
+
     :param conf_thres: This is the confidence threshold for the bounding boxes
     :type conf_thres: float
     :param model: The name of the model you want to use
@@ -50,10 +50,11 @@ def set_config(conf_thres: float, model: str, eval_dir: str):
     config.evaluation_directory = eval_dir
     return config
 
+
 def get_team_name(project_name: str):
     """
     > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
-    
+
     :param project_name: The name of the project you want to get the data from
     :type project_name: str
     :return: The team name is being returned.
@@ -69,7 +70,7 @@ def add_data_wandb(path: str, name: str, run):
     """
     > The function `add_data_wandb` takes a path to a directory, a name for the directory, and a run
     object, and adds the directory to the run as an artifact
-    
+
     :param path: the path to the directory you want to upload
     :type path: str
     :param name: The name of the artifact
@@ -589,9 +590,7 @@ def get_model(
         full_path = f"{team_name}/{project_name.lower()}"
     api = wandb.Api()
     try:
-        api.artifact_type(
-            type_name="model", project=full_path
-        ).collections()
+        api.artifact_type(type_name="model", project=full_path).collections()
     except Exception as e:
         logging.error(f"No model collections found. No artifacts have been logged. {e}")
         return None
@@ -606,9 +605,7 @@ def get_model(
         model = model[0]
     else:
         logging.error("No model found")
-    artifact = api.artifact(
-        full_path + "/" + model.name + ":latest"
-    )
+    artifact = api.artifact(full_path + "/" + model.name + ":latest")
     logging.info("Downloading model checkpoint...")
     artifact_dir = artifact.download(root=download_path)
     logging.info("Checkpoint downloaded.")
@@ -628,7 +625,7 @@ def choose_model(project_name: str, team_name: str = "koster"):
     model_info = {}
     api = wandb.Api()
     # weird error fix (initialize api another time)
-    
+
     project_name = project_name.replace(" ", "_")
     if team_name == "wildlife-ai":
         logging.info("Please note: Using models from adi-ohad-heb-uni account.")
@@ -637,11 +634,14 @@ def choose_model(project_name: str, team_name: str = "koster"):
     else:
         full_path = f"{team_name}/{project_name.lower()}"
 
-
-    runs = api.runs(full_path) 
+    runs = api.runs(full_path)
 
     for run in runs:
-        model_artifacts = [artifact for artifact in chain(run.logged_artifacts(), run.used_artifacts()) if artifact.type == 'model']
+        model_artifacts = [
+            artifact
+            for artifact in chain(run.logged_artifacts(), run.used_artifacts())
+            if artifact.type == "model"
+        ]
         if len(model_artifacts) > 0:
             model_dict[run.name] = model_artifacts[0].name.split(":")[0]
             model_info[model_artifacts[0].name.split(":")[0]] = run.summary
@@ -708,7 +708,7 @@ def choose_files(path: str):
 
     main_out = widgets.Output()
     display(clip_path_widget, main_out)
-    
+
     # Display the original and modified clips
     def on_change(change):
         with main_out:
@@ -718,7 +718,7 @@ def choose_files(path: str):
             else:
                 a = view_file(change["new"])
                 display(a)
-    
+
     clip_path_widget.observe(on_change, names="value")
     return clip_path_widget
 

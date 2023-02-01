@@ -229,7 +229,7 @@ def update_csv(
             df.to_csv(db_info_dict[local_csv], index=False)
             logging.info("The local csv file has been updated")
 
-            if project.server=="AWS":
+            if project.server == "AWS":
                 # Save the updated df in the server
                 server_utils.update_csv_server(
                     project, db_info_dict, orig_csv=serv_csv, updated_csv=local_csv
