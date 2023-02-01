@@ -82,7 +82,6 @@ def choose_footage(
         return movie_widget
 
     else:
-
         # Specify the output folder
         fc = FileChooser(start_path)
         fc.title = f"Choose location of {folder_type}"
@@ -330,7 +329,6 @@ def retrieve__populate_zoo_info(
             "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
         )
     else:
-
         # Retrieve and store the information of subjects uploaded to zooniverse
         zoo_info_dict = zooniverse_utils.retrieve_zoo_info(
             project, zoo_project, zoo_info, generate_export

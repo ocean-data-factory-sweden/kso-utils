@@ -146,7 +146,6 @@ def get_species_frames(
     server = project.server
 
     if server == "SNIC" and project.Project_name == "Koster_Seafloor_Obs":
-
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
 
@@ -186,7 +185,6 @@ def get_species_frames(
         )
 
     if server == "AWS":
-
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
 
@@ -244,7 +242,6 @@ def check_frames_uploaded(
     species_ids: list,
     conn: sqlite3.Connection,
 ):
-
     if project.Project_name == "Koster_Seafloor_Obs":
         # Get info of frames of the species of interest already uploaded
         if len(species_ids) <= 1:
@@ -394,7 +391,6 @@ def get_frames(
     n_frames_subject=3,
     subsample_up_to=100,
 ):
-
     # Roadblock to check if species list is empty
     if len(species_names) == 0:
         raise ValueError(
@@ -412,7 +408,6 @@ def get_frames(
     conn = db_utils.create_connection(db_path)
 
     if project.movie_folder is None:
-
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
             df = FileChooser(f"{snic_path}/tmp_dir")
@@ -589,7 +584,6 @@ def check_frame_size(frame_paths: list):
 
 # Function to compare original to modified frames
 def compare_frames(df):
-
     if not isinstance(df, pd.DataFrame):
         df = df.df
 
@@ -626,7 +620,6 @@ def compare_frames(df):
 
 # Display the frames using html
 def view_frames(df: pd.DataFrame, frame_path: str):
-
     # Get path of the modified clip selected
     modified_frame_path = df[df["frame_path"] == frame_path].modif_frame_path.values[0]
     extension = os.path.splitext(frame_path)[1]
@@ -648,7 +641,6 @@ def modify_frames(
     modification_details: dict,
     project: project_utils.Project,
 ):
-
     server = project.server
 
     # Specify the folder to host the modified clips
@@ -672,7 +664,6 @@ def modify_frames(
         shutil.rmtree(mod_frames_folder)
 
     if len(modification_details.values()) > 0:
-
         # Save the modification details to include as subject metadata
         frames_to_upload_df["frame_modification_details"] = str(modification_details)
 
@@ -719,7 +710,6 @@ def modify_frames(
         logging.info("Frames modified successfully")
 
     else:
-
         # Save the modification details to include as subject metadata
         frames_to_upload_df["modif_frame_path"] = frames_to_upload_df["frame_path"]
 
@@ -730,7 +720,6 @@ def modify_frames(
 def set_zoo_metadata(
     df, species_list: list, project: project_utils.Project, db_info_dict: dict
 ):
-
     project_name = project.Project_name
 
     if not isinstance(df, pd.DataFrame):
@@ -787,7 +776,6 @@ def upload_frames_to_zooniverse(
     db_info_dict: dict,
     project: project_utils.Project,
 ):
-
     # Retireve zooniverse project name and number
     project_name = project.Project_name
     project_number = project.Zooniverse_number

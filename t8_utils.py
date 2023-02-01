@@ -31,6 +31,7 @@ logging.getLogger().setLevel(logging.INFO)
 # Specify volume allocated by SNIC
 snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
 
+
 #### Set up ####
 def choose_agg_parameters(subject_type: str):
     """
@@ -249,7 +250,6 @@ def choose_w_version(workflows_df: pd.DataFrame, workflow_id: str):
     )
 
     if len(versions_available) > 1:
-
         # Display the versions of the workflow available
         w_version = widgets.Dropdown(
             options=list(map(float, versions_available)),
@@ -436,7 +436,6 @@ def aggregrate_classifications(
 
     # We take the raw classifications and process them to get the aggregated labels.
     if subj_type == "frame":
-
         # Get the aggregration parameters
         if not isinstance(agg_params, list):
             agg_users, min_users, agg_obj, agg_iou, agg_iua = [
@@ -727,7 +726,6 @@ def process_frames(df: pd.DataFrame, project_name: str):
         # Select the information from all the labelled animals (e.g. task = T0)
         for ann_i in annotations:
             if ann_i["task"] == "T0":
-
                 if ann_i["value"] == []:
                     # Specify the frame was classified as empty
                     choice_i = {
@@ -870,7 +868,6 @@ def view_subject(subject_id: int, class_df: pd.DataFrame, subject_type: str):
         </html>"""
 
     elif subject_type == "frame":
-
         # Read image
         response = requests.get(subject_location)
         im = PILImage.open(BytesIO(response.content))

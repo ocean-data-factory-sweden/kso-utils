@@ -90,7 +90,6 @@ def standarise_movie_format(
     project: project_utils.Project,
     gpu_available: bool = False,
 ):
-
     """
     This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
     it is converted using ffmpeg.

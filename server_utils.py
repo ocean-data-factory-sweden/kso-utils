@@ -118,7 +118,6 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
         os.mkdir(db_csv_info)
 
     if server == "AWS":
-
         # Download csv files from AWS
         db_initial_info = download_csv_aws(project_name, server_dict, db_csv_info)
 
@@ -128,7 +127,6 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
             )
 
     elif server in ["LOCAL", "SNIC"]:
-
         csv_folder = db_csv_info
 
         # Define the path to the csv files with initial info to build the db
@@ -183,7 +181,6 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
             )
 
     elif server == "TEMPLATE":
-
         # Specify the id of the folder with csv files of the template project
         gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
 
@@ -814,7 +811,6 @@ def upload_object_to_snic(sftp_client: SFTPClient, local_fpath: str, remote_fpat
 
 
 def download_csv_from_google_drive(file_url: str):
-
     # Download the csv files stored in Google Drive with initial information about
     # the movies and the species
 
@@ -827,7 +823,6 @@ def download_csv_from_google_drive(file_url: str):
 
 
 def download_gdrive(gdrive_id: str, folder_name: str):
-
     # Specify the url of the file to download
     url_input = "https://drive.google.com/uc?&confirm=s5vl&id=" + str(gdrive_id)
 

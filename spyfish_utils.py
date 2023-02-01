@@ -224,7 +224,6 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
 
     # Loop through each survey to find out the raw videos recorded with the GoPros
     for index, row in tqdm(df.iterrows(), total=df.shape[0]):
-
         # Select the go pro videos from the "i" survey to concatenate
         list1 = row["go_pro_files"].split(";")
         list_go_pro = [row["prefix"] + "/" + s for s in list1]
@@ -238,7 +237,6 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
 
         # Download each go pro video from the S3 bucket
         for go_pro_i in tqdm(list_go_pro, total=len(list_go_pro)):
-
             # Specify the temporary output of the go pro file
             go_pro_output = go_pro_i.split("/")[-1]
 
@@ -262,7 +260,6 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
         concat_video = row["filename"]
 
         if not os.path.exists(concat_video):
-
             logging.info("Concatenating ", concat_video)
 
             # Concatenate the videos

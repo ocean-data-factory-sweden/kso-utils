@@ -116,10 +116,8 @@ def retrieve_zoo_info(
             export_df = {}
 
         if len(export_df) > 0:
-
             # If KSO deal with duplicated subjects
             if project.Project_name == "Koster_Seafloor_Obs":
-
                 # Clear duplicated subjects
                 if info_n == "subjects":
                     export_df = clean_duplicated_subjects(export_df, project)
@@ -192,11 +190,9 @@ def populate_subjects(
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
-
         subjects = process_koster_subjects(subjects, db_path)
 
     else:
-
         # Extract metadata from uploaded subjects
         subjects_df, subjects_meta = extract_metadata(subjects)
 
@@ -205,7 +201,6 @@ def populate_subjects(
 
         # Check if the Zooniverse project is the Spyfish
         if project_name == "Spyfish_Aotearoa":
-
             subjects = process_spyfish_subjects(subjects, db_path)
 
         # If project template standardise subject info
@@ -334,7 +329,6 @@ def populate_agg_annotations(
 
     # Update agg_annotations_clip table
     if subj_type == "clip":
-
         # Set the columns in the right order
         species_df = pd.read_sql_query(
             "SELECT id as species_id, label FROM species", conn
@@ -368,7 +362,6 @@ def populate_agg_annotations(
 
     # Update agg_annotations_frame table
     if subj_type == "frame":
-
         # Select relevant columns
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
 
