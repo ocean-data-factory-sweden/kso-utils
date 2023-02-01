@@ -4,6 +4,7 @@ import cv2
 import pandas as pd
 import logging
 import imghdr
+from tqdm import tqdm
 from pathlib import Path
 
 # Logging
@@ -21,7 +22,7 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     :type root_path: str
     :param meta_filename: the name of the metadata file, which is an excel file
     :type meta_filename: str
-    :param pixels: the size of the square patch you want to extract
+    :param pixels: the size of the square patch you want to extract (usually 224)
     :type pixels: int
     :param out_path: the path to the folder where you want to save the patches
     :type out_path: str
@@ -43,29 +44,30 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     if not os.path.exists(f"{out_path}"):
         os.mkdir(f"{out_path}")
 
-    # k: index for each of the intercept specified in the SGU metadata-sheet, is included in the name of each created patch.
-    k = 0
-    for index, data in df.iterrows():
-        if data[0] in image_list:
-            img = cv2.imread(Path(path_to_folder, data[0]))
+    for row in tqdm(df.itertuples()):
+        if row.image_name in image_list:
 
-            # ToDo:
-            # add logic to find pixels to index the cropped image when you know how the metadata pos_XY works,
-            # for now always pick coord = 100,100
-            # use coord, defined below, when implementing right version
-            coord = (data.pos_X, data.pos_Y)
-            # remove below definition of coord when implementing right version
-            coord = (100, 100)
+            # Use conversion between current XY position and actual pixel values
+            coord = (row.pos_X / 15, row.pos_Y / 15)
+
+            # Discard images where pos_X is negative
+            if coord[0] < 0:
+                logging.error(f"Negative X value in {row.image_name}. Skipping...")
+                pass
+
+            # Load image
+            img = cv2.imread(Path(path_to_folder, row.image_name))
+
+            # Specify cropped patch size
             cropped_image = img[
                 int(coord[0] - pixels / 2) : int(coord[0] + pixels / 2),
                 int(coord[1] - pixels / 2) : int(coord[1] + pixels / 2),
             ]
 
-            # writes patches to a folder
+            # Write patches to a folder
             cv2.imwrite(
                 f"{out_path}/{Path(data[0]).stem}_patch_no_{k}.jpg", cropped_image
             )
-            k += 1
 
     logging.info(
         f"Patch creation completed successfully. Total patches: {len(os.listdir(out_path))}"
