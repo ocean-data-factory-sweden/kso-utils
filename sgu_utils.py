@@ -46,7 +46,6 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
 
     for row in tqdm(df.itertuples()):
         if row.image_name in image_list:
-
             # Use conversion between current XY position and actual pixel values
             coord = (row.pos_X / 15, row.pos_Y / 15)
 
