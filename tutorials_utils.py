@@ -10,7 +10,7 @@ from urllib.request import pathname2url
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import HTML, display
-from ipywidgets import interactive
+from ipywidgets import interactive, Layout
 import asyncio
 
 from panoptes_client import Project
@@ -21,11 +21,30 @@ import kso_utils.db_utils as db_utils
 import kso_utils.zooniverse_utils as zooniverse_utils
 import kso_utils.project_utils as project_utils
 import kso_utils.movie_utils as movie_utils
+import kso_utils.tutorials_utils as t_utils
 
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
+
+def process_source(source):
+    """
+    If the source is a string, write the string to a file and return the file name. If the source is a
+    list, return the list. If the source is neither, return None
+    
+    :param source: The source of the data. This can be a URL, a file, or a list of URLs or files
+    :return: the value of the source variable.
+    """
+    try:
+        source.value
+        return write_urls_to_file(source.value)
+    except AttributeError: 
+        try:
+            source.selected
+            return source.selected
+        except AttributeError:
+            return None
 
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
@@ -34,6 +53,39 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     fc.title = f"Choose location of {folder_type}"
     display(fc)
     return fc
+
+def choose_footage(project: project_utils.Project, start_path: str = ".", folder_type: str = ""):
+    if project.server == "AWS":
+        db_info_dict = t_utils.initiate_db(project)
+        available_movies_df = server_utils.retrieve_movie_info_from_server(
+            project=project, db_info_dict=db_info_dict
+        )
+        movie_dict = {name: movie_utils.get_movie_path(f_path, db_info_dict, project) for name, f_path in available_movies_df[["filename", "fpath"]].values}
+    
+        movie_widget = widgets.SelectMultiple(
+            options=[(name, movie) for name, movie in movie_dict.items()],
+            description="Select movie(s):",
+            ensure_option=False,
+            disabled=False,
+            layout=Layout(width="50%"),
+            style={"description_width": "initial"},
+        )
+
+        display(movie_widget)
+        return movie_widget
+    
+    else:
+
+        # Specify the output folder
+        fc = FileChooser(start_path)
+        fc.title = f"Choose location of {folder_type}"
+        display(fc)
+        return fc
+
+def write_urls_to_file(movie_list: list, filepath: str = "/tmp/temp.txt"):
+    with open(filepath, 'w') as fp:
+        fp.write('\n'.join(movie_list))
+    return filepath
 
 
 def get_project_info(projects_csv: str, project_name: str, info_interest: str):

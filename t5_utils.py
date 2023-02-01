@@ -21,7 +21,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-def setup_paths(output_folder: str):
+def setup_paths(output_folder: str, model_type: str):
     """
     It takes the output folder and returns the path to the data file and the path to the hyperparameters
     file
@@ -30,29 +30,36 @@ def setup_paths(output_folder: str):
     :type output_folder: str
     :return: The data_path and hyps_path
     """
-    try:
-        data_path = [
-            str(Path(output_folder, _))
-            for _ in os.listdir(output_folder)
-            if _.endswith(".yaml") and "hyp" not in _
-        ][-1]
-        hyps_path = str(Path(output_folder, "hyp.yaml"))
+    if model_type == 1:
+        try:
+            data_path = [
+                str(Path(output_folder, _))
+                for _ in os.listdir(output_folder)
+                if _.endswith(".yaml") and "hyp" not in _
+            ][-1]
+            hyps_path = str(Path(output_folder, "hyp.yaml"))
 
-        # Rewrite main path to images and labels
-        with open(data_path, "r") as yamlfile:
-            cur_yaml = yaml.safe_load(yamlfile)
-            cur_yaml["path"] = output_folder
+            # Rewrite main path to images and labels
+            with open(data_path, "r") as yamlfile:
+                cur_yaml = yaml.safe_load(yamlfile)
+                cur_yaml["path"] = output_folder
 
-        if cur_yaml:
-            with open(data_path, "w") as yamlfile:
-                yaml.safe_dump(cur_yaml, yamlfile)
+            if cur_yaml:
+                with open(data_path, "w") as yamlfile:
+                    yaml.safe_dump(cur_yaml, yamlfile)
 
-        logging.info("Success! Paths to data.yaml and hyps.yaml found.")
-    except Exception as e:
-        logging.error(
-            f"{e}, Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory."
-        )
-    return data_path, hyps_path
+            logging.info("Success! Paths to data.yaml and hyps.yaml found.")
+        except Exception as e:
+            logging.error(
+                f"{e}, Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory."
+            )
+        return data_path, hyps_path
+    elif model_type == 2:
+        logging.info("Paths do not need to be changed for this model type.")
+        return output_folder, None
+    else:
+        logging.info("This functionality is currently unavailable for the chosen model type.")
+        return None, None
 
 
 def choose_experiment_name():
@@ -72,6 +79,28 @@ def choose_experiment_name():
     )
     display(exp_name)
     return exp_name
+
+def choose_model_type():
+    """
+    It creates a dropdown box that allows you to choose a model type
+    :return: The dropdown box widget.
+    """
+    model_type = widgets.Dropdown(
+        value=1,
+        description="Required model type:",
+        options=[("Object Detection (e.g. identifying individuals in an image using rectangles)", 1),
+                 ("Image Classification (e.g. assign a class or label to an entire image)", 2),
+                 ("Instance Segmentation (e.g. fit a suitable mask on top of identified objects)", 3),
+                 ("Custom model (currently only Faster RCNN)", 4)],
+        disabled=False,
+        display="flex",
+        flex_flow="column",
+        align_items="stretch",
+        layout={"width": "max-content"},
+        style={"description_width": "initial"},
+    )
+    display(model_type)
+    return model_type
 
 
 def choose_baseline_model(download_path: str):
@@ -189,7 +218,7 @@ def choose_classes(db_path: str = "koster_lab.db"):
 
 def choose_train_params():
     """
-    It creates three sliders, one for batch size, one for epochs, and one for confidence threshold
+    It creates two sliders, one for batch size, one for epochs
     :return: the values of the sliders.
     """
     v = widgets.FloatLogSlider(
@@ -216,6 +245,16 @@ def choose_train_params():
         readout_format="d",
     )
 
+    box = widgets.HBox([v, z])
+    display(box)
+    return v, z
+
+def choose_eval_params():
+    """
+    It creates one slider for confidence threshold
+    :return: the value of the slider.
+    """
+
     z1 = widgets.FloatSlider(
         value=0.5,
         min=0.0,
@@ -233,9 +272,8 @@ def choose_train_params():
         style={"description_width": "initial"},
     )
 
-    box = widgets.HBox([v, z, z1])
-    display(box)
-    return v, z, z1
+    display(z1)
+    return z1
 
 
 def choose_test_prop():

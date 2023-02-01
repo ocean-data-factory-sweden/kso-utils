@@ -462,7 +462,7 @@ def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str
         movie_key = f_path.replace("%20", " ").split("/", 3)[3]
         movie_url = server_dict["client"].generate_presigned_url(
             "get_object",
-            Params={"Bucket": server_dict["bucket"], "Key": movie_key},
+            Params={"Bucket": project.bucket, "Key": movie_key},
             ExpiresIn=86400,
         )
         return movie_url

@@ -9,6 +9,8 @@ import logging
 import wandb
 import torch
 import base64
+import ffmpeg
+from itertools import chain
 from ast import literal_eval
 from pathlib import Path
 from natsort import index_natsorted
@@ -35,6 +37,12 @@ def set_config(conf_thres: float, model: str, eval_dir: str):
     config.model_name = model
     config.evaluation_directory = eval_dir
     return config
+
+def get_team_name(project_name: str):
+    if project_name == "Spyfish_Aotearoa":
+        return "wildlife-ai"
+    else:
+        "koster"
 
 
 def add_data_wandb(path: str, name: str, run):
@@ -220,10 +228,7 @@ def track_objects(
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,
-            strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
-            config_strongsort=Path(
-                main_tracker_folder, "strong_sort/configs/strong_sort.yaml"
-            ),
+            reid_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
             save_vid=True,
@@ -235,10 +240,7 @@ def track_objects(
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,
-            strong_sort_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
-            config_strongsort=Path(
-                main_tracker_folder, "strong_sort/configs/strong_sort.yaml"
-            ),
+            reid_weights=Path(tracker_folder, "osnet_x0_25_msmt17.pt"),
             imgsz=img_size,
             project=Path(f"{tracker_folder}/runs/track/"),
             device=torch_utils.select_device(""),
@@ -550,10 +552,15 @@ def get_model(
     :type download_path: str
     :return: The path to the downloaded model checkpoint.
     """
+    if team_name == "wildlife-ai":
+        logging.info("Please note: Using models from adi-ohad-heb-uni account.")
+        full_path = "adi-ohad-heb-uni/project-wildlife-ai"
+    else:
+        full_path = f"{team_name}/{project_name.lower()}"
     api = wandb.Api()
     try:
         api.artifact_type(
-            type_name="model", project=f"{team_name}/{project_name.lower()}"
+            type_name="model", project=full_path
         ).collections()
     except Exception as e:
         logging.error(f"No model collections found. No artifacts have been logged. {e}")
@@ -561,7 +568,7 @@ def get_model(
     collections = [
         coll
         for coll in api.artifact_type(
-            type_name="model", project=f"{team_name}/{project_name.lower()}"
+            type_name="model", project=full_path
         ).collections()
     ]
     model = [i for i in collections if i.name == model_name]
@@ -570,7 +577,7 @@ def get_model(
     else:
         logging.error("No model found")
     artifact = api.artifact(
-        f"{team_name}/{project_name.lower()}/" + model.name + ":latest"
+        full_path + "/" + model.name + ":latest"
     )
     logging.info("Downloading model checkpoint...")
     artifact_dir = artifact.download(root=download_path)
@@ -578,7 +585,7 @@ def get_model(
     return os.path.realpath(artifact_dir)
 
 
-# Function to compare original to modified frames
+# Function to choose a model to evaluate
 def choose_model(project_name: str, team_name: str = "koster"):
     """
     It takes a project name and returns a dropdown widget that displays the metrics of the model
@@ -591,31 +598,24 @@ def choose_model(project_name: str, team_name: str = "koster"):
     model_info = {}
     api = wandb.Api()
     # weird error fix (initialize api another time)
-    api.runs(path=f"{team_name}/{project_name.lower()}")
-    if (
-        len(
-            api.runs(path=f"{team_name}/{project_name.lower()}").last_response[
-                "project"
-            ]["runs"]["edges"]
-        )
-        == 0
-    ):
-        logging.error("No models currently available for the project.")
-        model_dict = {}
+    
+    project_name = project_name.replace(" ", "_")
+    if team_name == "wildlife-ai":
+        logging.info("Please note: Using models from adi-ohad-heb-uni account.")
+        full_path = "adi-ohad-heb-uni/project-wildlife-ai"
+        api.runs(path=full_path).objects
     else:
-        for edge, obj in zip(
-            api.runs(path=f"{team_name}/{project_name.lower()}").last_response[
-                "project"
-            ]["runs"]["edges"],
-            api.runs(path=f"{team_name}/{project_name.lower()}").objects,
-        ):
-            if project_name == "model-registry":
-                model_dict[edge["node"]["displayName"]] = edge["node"]["displayName"]
-            else:
-                model_dict[edge["node"]["displayName"]] = "run_" + obj.id + "_model"
-            model_info["run_" + obj.id + "_model"] = literal_eval(
-                edge["node"]["summaryMetrics"]
-            )
+        full_path = f"{team_name}/{project_name.lower()}"
+
+
+    runs = api.runs(full_path) 
+
+    for run in runs:
+        model_artifacts = [artifact for artifact in chain(run.logged_artifacts(), run.used_artifacts()) if artifact.type == 'model']
+        if len(model_artifacts) > 0:
+            model_dict[run.name] = model_artifacts[0].name.split(":")[0]
+            model_info[model_artifacts[0].name.split(":")[0]] = run.summary
+
     # Add "no movie" option to prevent conflicts
     # models = np.append(list(model_dict.keys()),"No model")
 
@@ -631,20 +631,23 @@ def choose_model(project_name: str, team_name: str = "koster"):
     main_out = widgets.Output()
     display(model_widget, main_out)
 
-    # Display the original and modified clips
+    # Display model metrics
     def on_change(change):
         with main_out:
             clear_output()
             if change["new"] == "No file":
-                print("Choose another file")
+                logging.info("Choose another file")
             else:
-                print(
-                    {
-                        k: v
-                        for k, v in model_info[change["new"]].items()
-                        if "metrics" in k
-                    }
-                )
+                if project_name == "model-registry":
+                    logging.info("No metrics available")
+                else:
+                    logging.info(
+                        {
+                            k: v
+                            for k, v in model_info[change["new"]].items()
+                            if "metrics" in k
+                        }
+                    )
 
     model_widget.observe(on_change, names="value")
 
@@ -675,18 +678,19 @@ def choose_files(path: str):
 
     main_out = widgets.Output()
     display(clip_path_widget, main_out)
-
+    
     # Display the original and modified clips
     def on_change(change):
         with main_out:
             clear_output()
             if change["new"] == "No file":
-                print("Choose another file")
+                logging.info("Choose another file")
             else:
                 a = view_file(change["new"])
                 display(a)
-
+    
     clip_path_widget.observe(on_change, names="value")
+    return clip_path_widget
 
 
 # Display the frames using html
@@ -705,22 +709,24 @@ def view_file(path: str):
     elif extension.lower() in [".mp4", ".mov", ".avi"]:
         if os.path.exists("linked_content"):
             shutil.rmtree("linked_content")
-        else:
-            try:
-                os.mkdir("linked_content")
-                os.symlink(path, "linked_content/" + os.path.basename(path))
-                widget = HTML(
-                    f"""
-                            <video width=800 height=400 alt="test" controls>
-                                <source src="linked_content/{os.path.basename(path)}" type="video/{extension.lower().replace(".", "")}">
-                            </video>
-                        """
-                )
-            except:
-                logging.error(
-                    "Cannot write to local files, viewing not currently possible."
-                )
-                widget = widgets.Image()
+        try:
+            os.mkdir("linked_content")
+            logging.info("Opening viewer...")
+            stream = ffmpeg.input(path)
+            stream = ffmpeg.output(stream, f"linked_content/{os.path.basename(path)}")
+            ffmpeg.run(stream)
+            widget = HTML(
+                f"""
+                        <video width=800 height=400 alt="test" controls>
+                            <source src="linked_content/{os.path.basename(path)}" type="video/{extension.lower().replace(".", "")}">
+                        </video>
+                    """
+            )
+        except:
+            logging.error(
+                "Cannot write to local files, viewing not currently possible."
+            )
+            widget = widgets.Image()
 
     else:
         logging.error(
