@@ -1,4 +1,5 @@
 # base imports
+import sys
 import os
 import requests
 import random
@@ -15,6 +16,7 @@ from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 from kso_utils.spyfish_utils import process_clips_spyfish
 import kso_utils.tutorials_utils as tutorials_utils
 import kso_utils.project_utils as project_utils
+import kso_utils.zooniverse_utils as zoo_utils
 
 # widget imports
 from IPython.display import HTML, display, clear_output
@@ -23,6 +25,11 @@ from itables import show
 from PIL import Image as PILImage, ImageDraw
 import imagesize
 from jupyter_bbox_widget import BBoxWidget
+
+
+# util imports
+from kso_utils.db_utils import create_connection
+from kso_utils.zooniverse_utils import populate_agg_annotations
 
 # Logging
 logging.basicConfig()
@@ -370,7 +377,9 @@ def get_classifications(
 
         classes_df = filtered_class_df
 
-    logging.info("Zooniverse classifications have been retrieved")
+    logging.info(
+        f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
+    )
 
     return classes_df
 
@@ -474,14 +483,7 @@ def aggregrate_classifications(
             columns={"frame_number": "start_frame"}
         )
         agg_labels_df_empty = agg_labels_df_empty[
-            [
-                "label",
-                "subject_ids",
-                "x",
-                "y",
-                "w",
-                "h",
-            ]
+            ["label", "subject_ids", "x", "y", "w", "h"]
         ]
 
         # Temporary exclude frames aggregrated as empty
@@ -578,7 +580,14 @@ def aggregrate_classifications(
         agg_class_df = pd.merge(
             agg_class_df,
             raw_class_df[
-                ["subject_ids", "https_location", "subject_type"]
+                [
+                    "subject_ids",
+                    "https_location",
+                    "subject_type",
+                    "workflow_id",
+                    "workflow_name",
+                    "workflow_version",
+                ]
             ].drop_duplicates(),
             how="left",
             on="subject_ids",
@@ -599,7 +608,16 @@ def aggregrate_classifications(
 
         # Extract the median of the second where the animal/object is and number of animals
         agg_class_df = agg_class_df.groupby(
-            ["subject_ids", "https_location", "subject_type", "label"], as_index=False
+            [
+                "subject_ids",
+                "https_location",
+                "subject_type",
+                "label",
+                "workflow_id",
+                "workflow_name",
+                "workflow_version",
+            ],
+            as_index=False,
         )
         agg_class_df = pd.DataFrame(
             agg_class_df[["how_many", "first_seen"]].median().round(0)
@@ -654,6 +672,12 @@ def process_clips(df: pd.DataFrame, project: project_utils.Project):
                 annotations, row["classification_id"], rows_list
             )
 
+        # Process clips as the default method
+        else:
+            rows_list = zoo_utils.process_clips_template(
+                annotations, row["classification_id"], rows_list
+            )
+
     # Create a data frame with annotations as rows
     annot_df = pd.DataFrame(
         rows_list, columns=["classification_id", "label", "first_seen", "how_many"]
@@ -681,6 +705,9 @@ def process_clips(df: pd.DataFrame, project: project_utils.Project):
             "https_location",
             "subject_type",
             "subject_ids",
+            "workflow_id",
+            "workflow_name",
+            "workflow_version",
         ]
     ]
 
@@ -782,6 +809,7 @@ def process_frames(df: pd.DataFrame, project_name: str):
             "frame_number",
             "user_name",
             "movie_id",
+            "workflow_version",
         ]
     ]
 
@@ -1214,3 +1242,276 @@ def get_annotations_viewer(data_path: str, species_list: list):
     w_bbox.on_submit(on_submit)
 
     return w_container
+
+
+def format_to_gbif_occurence(
+    df: pd.DataFrame,
+    classified_by: str,
+    subject_type: str,
+    db_info_dict: dict,
+    project: project_utils.Project,
+    zoo_info_dict: dict,
+):
+    """
+    > This function takes a df of biological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
+    :param df: the dataframe containing the aggregated classifications
+    :param classified_by: the entity who classified the object of interest, either "citizen_scientists", "biologists" or "ml_algorithms"
+    :param subject_type: str,
+    :param db_info_dict: a dictionary containing the path to the database and the database name
+    :param project: the project object
+    :param zoo_info_dict: dictionary with the workflow/subjects/classifications retrieved from Zooniverse project
+    :return: a df of species occurrences to publish in GBIF/OBIS.
+    """
+
+    # If classifications have been created by citizen scientists
+    if classified_by == "citizen_scientists":
+        #### Retrieve subject information #####
+        # Create connection to db
+        conn = create_connection(db_info_dict["db_path"])
+
+        # Add annotations to db
+        populate_agg_annotations(df, subject_type, project)
+
+        # Retrieve list of subjects
+        subjects_df = pd.read_sql_query(
+            f"SELECT id, clip_start_time, frame_number, movie_id FROM subjects",
+            conn,
+        )
+
+        # Ensure subject_ids format is int
+        df["subject_ids"] = df["subject_ids"].astype(int)
+        subjects_df["id"] = subjects_df["id"].astype(int)
+
+        # Combine the aggregated clips and subjects dataframes
+        comb_df = pd.merge(
+            df, subjects_df, how="left", left_on="subject_ids", right_on="id"
+        ).drop(columns=["id"])
+
+        #### Retrieve movie and site information #####
+        # Query info about the movie of interest
+        movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
+
+        # Add survey information as part of the movie info if spyfish
+        if "local_surveys_csv" in db_info_dict.keys():
+            # Read info about the movies
+            movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
+
+            # Select only movie ids and survey ids
+            movies_csv = movies_csv[["movie_id", "SurveyID"]]
+
+            # Combine the movie_id and survey information
+            movies_df = pd.merge(
+                movies_df, movies_csv, how="left", left_on="id", right_on="movie_id"
+            ).drop(columns=["movie_id"])
+
+            # Read info about the surveys
+            surveys_df = pd.read_csv(
+                db_info_dict["local_surveys_csv"], parse_dates=["SurveyStartDate"]
+            )
+
+            # Combine the movie_id and survey information
+            movies_df = pd.merge(
+                movies_df,
+                surveys_df,
+                how="left",
+                left_on="SurveyID",
+                right_on="SurveyID",
+            )
+
+        # Combine the aggregated clips and subjects dataframes
+        comb_df = pd.merge(
+            comb_df, movies_df, how="left", left_on="movie_id", right_on="id"
+        ).drop(columns=["id"])
+
+        # Query info about the sites of interest
+        sites_df = pd.read_sql_query("SELECT * FROM sites", conn)
+
+        # Combine the aggregated classifications and site information
+        comb_df = pd.merge(
+            comb_df, sites_df, how="left", left_on="site_id", right_on="id"
+        ).drop(columns=["id"])
+
+        #### Retrieve species/labels information #####
+        # Create a df with unique workflow ids and versions of interest
+        work_df = (
+            df[["workflow_id", "workflow_version"]].drop_duplicates().astype("int")
+        )
+
+        # Correct for some weird zooniverse version behaviour
+        work_df["workflow_version"] = work_df["workflow_version"] - 1
+
+        # Store df of all the common names and the labels into a list of df
+        commonName_labels_list = [
+            get_workflow_labels(zoo_info_dict["workflows"], x, y)
+            for x, y in zip(work_df["workflow_id"], work_df["workflow_version"])
+        ]
+
+        # Concatenate the dfs and select only unique common names and the labels
+        commonName_labels_df = pd.concat(commonName_labels_list).drop_duplicates()
+
+        # Rename the columns as they are the other way aorund (potentially only in Spyfish?)
+        vernacularName_labels_df = commonName_labels_df.rename(
+            columns={
+                "commonName": "label",
+                "label": "vernacularName",
+            }
+        )
+
+        # Combine the labels with the commonNames of the classifications
+        comb_df = pd.merge(comb_df, vernacularName_labels_df, how="left", on="label")
+
+        # Query info about the species of interest
+        species_df = pd.read_sql_query("SELECT * FROM species", conn)
+
+        # Rename the column to match Darwin core std
+        species_df = species_df.rename(
+            columns={
+                "label": "vernacularName",
+            }
+        )
+        # Combine the aggregated classifications and species information
+        comb_df = pd.merge(comb_df, species_df, how="left", on="vernacularName")
+
+        #### Tidy up classifications information #####
+        if subject_type == "clip":
+            # Identify the second of the original movie when the species first appears
+            comb_df["second_in_movie"] = (
+                comb_df["clip_start_time"] + comb_df["first_seen"]
+            )
+
+        if subject_type == "frame":
+            # Identify the second of the original movie when the species appears
+            comb_df["second_in_movie"] = comb_df["frame_number"] * comb_df["fps"]
+
+        # Drop the clips classified as nothing here
+        comb_df = comb_df[comb_df["label"] != "NOTHINGHERE"]
+        comb_df = comb_df[comb_df["label"] != "OTHER"]
+
+        # Select the max count of each species on each movie
+        comb_df = comb_df.sort_values("how_many").drop_duplicates(
+            ["movie_id", "vernacularName"], keep="last"
+        )
+
+        # Rename columns to match Darwin Data Core Standards
+        comb_df = comb_df.rename(
+            columns={
+                "created_on": "eventDate",
+                "how_many": "individualCount",
+            }
+        )
+
+        # Create relevant columns for GBIF
+        comb_df["occurrenceID"] = (
+            project.Project_name
+            + "_"
+            + comb_df["siteName"]
+            + "_"
+            + comb_df["eventDate"].astype(str)
+            + "_"
+            + comb_df["second_in_movie"].astype(str)
+            + "_"
+            + comb_df["vernacularName"].astype(str)
+        )
+
+        comb_df["basisOfRecord"] = "MachineObservation"
+
+        # If coord uncertainity doesn't exist set to 30 metres
+        comb_df["coordinateUncertaintyInMeters"] = comb_df.get(
+            "coordinateUncertaintyInMeters", 30
+        )
+
+        # Select columns relevant for GBIF occurrences
+        comb_df = comb_df[
+            [
+                "occurrenceID",
+                "basisOfRecord",
+                "vernacularName",
+                "scientificName",
+                "eventDate",
+                "countryCode",
+                "taxonRank",
+                "kingdom",
+                "decimalLatitude",
+                "decimalLongitude",
+                "geodeticDatum",
+                "coordinateUncertaintyInMeters",
+                "individualCount",
+            ]
+        ]
+
+        return comb_df
+
+    # If classifications have been created by biologists
+    if classified_by == "biologists":
+        logging.info(f"This sections is currently under development")
+
+    # If classifications have been created by ml algorithms
+    if classified_by == "ml_algorithms":
+        logging.info(f"This sections is currently under development")
+    else:
+        raise ValueError(
+            f"Specify who classified the species of interest (citizen_scientists, biologists or ml_algorithms)"
+        )
+
+
+def get_workflow_labels(
+    workflow_df: pd.DataFrame, workflow_id: int, workflow_version: int
+):
+    """
+    > This function takes a df of workflows of interest and retrieves the labels and common names of the choices cit scientists have in a survey task in Zooniverse.
+    the function is a modified version of the 'get_workflow_info' function by @lcjohnso
+    https://github.com/zooniverse/Data-digging/blob/6e9dc5db6f6125316616c4b04ae5fc4223826a25/scripts_GeneralPython/get_workflow_info.pybiological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
+    :param workflow_df: df of the workflows of the Zooniverse project of interest,
+    :param workflow_id: integer of the workflow id of interest,
+    :param workflow_version: integer of the workflow version of interest.
+    :return: a df with the common name and label of the annotations for the workflow.
+    """
+    # initialize the output
+    workflow_info = {}
+
+    # parse the tasks column as a json so we can work with it (it just loads as a string)
+    workflow_df["tasks_json"] = [json.loads(q) for q in workflow_df["tasks"]]
+    workflow_df["strings_json"] = [json.loads(q) for q in workflow_df["strings"]]
+
+    # identify the row of the workflow dataframe we want to extract
+    is_theworkflow = (workflow_df["workflow_id"] == workflow_id) & (
+        workflow_df["version"] == workflow_version
+    )
+
+    # extract it
+    theworkflow = workflow_df[is_theworkflow]
+
+    # pandas is a little weird about accessing stuff sometimes
+    # we should only have 1 row in theworkflow but the row index will be retained
+    # from the full workflow_df, so we need to figure out what it is
+    i_wf = theworkflow.index[0]
+
+    # extract the tasks as a json
+    tasks = theworkflow["tasks_json"][i_wf]
+    strings = theworkflow["strings_json"][i_wf]
+
+    workflow_info = tasks.copy()
+
+    tasknames = workflow_info.keys()
+    workflow_info["tasknames"] = tasknames
+
+    # now that we've extracted the actual task names, add the first task
+    workflow_info["first_task"] = theworkflow["first_task"].values[0]
+
+    # now join workflow structure to workflow label content for each task
+
+    for task in tasknames:
+        # Create an empty dictionary to host the dfs of interest
+        label_common_name_dict = {"commonName": [], "label": []}
+
+        # Create an empty dictionary to host the dfs of interest
+        label_common_name_dict = {"commonName": [], "label": []}
+        for i_c, choice in enumerate(workflow_info[task]["choices"].keys()):
+            c_label = strings[workflow_info[task]["choices"][choice]["label"]]
+            label_common_name_dict["commonName"].append(choice)
+            label_common_name_dict["label"].append(c_label)
+
+        if task == "T0":
+            break
+
+    return pd.DataFrame.from_dict(label_common_name_dict)
