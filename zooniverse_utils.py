@@ -393,3 +393,55 @@ def populate_agg_annotations(
             [(None,) + tuple(i) for i in annotations_df.values],
             7,
         )
+
+
+def process_clips_template(annotations, row_class_id, rows_list: list):
+    """
+    For each annotation, if the task is T0, then for each species annotated, flatten the relevant
+    answers and save the species of choice, class and subject id.
+
+    :param annotations: the list of annotations for a given subject
+    :param row_class_id: the classification id
+    :param rows_list: a list of dictionaries, each dictionary is a row in the output dataframe
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
+    first seen time and the number of individuals.
+    """
+
+    for ann_i in annotations:
+        if ann_i["task"] == "T0":
+            # Select each species annotated and flatten the relevant answers
+            for value_i in ann_i["value"]:
+                choice_i = {}
+                # If choice = 'nothing here', set follow-up answers to blank
+                if value_i["choice"] == "NOTHINGHERE":
+                    f_time = ""
+                    inds = ""
+                # If choice = species, flatten follow-up answers
+                else:
+                    answers = value_i["answers"]
+                    for k in answers.keys():
+                        if "EARLIESTPOINT" in k:
+                            f_time = answers[k].replace("S", "")
+                        if "HOWMANY" in k:
+                            inds = answers[k]
+                            # Deal with +20 fish options
+                            if inds == "2030":
+                                inds = "25"
+                            if inds == "3040":
+                                inds = "35"
+                        elif "EARLIESTPOINT" not in k and "HOWMANY" not in k:
+                            f_time, inds = None, None
+
+                # Save the species of choice, class and subject id
+                choice_i.update(
+                    {
+                        "classification_id": row_class_id,
+                        "label": value_i["choice"],
+                        "first_seen": f_time,
+                        "how_many": inds,
+                    }
+                )
+
+                rows_list.append(choice_i)
+
+    return rows_list
