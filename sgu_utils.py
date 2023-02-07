@@ -6,10 +6,18 @@ import logging
 import imghdr
 from tqdm import tqdm
 from pathlib import Path
+import splitfolders
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
+
+
+def create_classification_dataset(data_path: str, out_path: str, test_size: float):
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
+    splitfolders.ratio(data_path, output=out_path, seed=1337, ratio=(1-test_size, 0, test_size))
+    logging.info(f"Training and test datasets saved at {out_path}") 
 
 
 def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
@@ -44,8 +52,11 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     if not os.path.exists(f"{out_path}"):
         os.mkdir(f"{out_path}")
 
+
+    k = 0
     for row in tqdm(df.itertuples()):
         if row.image_name in image_list:
+
             # Use conversion between current XY position and actual pixel values
             coord = (row.pos_X / 15, row.pos_Y / 15)
 
@@ -63,13 +74,19 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
                 int(coord[1] - pixels / 2) : int(coord[1] + pixels / 2),
             ]
 
+            # Get label
+            label = row.sub_type
+            if not os.path.exists(Path(out_path, label)):
+                os.mkdir(Path(out_path, label))
+
             # Write patches to a folder
+            k += 1
             cv2.imwrite(
-                f"{out_path}/{Path(data[0]).stem}_patch_no_{k}.jpg", cropped_image
+                f"{Path(out_path, label)}/{Path(data[0]).stem}_patch_{k}.jpg", cropped_image
             )
 
     logging.info(
-        f"Patch creation completed successfully. Total patches: {len(os.listdir(out_path))}"
+        f"Patch creation completed successfully. Total patches: {len(Path(out_path).iterdir())}"
     )
 
 
