@@ -774,6 +774,10 @@ def extract_clips(
                 str(clip_length),
                 "-i",
                 movie_path,
+                "-threads",
+                "4",
+                "-preset",
+                "ultrafast",
                 "-an",  # removes the audio
                 "-c:a",
                 "copy",
