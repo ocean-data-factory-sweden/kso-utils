@@ -16,8 +16,10 @@ logging.getLogger().setLevel(logging.INFO)
 def create_classification_dataset(data_path: str, out_path: str, test_size: float):
     if not os.path.exists(out_path):
         os.mkdir(out_path)
-    splitfolders.ratio(data_path, output=out_path, seed=1337, ratio=(1-test_size, 0, test_size))
-    logging.info(f"Training and test datasets saved at {out_path}") 
+    splitfolders.ratio(
+        data_path, output=out_path, seed=1337, ratio=(1 - test_size, 0, test_size)
+    )
+    logging.info(f"Training and test datasets saved at {out_path}")
 
 
 def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
@@ -52,11 +54,9 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     if not os.path.exists(f"{out_path}"):
         os.mkdir(f"{out_path}")
 
-
     k = 0
     for row in tqdm(df.itertuples()):
         if row.image_name in image_list:
-
             # Use conversion between current XY position and actual pixel values
             coord = (row.pos_X / 15, row.pos_Y / 15)
 
@@ -82,7 +82,8 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
             # Write patches to a folder
             k += 1
             cv2.imwrite(
-                f"{Path(out_path, label)}/{Path(data[0]).stem}_patch_{k}.jpg", cropped_image
+                f"{Path(out_path, label)}/{Path(data[0]).stem}_patch_{k}.jpg",
+                cropped_image,
             )
 
     logging.info(
