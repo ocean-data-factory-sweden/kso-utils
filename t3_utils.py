@@ -746,6 +746,8 @@ def extract_clips(
                 str(clip_length),
                 "-i",
                 movie_path,
+                "-threads",
+                "4",
                 "-an",  # removes the audio
                 "-c:a",
                 "copy",
@@ -774,6 +776,8 @@ def extract_clips(
                 str(clip_length),
                 "-i",
                 movie_path,
+                "-threads",
+                "4",
                 "-an",  # removes the audio
                 "-c:a",
                 "copy",

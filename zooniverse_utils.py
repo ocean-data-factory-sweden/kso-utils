@@ -203,8 +203,35 @@ def populate_subjects(
         if project_name == "Spyfish_Aotearoa":
             subjects = process_spyfish_subjects(subjects, db_path)
 
-        # If project template standardise subject info
-        if project_name == "Template project":
+        # If project is not KSO or Spyfish standardise subject info
+        else:
+            # Create columns to match schema if they don't exist
+            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
+            subjects["frame_number"] = subjects.get("frame_number", np.nan)
+
+            # Select only relevant metadata columns
+            subjects = subjects[
+                [
+                    "subject_id",
+                    "project_id",
+                    "workflow_id",
+                    "subject_set_id",
+                    "locations",
+                    "movie_id",
+                    "frame_number",
+                    "movie_filepath",
+                    "frame_exp_sp_id",
+                    "upl_seconds",
+                    "Subject_type",
+                    "#VideoFilename",
+                    "#clip_length",
+                    "classifications_count",
+                    "retired_at",
+                    "retirement_reason",
+                    "created_at",
+                ]
+            ]
+
             # Rename columns to match the db format
             subjects = subjects.rename(
                 columns={
@@ -215,9 +242,13 @@ def populate_subjects(
                 }
             )
 
-            # Create columns to match schema if they don't exist
-            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
-            subjects["frame_number"] = subjects.get("frame_number", np.nan)
+            # Remove clip subjects with no clip_start_time info (from different projects)
+            subjects = subjects[
+                ~(
+                    (subjects["subject_type"] == "clip")
+                    & (subjects["clip_start_time"].isna())
+                )
+            ]
 
             # Calculate the clip_end_time
             subjects["clip_end_time"] = (
