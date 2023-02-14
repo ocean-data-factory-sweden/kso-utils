@@ -115,10 +115,16 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
             path = None
         return path
     
-    
     # df: dataframe based on SGU metadata-sheet
     df = pd.read_excel(Path(path_to_folder, meta_filename), engine='openpyxl')
     df["fpath"] = path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
+    
+    # Assumption: Si not found in metadata, and UkSu refers to unknown substrate
+    df = df[~df["sub_type"].isin(["UkSu", "Si"])]
+    
+    # Assumption: St, LaSt combined, Bo and LaBo combined
+    df['sub_type'] = df['sub_type'].replace(['LaSt'], 'St')
+    df['sub_type'] = df['sub_type'].replace(['LaBo'], 'Bo')
     
     df = df.groupby(['fpath'], 
                   as_index=False)['pos_X','pos_Y','sub_type','point'].agg(lambda x: list(x))

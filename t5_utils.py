@@ -139,6 +139,7 @@ def choose_baseline_model(download_path: str):
 
     model_widget = widgets.Dropdown(
         options=[(name, model) for name, model in model_dict.items()],
+        value=None,
         description="Select model:",
         ensure_option=False,
         disabled=False,
@@ -156,7 +157,7 @@ def choose_baseline_model(download_path: str):
                 for af in model_dict[change["new"].name].versions():
                     artifact_dir = af.download(download_path)
                     artifact_file = [
-                        str(Path(artifact_dir, "yolov5m.pt"))
+                        str(Path(artifact_dir, i))
                         for i in os.listdir(artifact_dir)
                         if i.endswith(".pt")
                     ][-1]
