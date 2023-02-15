@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 import splitfolders
 import fnmatch
+
 tqdm.pandas()
 
 # Logging
@@ -15,11 +16,15 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-def create_classification_dataset(data_path: str, out_path: str, test_size: float, seed: int = 1337):
+def create_classification_dataset(
+    data_path: str, out_path: str, test_size: float, seed: int = 1337
+):
     if not os.path.exists(out_path):
         os.mkdir(out_path)
-    splitfolders.ratio(data_path, output=out_path, seed=seed, ratio=(1-test_size, 0, test_size))
-    logging.info(f"Training and test datasets saved at {out_path}") 
+    splitfolders.ratio(
+        data_path, output=out_path, seed=seed, ratio=(1 - test_size, 0, test_size)
+    )
+    logging.info(f"Training and test datasets saved at {out_path}")
 
 
 def get_patch(row, out_path: str, pixels: int = 224):
@@ -28,36 +33,38 @@ def get_patch(row, out_path: str, pixels: int = 224):
     except:
         logging.info(f"No such image, {row.fpath}")
         return
-    
+
     for ix, (pos_X, pos_Y) in enumerate(zip(row.pos_X, row.pos_Y)):
-        
+
         # Use conversion between current XY position and actual pixel values
         coord = (pos_X / 15, pos_Y / 15)
 
         # Discard images where pos_X is negative
         if coord[0] < 0:
-            logging.error(f"Negative X value in {os.path.basename(row.fpath)}. Skipping...")
+            logging.error(
+                f"Negative X value in {os.path.basename(row.fpath)}. Skipping..."
+            )
             return
 
         # Discard images where label is NA
         if not isinstance(row.sub_type[ix], str):
-            logging.error(f"Invalid label in {os.path.basename(row.fpath)}. Skipping...")
+            logging.error(
+                f"Invalid label in {os.path.basename(row.fpath)}. Skipping..."
+            )
             return
 
         cropped_ys, cropped_ye = int(coord[1] - pixels / 2), int(coord[1] + pixels / 2)
         cropped_xs, cropped_xe = int(coord[0] - pixels / 2), int(coord[0] + pixels / 2)
 
         if cropped_ys < 0:
-                y_diff = -1 * cropped_ys
-                cropped_ys += y_diff
-                cropped_ye += y_diff
+            y_diff = -1 * cropped_ys
+            cropped_ys += y_diff
+            cropped_ye += y_diff
 
         if cropped_xs < 0:
-                x_diff = -1 * cropped_xs
-                cropped_xs += x_diff
-                cropped_xe += x_diff
-
-
+            x_diff = -1 * cropped_xs
+            cropped_xs += x_diff
+            cropped_xe += x_diff
 
         # Specify cropped patch size
         cropped_image = img[
@@ -73,7 +80,7 @@ def get_patch(row, out_path: str, pixels: int = 224):
         # Write patches to a folder
         cv2.imwrite(
             f"{Path(out_path, label)}/{Path(row.fpath).stem}_patch_{row.point[ix]}.jpg",
-            cropped_image
+            cropped_image,
         )
 
 
@@ -95,46 +102,48 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     """
 
     path_to_folder = Path(root_path)
-    
+
     # get list of image files
-    orig_names = [f
+    orig_names = [
+        f
         for f in os.listdir(path_to_folder)
-        if imghdr.what(Path(path_to_folder, f)) is not None]
-    
-    image_list = [
-        f.lower()
-        for f in orig_names
+        if imghdr.what(Path(path_to_folder, f)) is not None
     ]
-    
-    img_2_orig = {k: v for k,v in zip(image_list, orig_names)}
-    
+
+    image_list = [f.lower() for f in orig_names]
+
+    img_2_orig = {k: v for k, v in zip(image_list, orig_names)}
+
     def find_image(path):
         try:
             path = img_2_orig[path]
         except KeyError:
             path = None
         return path
-    
+
     # df: dataframe based on SGU metadata-sheet
-    df = pd.read_excel(Path(path_to_folder, meta_filename), engine='openpyxl')
-    df["fpath"] = path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
-    
+    df = pd.read_excel(Path(path_to_folder, meta_filename), engine="openpyxl")
+    df["fpath"] = (
+        path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
+    )
+
     # Assumption: Si not found in metadata, and UkSu refers to unknown substrate
     df = df[~df["sub_type"].isin(["UkSu", "Si"])]
-    
+
     # Assumption: St, LaSt combined, Bo and LaBo combined
-    df['sub_type'] = df['sub_type'].replace(['LaSt'], 'St')
-    df['sub_type'] = df['sub_type'].replace(['LaBo'], 'Bo')
-    
-    df = df.groupby(['fpath'], 
-                  as_index=False)['pos_X','pos_Y','sub_type','point'].agg(lambda x: list(x))
+    df["sub_type"] = df["sub_type"].replace(["LaSt"], "St")
+    df["sub_type"] = df["sub_type"].replace(["LaBo"], "Bo")
+
+    df = df.groupby(["fpath"], as_index=False)[
+        "pos_X", "pos_Y", "sub_type", "point"
+    ].agg(lambda x: list(x))
 
     # create patch folder
     if not os.path.exists(f"{out_path}"):
         Path(f"{out_path}").mkdir(parents=True, exist_ok=True)
-        
+
     df.progress_apply(lambda x: get_patch(x, out_path, pixels), axis=1)
-    
+
     logging.info(
         f"Patch creation completed successfully. Total patches: {len(fnmatch.filter(os.listdir(out_path), '*.jpg'))}"
     )
