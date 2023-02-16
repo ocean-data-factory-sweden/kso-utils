@@ -145,7 +145,6 @@ def get_species_frames(
 
     server = project.server
 
-
     if server == "SNIC":
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
@@ -700,7 +699,9 @@ def modify_frames(
                     crf_prompt = str(max([int(i) for i in crf_value]))
                     full_prompt += f".output('{row['modif_frame_path']}', q={crf_prompt}, pix_fmt='yuv420p')"
                 else:
-                    full_prompt += f".output('{row['modif_frame_path']}', q=20, pix_fmt='yuv420p')"
+                    full_prompt += (
+                        f".output('{row['modif_frame_path']}', q=20, pix_fmt='yuv420p')"
+                    )
                 # Run the modification
                 try:
                     print(full_prompt)
