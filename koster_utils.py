@@ -42,7 +42,6 @@ def reswedify(string: str):
 
 # Function to extract metadata from subjects
 def extract_metadata(subj_df: pd.DataFrame):
-
     # Reset index of df
     subj_df = subj_df.reset_index(drop=True).reset_index()
 
@@ -62,7 +61,6 @@ def extract_metadata(subj_df: pd.DataFrame):
 
 # Function to process subjects uploaded automatically
 def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
-
     # Select automatically uploaded frames
     auto_subjects_df = subjects_df[(subjects_df["created_at"] > auto_date)]
 
@@ -77,7 +75,6 @@ def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
 
 # Function to process subjects uploaded manually
 def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str):
-
     # Select clips uploaded manually
     man_clips_df = (
         subjects_df[
@@ -105,7 +102,6 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
 
 # Function to get the movie_ids based on movie filenames
 def get_movies_id(df: pd.DataFrame, db_path: str):
-
     # Create connection to db
     conn = db_utils.create_connection(db_path)
 
@@ -136,7 +132,6 @@ def get_movies_id(df: pd.DataFrame, db_path: str):
 
 # Function to process the metadata of clips that were uploaded manually
 def process_manual_clips(meta_df: pd.DataFrame):
-
     # Select the filename of the clips and remove extension type
     clip_filenames = meta_df["filename"].str.replace(".mp4", "", regex=True)
 
@@ -168,7 +163,6 @@ def process_manual_clips(meta_df: pd.DataFrame):
 
 # Function to get the list of duplicated subjects
 def get_duplicatesdf(project: project_utils.Project):
-
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder
 
@@ -185,7 +179,6 @@ def get_duplicatesdf(project: project_utils.Project):
 
 # Function to select the first subject of those that are duplicated
 def clean_duplicated_subjects(subjects: pd.DataFrame, project: project_utils.Project):
-
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 
@@ -255,7 +248,6 @@ def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
 def combine_annot_from_duplicates(
     annot_df: pd.DataFrame, project: project_utils.Project
 ):
-
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 

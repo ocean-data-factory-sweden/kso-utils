@@ -108,7 +108,6 @@ def execute_sql(conn: sqlite3.Connection, sql: str):
 
 
 def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
-
     conn = create_connection(db_path)
 
     try:
@@ -144,7 +143,6 @@ def get_id(
     conn: sqlite3.Connection,
     conditions: dict = {"a": "=b"},
 ):
-
     # Get id from a table where a condition is met
 
     if isinstance(conditions, dict):
@@ -365,7 +363,6 @@ def process_species_df(
 
 
 def find_duplicated_clips(conn: sqlite3.Connection):
-
     # Retrieve the information of all the clips uploaded
     subjects_df = pd.read_sql_query(
         "SELECT id, movie_id, clip_start_time, clip_end_time FROM subjects WHERE subject_type='clip'",

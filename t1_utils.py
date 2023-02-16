@@ -229,10 +229,11 @@ def update_csv(
             df.to_csv(db_info_dict[local_csv], index=False)
             logging.info("The local csv file has been updated")
 
-            # Save the updated df in the server
-            server_utils.update_csv_server(
-                project, db_info_dict, orig_csv=serv_csv, updated_csv=local_csv
-            )
+            if project.server == "AWS":
+                # Save the updated df in the server
+                server_utils.update_csv_server(
+                    project, db_info_dict, orig_csv=serv_csv, updated_csv=local_csv
+                )
 
         else:
             logging.info("Run this cell again when the changes are correct!")
@@ -325,6 +326,7 @@ def choose_movie_review():
 
 def check_movies_csv(
     db_info_dict: dict,
+    available_movies_df: pd.DataFrame,
     project: project_utils.Project,
     review_method: widgets.Widget,
     gpu_available: bool = False,
@@ -333,6 +335,7 @@ def check_movies_csv(
     > The function `check_movies_csv` loads the csv with movies information and checks if it is empty
 
     :param db_info_dict: a dictionary with the following keys:
+    :param available_movies_df: a dataframe with all the movies in the database
     :param project: The project name
     :param review_method: The method used to review the movies
     :param gpu_available: Boolean, whether or not a GPU is available
@@ -369,13 +372,37 @@ def check_movies_csv(
                 drop=True
             )
 
-            logging.info("Retrieving the paths to access the movies")
-            # Add a column with the path (or url) where the movies can be accessed from
-            df_missing["movie_path"] = pd.Series(
-                [
-                    movie_utils.get_movie_path(i, db_info_dict, project)
-                    for i in tqdm(df_missing[col_fpath], total=df_missing.shape[0])
-                ]
+            ##### Select only movies that can be mapped ####
+            # Merge the missing fps/duration df with the available movies
+            df_missing = df_missing.merge(
+                available_movies_df[["filename", "exists", "spath"]],
+                on=["filename"],
+                how="left",
+            )
+
+            if df_missing.exists.isnull().values.any():
+                # Replace na with False
+                df_missing["exists"] = df_missing["exists"].fillna(False)
+
+                logging.info(
+                    f"Only # {df_missing[df_missing['exists']].shape[0]} out of # {df_missing[~df_missing['exists']].shape[0]} movies with missing information are available. Proceeding to retrieve fps and duration info for only those {df_missing[df_missing['exists']].shape[0]} available movies."
+                )
+
+                # Select only available movies
+                df_missing = df_missing[df_missing["exists"]].reset_index(drop=True)
+
+            #             # Add a column with the path (or url) where the movies can be accessed from
+            #             df_missing["movie_path"] = pd.Series(
+            #                 [
+            #                     movie_utils.get_movie_path(i, db_info_dict, project)
+            #                     for i in tqdm(df_missing[col_fpath], total=df_missing.shape[0])
+            #                 ]
+            #             )
+            # Rename column to match the movie_path format
+            df_missing = df_missing.rename(
+                columns={
+                    "spath": "movie_path",
+                }
             )
 
             logging.info("Getting the fps and duration of the movies")

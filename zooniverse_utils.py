@@ -7,12 +7,8 @@ import pandas as pd
 import json
 import logging
 import numpy as np
-from panoptes_client import (
-    Project,
-    Panoptes,
-)
+from panoptes_client import Project, Panoptes, panoptes
 from ast import literal_eval
-
 
 # util imports
 from kso_utils.koster_utils import (
@@ -70,7 +66,7 @@ def retrieve_zoo_info(
     project: project_utils.Project,
     zoo_project: Project,
     zoo_info: str,
-    generate: bool = False,
+    generate_export: bool = False,
 ):
     """
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
@@ -80,16 +76,16 @@ def retrieve_zoo_info(
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
     :type zoo_info: str
-    :param generate: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
+    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
     :return: A dictionary of dataframes.
     """
-
     if hasattr(project, "info_df"):
         if project.info_df is not None:
             logging.info(
                 "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
             )
             return project.info_df
+
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
 
@@ -97,7 +93,18 @@ def retrieve_zoo_info(
         logging.info(f"Retrieving {info_n} from Zooniverse")
 
         # Get the information of interest from Zooniverse
-        export = zoo_project.get_export(info_n, generate=generate)
+        if generate_export:
+            try:
+                export = zoo_project.get_export(
+                    info_n, generate=generate_export, wait=True, wait_timeout=1800
+                )
+            except panoptes.PanoptesAPIException:
+                logging.error(
+                    "Export generation time out, retrieving the last available information..."
+                )
+                export = zoo_project.get_export(info_n, generate=False)
+        else:
+            export = zoo_project.get_export(info_n, generate=generate_export)
 
         # Save the info as pandas data frame
         try:
@@ -106,12 +113,11 @@ def retrieve_zoo_info(
             logging.error(
                 "Export retrieval time out, please try again in 1 minute or so."
             )
+            export_df = {}
 
         if len(export_df) > 0:
-
             # If KSO deal with duplicated subjects
             if project.Project_name == "Koster_Seafloor_Obs":
-
                 # Clear duplicated subjects
                 if info_n == "subjects":
                     export_df = clean_duplicated_subjects(export_df, project)
@@ -184,11 +190,9 @@ def populate_subjects(
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
-
         subjects = process_koster_subjects(subjects, db_path)
 
     else:
-
         # Extract metadata from uploaded subjects
         subjects_df, subjects_meta = extract_metadata(subjects)
 
@@ -197,11 +201,37 @@ def populate_subjects(
 
         # Check if the Zooniverse project is the Spyfish
         if project_name == "Spyfish_Aotearoa":
-
             subjects = process_spyfish_subjects(subjects, db_path)
 
-        # If project template standardise subject info
-        if project_name == "Template project":
+        # If project is not KSO or Spyfish standardise subject info
+        else:
+            # Create columns to match schema if they don't exist
+            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
+            subjects["frame_number"] = subjects.get("frame_number", np.nan)
+
+            # Select only relevant metadata columns
+            subjects = subjects[
+                [
+                    "subject_id",
+                    "project_id",
+                    "workflow_id",
+                    "subject_set_id",
+                    "locations",
+                    "movie_id",
+                    "frame_number",
+                    "movie_filepath",
+                    "frame_exp_sp_id",
+                    "upl_seconds",
+                    "Subject_type",
+                    "#VideoFilename",
+                    "#clip_length",
+                    "classifications_count",
+                    "retired_at",
+                    "retirement_reason",
+                    "created_at",
+                ]
+            ]
+
             # Rename columns to match the db format
             subjects = subjects.rename(
                 columns={
@@ -212,9 +242,13 @@ def populate_subjects(
                 }
             )
 
-            # Create columns to match schema if they don't exist
-            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
-            subjects["frame_number"] = subjects.get("frame_number", np.nan)
+            # Remove clip subjects with no clip_start_time info (from different projects)
+            subjects = subjects[
+                ~(
+                    (subjects["subject_type"] == "clip")
+                    & (subjects["clip_start_time"].isna())
+                )
+            ]
 
             # Calculate the clip_end_time
             subjects["clip_end_time"] = (
@@ -326,7 +360,6 @@ def populate_agg_annotations(
 
     # Update agg_annotations_clip table
     if subj_type == "clip":
-
         # Set the columns in the right order
         species_df = pd.read_sql_query(
             "SELECT id as species_id, label FROM species", conn
@@ -360,7 +393,6 @@ def populate_agg_annotations(
 
     # Update agg_annotations_frame table
     if subj_type == "frame":
-
         # Select relevant columns
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
 
@@ -392,3 +424,55 @@ def populate_agg_annotations(
             [(None,) + tuple(i) for i in annotations_df.values],
             7,
         )
+
+
+def process_clips_template(annotations, row_class_id, rows_list: list):
+    """
+    For each annotation, if the task is T0, then for each species annotated, flatten the relevant
+    answers and save the species of choice, class and subject id.
+
+    :param annotations: the list of annotations for a given subject
+    :param row_class_id: the classification id
+    :param rows_list: a list of dictionaries, each dictionary is a row in the output dataframe
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
+    first seen time and the number of individuals.
+    """
+
+    for ann_i in annotations:
+        if ann_i["task"] == "T0":
+            # Select each species annotated and flatten the relevant answers
+            for value_i in ann_i["value"]:
+                choice_i = {}
+                # If choice = 'nothing here', set follow-up answers to blank
+                if value_i["choice"] == "NOTHINGHERE":
+                    f_time = ""
+                    inds = ""
+                # If choice = species, flatten follow-up answers
+                else:
+                    answers = value_i["answers"]
+                    for k in answers.keys():
+                        if "EARLIESTPOINT" in k:
+                            f_time = answers[k].replace("S", "")
+                        if "HOWMANY" in k:
+                            inds = answers[k]
+                            # Deal with +20 fish options
+                            if inds == "2030":
+                                inds = "25"
+                            if inds == "3040":
+                                inds = "35"
+                        elif "EARLIESTPOINT" not in k and "HOWMANY" not in k:
+                            f_time, inds = None, None
+
+                # Save the species of choice, class and subject id
+                choice_i.update(
+                    {
+                        "classification_id": row_class_id,
+                        "label": value_i["choice"],
+                        "first_seen": f_time,
+                        "how_many": inds,
+                    }
+                )
+
+                rows_list.append(choice_i)
+
+    return rows_list

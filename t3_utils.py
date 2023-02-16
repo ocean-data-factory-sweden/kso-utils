@@ -117,7 +117,6 @@ def select_random_clips(movie_i: str, db_info_dict: dict):
 
     # Select n number of clips at random
     def n_random_clips(clip_length, n_clips):
-
         # Create a list of starting points for n number of clips
         duration_movie = math.floor(movie_df["duration"].values[0])
         starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
@@ -500,7 +499,6 @@ def create_modified_clips(
         shutil.rmtree(mod_clips_folder)
 
     if len(modification_details.values()) > 0:
-
         # Create the folder to store the videos if not exist
         if not os.path.exists(mod_clips_folder):
             os.mkdir(mod_clips_folder)
@@ -638,7 +636,6 @@ def select_clip_n_len(movie_i: str, db_info_dict: dict):
 
     # Display in hours, minutes and seconds
     def to_clips(clip_length, clips_range):
-
         # Calculate the number of clips
         clips = int((clips_range[1] - clips_range[0]) / clip_length)
 
@@ -749,6 +746,8 @@ def extract_clips(
                 str(clip_length),
                 "-i",
                 movie_path,
+                "-threads",
+                "4",
                 "-an",  # removes the audio
                 "-c:a",
                 "copy",
@@ -777,6 +776,8 @@ def extract_clips(
                 str(clip_length),
                 "-i",
                 movie_path,
+                "-threads",
+                "4",
                 "-an",  # removes the audio
                 "-c:a",
                 "copy",
@@ -1021,7 +1022,6 @@ def set_zoo_metadata(
 
     # Add spyfish-specific info
     if project.Project_name == "Spyfish_Aotearoa":
-
         # Read sites csv as pd
         sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
 
@@ -1055,7 +1055,6 @@ def set_zoo_metadata(
         )
 
     if project.Project_name == "Koster_Seafloor_Obs":
-
         # Read sites csv as pd
         sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
 

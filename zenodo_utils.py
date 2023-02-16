@@ -2,6 +2,7 @@ import wandb
 import requests
 import os, json
 
+
 # Get deposition id, i.e. "id" field from this response and bucket
 def get_zenodo_id_bucket(access_key: str):
     headers = {"Content-Type": "application/json"}
@@ -21,7 +22,6 @@ def get_zenodo_id_bucket(access_key: str):
 
 
 def add_file_to_zenodo_upload(access_key: str, bucket_url: str, file_path: str):
-
     filename = os.path.basename(file_path)
     # The target URL is a combination of the bucket link with the desired filename
     # seperated by a slash.

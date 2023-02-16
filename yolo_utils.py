@@ -475,7 +475,6 @@ def frame_aggregation(
         return None
 
     if movie_bool:
-
         # Get movie path on the server
         train_rows["movie_path"] = train_rows.merge(
             movie_df, left_on="movie_id", right_on="id", how="left"

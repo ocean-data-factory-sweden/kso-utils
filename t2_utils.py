@@ -63,7 +63,6 @@ def select_survey(db_info_dict: dict):
             return survey_widget
 
         if Existing_or_new == "New survey":
-
             # Load the csv with with sites and survey choices
             choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
 
@@ -321,6 +320,7 @@ def select_FishMultiSpecies():
     species survey or not
     :return: A widget that can be used to select a single species or multiple species
     """
+
     # Widget to record if survey is single species
     def FishMultiSpecies_to_true_false(FishMultiSpecies_value):
         if FishMultiSpecies_value == "Yes":
@@ -368,6 +368,7 @@ def select_IsLongTermMonitoring():
     long-term monitoring
     :return: A widget object
     """
+
     # Widget to record if survey is part of long term monitoring
     def IsLongTermMonitoring_to_true_false(IsLongTermMonitoring_value):
         if IsLongTermMonitoring_value == "No":
@@ -1551,7 +1552,6 @@ def confirm_deployment_details(
     """
 
     for deployment_i in deployment_names:
-
         # Save the deployment responses as a new row for the movies csv file
         new_movie_row_dict = {
             key: (
@@ -1580,7 +1580,6 @@ def confirm_deployment_details(
 
         # Save the name of the survey
         if isinstance(survey_i.result, dict):
-
             # Load the ncsv with survey information
             surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
 
@@ -1816,7 +1815,6 @@ def add_new_rows_to_csv(db_info_dict: dict, new_movie_rows_sheet):
 
 
 def choose_new_videos_to_upload():
-
     """
     Simple widget for uploading videos from a file browser.
     returns the list of movies to be added.
