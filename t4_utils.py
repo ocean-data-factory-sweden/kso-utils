@@ -360,7 +360,8 @@ def extract_frames(
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
         Path(frames_folder).mkdir(parents=True, exist_ok=True)
-        os.chmod(frames_folder, 0o777)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(frames_folder)]
 
     for movie in df["fpath"].unique():
         url = movie_utils.get_movie_path(
