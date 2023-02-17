@@ -35,7 +35,6 @@ def get_patch(row, out_path: str, pixels: int = 224):
         return
 
     for ix, (pos_X, pos_Y) in enumerate(zip(row.pos_X, row.pos_Y)):
-
         # Use conversion between current XY position and actual pixel values
         coord = (pos_X / 15, pos_Y / 15)
 

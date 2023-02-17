@@ -82,6 +82,7 @@ def choose_experiment_name():
     display(exp_name)
     return exp_name
 
+
 def choose_entity():
     """
     It creates a text box that allows you to enter your username or teamname of WandB

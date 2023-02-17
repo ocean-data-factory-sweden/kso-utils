@@ -242,7 +242,6 @@ def check_frames_uploaded(
     species_ids: list,
     conn: sqlite3.Connection,
 ):
-
     if project.server == "SNIC":
         # Get info of frames of the species of interest already uploaded
         if len(species_ids) <= 1:
