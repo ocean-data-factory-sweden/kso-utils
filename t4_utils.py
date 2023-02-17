@@ -145,7 +145,7 @@ def get_species_frames(
 
     server = project.server
 
-    if server == "SNIC" and project.Project_name == "Koster_Seafloor_Obs":
+    if server == "SNIC":
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
         movie_folder = project.movie_folder
 
@@ -242,7 +242,7 @@ def check_frames_uploaded(
     species_ids: list,
     conn: sqlite3.Connection,
 ):
-    if project.Project_name == "Koster_Seafloor_Obs":
+    if project.server == "SNIC":
         # Get info of frames of the species of interest already uploaded
         if len(species_ids) <= 1:
             uploaded_frames_df = pd.read_sql_query(
@@ -359,7 +359,7 @@ def extract_frames(
 
     # Create the folder to store the frames if not exist
     if not os.path.exists(frames_folder):
-        os.mkdir(frames_folder)
+        Path(frames_folder).mkdir(parents=True, exist_ok=True)
         os.chmod(frames_folder, 0o777)
 
     for movie in df["fpath"].unique():
@@ -694,12 +694,16 @@ def modify_frames(
                 crf_value = [i for i in crf_value if i is not None]
 
                 if len(crf_value) > 0:
+                    # Note: now using q option as crf not supported by ffmpeg build
                     crf_prompt = str(max([int(i) for i in crf_value]))
-                    full_prompt += f".output('{row['modif_frame_path']}', crf={crf_prompt}, pix_fmt='yuv420p')"
+                    full_prompt += f".output('{row['modif_frame_path']}', q={crf_prompt}, pix_fmt='yuv420p')"
                 else:
-                    full_prompt += f".output('{row['modif_frame_path']}', crf=20, pix_fmt='yuv420p')"
+                    full_prompt += (
+                        f".output('{row['modif_frame_path']}', q=20, pix_fmt='yuv420p')"
+                    )
                 # Run the modification
                 try:
+                    print(full_prompt)
                     eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
                     os.chmod(row["modif_frame_path"], 0o777)
                 except ffmpeg_python.Error as e:
@@ -732,7 +736,7 @@ def set_zoo_metadata(
         df["frame_path"] = df["modif_frame_path"]
 
     # Set project-specific metadata
-    if project_name == "Koster_Seafloor_Obs":
+    if project.Zooniverse_number == 9747:
         conn = db_utils.create_connection(project.db_path)
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
