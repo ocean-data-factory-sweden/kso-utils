@@ -670,8 +670,9 @@ def modify_frames(
 
         # Create the folder to store the videos if not exist
         if not os.path.exists(mod_frames_folder):
-            os.mkdir(mod_frames_folder)
-            os.chmod(mod_frames_folder, 0o777)
+            Path(mod_frames_folder).mkdir(parents=True, exist_ok=True)
+            # Recursively add permissions to folders created
+            [os.chmod(root, 0o777) for root, dirs, files in os.walk(mod_frames_folder)]
 
         #### Modify the clips###
         # Read each clip and modify them (printing a progress bar)
