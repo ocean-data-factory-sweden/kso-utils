@@ -497,15 +497,15 @@ def get_data_viewer(data_path: str):
         return None
     imgs = list(filter(lambda fn: fn.lower().endswith(".jpg"), os.listdir(data_path)))
 
-    def loadimg(k,scale=0.4):
-        display(draw_box(os.path.join(data_path, imgs[k]),scale))
+    def loadimg(k, scale=0.4):
+        display(draw_box(os.path.join(data_path, imgs[k]), scale))
 
-    return widgets.interact(loadimg, k=(0, len(imgs) - 1), scale=(0.1,1.0))
+    return widgets.interact(loadimg, k=(0, len(imgs) - 1), scale=(0.1, 1.0))
 
 
 def draw_box(path: str, scale: float):
     """
-    It takes a path to an image and a scale parameter, opens the image and resizes it to the specified scale, 
+    It takes a path to an image and a scale parameter, opens the image and resizes it to the specified scale,
     opens the corresponding label file, and draws a box around each object in the image
 
     :param path: the path to the image
@@ -517,7 +517,7 @@ def draw_box(path: str, scale: float):
 
     im = PILImage.open(path)
     dw, dh = im._size
-    im=im.resize(( int(dw * scale), int(dh * scale)))
+    im = im.resize((int(dw * scale), int(dh * scale)))
     d = {
         line.split()[0]: line.split()[1:]
         for line in open(path.replace("images", "labels").replace(".jpg", ".txt"))
