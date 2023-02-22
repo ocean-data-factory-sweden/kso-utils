@@ -312,7 +312,7 @@ def retrieve__populate_zoo_info(
     project: project_utils.Project,
     db_info_dict: dict,
     zoo_project: Project,
-    zoo_info: str,
+    zoo_info: list,
     generate_export: bool = False,
 ):
     """
@@ -322,7 +322,7 @@ def retrieve__populate_zoo_info(
     :param project: the project you want to retrieve information for
     :param db_info_dict: a dictionary containing the path to the database and the name of the database
     :param zoo_project: The name of the Zooniverse project you created
-    :param zoo_info: a string containing the information of the Zooniverse project
+    :param zoo_info: a list containing the information of the Zooniverse project you would like to retrieve
     :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
 
     :return: The zoo_info_dict is being returned.
@@ -393,6 +393,7 @@ def select_movie(available_movies_df: pd.DataFrame):
         options=available_movies_tuple,
         description="Movie of interest:",
         ensure_option=True,
+        value=None,
         disabled=False,
         layout=widgets.Layout(width="50%"),
         style={"description_width": "initial"},
@@ -478,6 +479,14 @@ def wait_for_change(widget1: widgets.Widget, widget2: widgets.Widget):
 
     widget1.on_click(getvalue)
     widget2.on_click(getvalue)
+    return future
+
+def single_wait_for_change(widget, value):
+    future = asyncio.Future()
+    def getvalue(change):
+        future.set_result(change.new)
+        widget.unobserve(getvalue, value)
+    widget.observe(getvalue, value)
     return future
 
 
