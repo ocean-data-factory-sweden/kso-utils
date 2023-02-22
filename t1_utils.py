@@ -325,7 +325,7 @@ def check_movies_csv(
     db_info_dict: dict,
     available_movies_df: pd.DataFrame,
     project: project_utils.Project,
-    review_method: widgets.Widget,
+    review_method: str,
     gpu_available: bool = False,
 ):
     """
@@ -351,7 +351,7 @@ def check_movies_csv(
     col_sampling_end = col_names["sampling_end"]
     col_fpath = col_names["fpath"]
 
-    if review_method.value.startswith("Basic"):
+    if review_method.startswith("Basic"):
         # Check if fps or duration is missing from any movie
         if (
             not df[[col_fps, col_duration, col_sampling_start, col_sampling_end]]
