@@ -339,6 +339,7 @@ def frame_aggregation(
         logging.error(
             "No species were selected. Please select at least one species before continuing."
         )
+        return
 
     # Select the aggregated classifications from the species of interest
     train_rows = agg_df
@@ -357,6 +358,7 @@ def frame_aggregation(
     # Check if any frames are left after removing null values
     if len(train_rows) == 0:
         logging.error("No frames left. Please adjust aggregation parameters.")
+        return
 
     # Create output folder
     if os.path.isdir(out_path):

@@ -5,6 +5,7 @@ import subprocess
 import datetime
 import logging
 import ffmpeg
+import shutil
 from pathlib import Path
 
 # widget imports
@@ -19,6 +20,7 @@ from ipyfilechooser import FileChooser
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as t_utils
+import kso_utils.project_utils as p_utils
 
 
 # Logging
@@ -1731,7 +1733,7 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
         print("Movies csv file succesfully updated in the server.")
 
 
-def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
+def upload_new_movies(project: p_utils.Project, db_info_dict: dict, movie_list: list):
     """
     It uploads the new movies to the SNIC server and creates new rows to be updated
     with movie metadata and saved into movies.csv
@@ -1740,6 +1742,7 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
     :param movie_list: list of new movies that are to be added to movies.csv
     """
     # Get number of new movies to be added
+    movie_folder = project.movie_folder
     number_of_movies = len(movie_list)
     # Get current movies
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
@@ -1750,7 +1753,10 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         column_headers=movies_df.columns.tolist(),
     )
     for index, movie in enumerate(movie_list):
-        remote_fpath = Path(f"{snic_path}/tmp_dir/" + movie[1])
+        if project.server == "SNIC":
+            remote_fpath = Path(f"{snic_path}/tmp_dir/", movie[1])
+        else:
+            remote_fpath = Path(f"{movie_folder}", movie[1])
         if os.path.exists(remote_fpath):
             logging.info(
                 "Filename "
@@ -1776,11 +1782,14 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
                 stream, capture_stdout=True, capture_stderr=True, overwrite_output=True
             )
 
-            server_utils.upload_object_to_snic(
-                db_info_dict["sftp_client"],
-                str(processed_video_path),
-                str(remote_fpath),
-            )
+            if project.server == "SNIC":
+                server_utils.upload_object_to_snic(
+                    db_info_dict["sftp_client"],
+                    str(processed_video_path),
+                    str(remote_fpath),
+                )
+            elif project.server in ["LOCAL", "TEMPLATE"]:
+                shutil.copy2(str(processed_video_path), str(remote_fpath))
             logging.info("movie uploaded\n")
         # Fetch movie metadata that can be calculated from movie file
         fps, duration = movie_utils.get_fps_duration(movie[0])
@@ -1799,7 +1808,6 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         "Complete this sheet by filling the missing info on the movie you just uploaded"
     )
     display(new_movie_rows_sheet)
-
     return new_movie_rows_sheet
 
 

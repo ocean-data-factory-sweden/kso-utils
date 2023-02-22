@@ -25,6 +25,7 @@ import imagesize
 
 import yolov5_tracker.track as track
 from yolov5.utils import torch_utils
+import yolov5.detect as detect
 
 # Logging
 logging.basicConfig()
@@ -301,6 +302,215 @@ def encode_image(filepath):
         image_bytes = f.read()
     encoded = str(base64.b64encode(image_bytes), "utf-8")
     return "data:image/jpg;base64," + encoded
+
+
+def get_annotator(image_path: str, species_list: list, autolabel_model: str = None):
+    """
+    It takes a path to a folder containing images and annotations, and a list of species names, and
+    returns a widget that allows you to view the images and their annotations, and to edit the
+    annotations
+
+    :param data_path: the path to the image folder
+    :type data_path: str
+    :param species_list: a list of species names
+    :type species_list: list
+    :return: A VBox widget containing a progress bar and a BBoxWidget.
+    """
+    images = sorted(
+        [
+            f
+            for f in os.listdir(image_path)
+            if os.path.isfile(os.path.join(image_path, f)) and f.endswith(".jpg")
+        ]
+    )
+
+    # a progress bar to show how far we got
+    w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
+    
+    if autolabel_model is not None:
+        detect.run(weights=autolabel_model, source=image_path, conf_thres=0.5, nosave=True, name='annotate')
+        annotations = sorted(
+            [
+                f
+                for f in os.listdir(os.path.join(image_path, 'annotate'))
+                if os.path.isfile(os.path.join(image_path, 'annotate', f)) and f.endswith(".txt")
+            ]
+        )
+    # the bbox widget
+    image = os.path.join(image_path, images[0])
+    width, height = imagesize.get(image)
+    if autolabel_model is not None:
+        label_file = annotations[w_progress.value]
+        bboxes = []
+        labels = []
+        with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+            for line in f:
+                s = line.split(" ")
+                labels.append(s[0])
+
+                left = (float(s[1]) - (float(s[3]) / 2)) * width
+                top = (float(s[2]) - (float(s[4]) / 2)) * height
+
+                bboxes.append(
+                    {
+                        "x": left,
+                        "y": top,
+                        "width": float(s[3]) * width,
+                        "height": float(s[4]) * height,
+                        "label": species_list[int(s[0])],
+                    }
+                )
+    else:
+        bboxes = []
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
+
+    # here we assign an empty list to bboxes but
+    # we could also run a detection model on the file
+    # and use its output for creating initial bboxes
+    w_bbox.bboxes = bboxes
+
+    # combine widgets into a container
+    w_container = widgets.VBox(
+        [
+            w_progress,
+            w_bbox,
+        ]
+    )
+
+    def on_button_clicked(b):
+        w_progress.value = 0
+        image = os.path.join(image_path, images[0])
+        width, height = imagesize.get(image)
+        if autolabel_model is not None:
+            label_file = annotations[w_progress.value]
+            bboxes = []
+            labels = []
+            with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+                for line in f:
+                    s = line.split(" ")
+                    labels.append(s[0])
+
+                    left = (float(s[1]) - (float(s[3]) / 2)) * width
+                    top = (float(s[2]) - (float(s[4]) / 2)) * height
+
+                    bboxes.append(
+                        {
+                            "x": left,
+                            "y": top,
+                            "width": float(s[3]) * width,
+                            "height": float(s[4]) * height,
+                            "label": species_list[int(s[0])],
+                        }
+                    )
+        else:
+            bboxes = []
+        w_bbox.image = encode_image(image)
+
+        # here we assign an empty list to bboxes but
+        # we could also run a detection model on the file
+        # and use its output for creating inital bboxes
+        w_bbox.bboxes = bboxes
+        w_container.children = tuple(list(w_container.children[1:]))
+        b.close()
+
+    # when Skip button is pressed we move on to the next file
+    def on_skip():
+        w_progress.value += 1
+        if w_progress.value == len(images):
+            button = widgets.Button(
+                description="Click to restart.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+            if isinstance(w_container.children[0], widgets.Button):
+                w_container.children = tuple(list(w_container.children[1:]))
+            w_container.children = tuple([button] + list(w_container.children))
+            button.on_click(on_button_clicked)
+
+        # open new image in the widget
+        else:
+            image_file = images[w_progress.value]
+            image_p = os.path.join(image_path, image_file)
+            width, height = imagesize.get(image_p)
+            w_bbox.image = encode_image(image_p)
+            if autolabel_model is not None:
+                label_file = annotations[w_progress.value]
+                bboxes = []
+                with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+                    for line in f:
+                        s = line.split(" ")
+                        left = (float(s[1]) - (float(s[3]) / 2)) * width
+                        top = (float(s[2]) - (float(s[4]) / 2)) * height
+                        bboxes.append(
+                            {
+                                "x": left,
+                                "y": top,
+                                "width": float(s[3]) * width,
+                                "height": float(s[4]) * height,
+                                "label": species_list[int(s[0])],
+                            }
+                        )
+            else:
+                bboxes = []
+
+            # here we assign an empty list to bboxes but
+            # we could also run a detection model on the file
+            # and use its output for creating initial bboxes
+            w_bbox.bboxes = bboxes
+
+    w_bbox.on_skip(on_skip)
+
+    # when Submit button is pressed we save current annotations
+    # and then move on to the next file
+    def on_submit():
+        image_file = images[w_progress.value]
+        width, height = imagesize.get(os.path.join(image_path, image_file))
+        # save annotations for current image
+        if label_file:
+            # if the label_file already exists
+            open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "w").write(
+                "\n".join(
+                    [
+                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                            species_list.index(
+                                i["label"]
+                            ),  # single class vs multiple classes
+                            min((i["x"] + i["width"] / 2) / width, 1.0),
+                            min((i["y"] + i["height"] / 2) / height, 1.0),
+                            min(i["width"] / width, 1.0),
+                            min(i["height"] / height, 1.0),
+                        )
+                        for i in w_bbox.bboxes
+                    ]
+                )
+            )
+        else:
+            label_file = Path(image_file).name.replace('.jpg', '.txt')
+            # if the label_file needs to be created
+            open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "w").write(
+                "\n".join(
+                    [
+                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                            species_list.index(
+                                i["label"]
+                            ),  # single class vs multiple classes
+                            min((i["x"] + i["width"] / 2) / width, 1.0),
+                            min((i["y"] + i["height"] / 2) / height, 1.0),
+                            min(i["width"] / width, 1.0),
+                            min(i["height"] / height, 1.0),
+                        )
+                        for i in w_bbox.bboxes
+                    ]
+                )
+            )
+        # move on to the next file
+        on_skip()
+
+    w_bbox.on_submit(on_submit)
+
+    return w_container
 
 
 def get_annotations_viewer(data_path: str, species_list: list):

@@ -228,6 +228,8 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
 
     # Add project-specific db_path
     db_initial_info["db_path"] = project.db_path
+    if "client" in server_dict:
+        db_initial_info["client"] = server_dict["client"]
 
     return db_initial_info
 

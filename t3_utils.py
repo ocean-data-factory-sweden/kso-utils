@@ -794,7 +794,8 @@ def extract_clips(
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
         mod_prompt = ""
-        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+        output_prompt = ""
+        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
 
         # Set up modification
         for transform in modification_details.values():
@@ -805,13 +806,13 @@ def extract_clips(
                 # Unnest the modification detail dict
                 df = pd.json_normalize(modification_details, sep="_")
                 crf = df.filter(regex="crf$", axis=1).values[0][0]
-                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
 
         # Run the modification
         try:
             if len(mod_prompt) > 0:
                 full_prompt += mod_prompt
-            if output_prompt:
+            if len(output_prompt) > 0:
                 full_prompt += output_prompt
             else:
                 full_prompt += def_output_prompt
@@ -921,31 +922,19 @@ def create_clips(
 
     logging.info("Extracting clips")
 
-    for i in range(0, potential_start_df.shape[0], pool_size):
-        logging.info(
-            f"Modifying {i} to {i+pool_size} out of {potential_start_df.shape[0]}"
-        )
 
-        processlist = []
-        # Read each movie and extract the clips
-        for index, row in potential_start_df.iloc[i : i + pool_size].iterrows():
-            # Extract the videos and store them in the folder
-            p = mp.Process(
-                target=extract_clips,
-                args=(
-                    movie_path,
-                    clip_length,
-                    row["upl_seconds"],
-                    row["clip_path"],
-                    modification_details,
-                    gpu_available,
-                ),
+    processlist = []
+    # Read each movie and extract the clips
+    for index, row in potential_start_df.iterrows():
+        # Extract the videos and store them in the folder
+        extract_clips(
+                movie_path,
+                clip_length,
+                row["upl_seconds"],
+                row["clip_path"],
+                modification_details,
+                gpu_available,
             )
-            processlist.append(p)
-            p.start()
-
-        for pr in processlist:
-            pr.join()
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(modification_details)
