@@ -320,26 +320,40 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
         ]
     )
 
+    annot_path = os.path.join(Path(image_path).parent, "labels")
+
     # a progress bar to show how far we got
     w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
-    
+
     if autolabel_model is not None:
-        detect.run(weights=autolabel_model, source=image_path, conf_thres=0.5, nosave=True, name='annotate')
-        annotations = sorted(
-            [
-                f
-                for f in os.listdir(os.path.join(image_path, 'annotate'))
-                if os.path.isfile(os.path.join(image_path, 'annotate', f)) and f.endswith(".txt")
-            ]
+        # TODO: Make this predict for each image as it is displayed and not for all of them at once.
+        detect.run(
+            weights=autolabel_model,
+            source=image_path,
+            conf_thres=0.5,
+            nosave=True,
+            name="labels",
         )
+        try:
+            annotations = sorted(
+                [
+                    f
+                    for f in os.listdir(annot_path)
+                    if os.path.isfile(os.path.join(annot_path, f))
+                    and f.endswith(".txt")
+                ]
+            )
+        except FileNotFoundError:
+            logging.info("Autolabelling produced no labels.")
+            annotations = []
     # the bbox widget
     image = os.path.join(image_path, images[0])
     width, height = imagesize.get(image)
-    if autolabel_model is not None:
+    if autolabel_model is not None and len(annotations) > 0:
         label_file = annotations[w_progress.value]
         bboxes = []
         labels = []
-        with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+        with open(os.path.join(annot_path, label_file), "r") as f:
             for line in f:
                 s = line.split(" ")
                 labels.append(s[0])
@@ -377,11 +391,11 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
         w_progress.value = 0
         image = os.path.join(image_path, images[0])
         width, height = imagesize.get(image)
-        if autolabel_model is not None:
+        if autolabel_model is not None and len(annotations) > 0:
             label_file = annotations[w_progress.value]
             bboxes = []
             labels = []
-            with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+            with open(os.path.join(annot_path, label_file), "r") as f:
                 for line in f:
                     s = line.split(" ")
                     labels.append(s[0])
@@ -431,10 +445,10 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
             image_p = os.path.join(image_path, image_file)
             width, height = imagesize.get(image_p)
             w_bbox.image = encode_image(image_p)
-            if autolabel_model is not None:
+            if autolabel_model is not None and len(annotations) > 0:
                 label_file = annotations[w_progress.value]
                 bboxes = []
-                with open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "r") as f:
+                with open(os.path.join(annot_path, label_file), "r") as f:
                     for line in f:
                         s = line.split(" ")
                         left = (float(s[1]) - (float(s[3]) / 2)) * width
@@ -464,43 +478,26 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
         image_file = images[w_progress.value]
         width, height = imagesize.get(os.path.join(image_path, image_file))
         # save annotations for current image
-        if label_file:
-            # if the label_file already exists
-            open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "w").write(
-                "\n".join(
-                    [
-                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                            species_list.index(
-                                i["label"]
-                            ),  # single class vs multiple classes
-                            min((i["x"] + i["width"] / 2) / width, 1.0),
-                            min((i["y"] + i["height"] / 2) / height, 1.0),
-                            min(i["width"] / width, 1.0),
-                            min(i["height"] / height, 1.0),
-                        )
-                        for i in w_bbox.bboxes
-                    ]
-                )
+        label_file = Path(image_file).name.replace(".jpg", ".txt")
+        # if the label_file needs to be created
+        if not os.path.exists(annot_path):
+            Path(annot_path).mkdir(parents=True, exist_ok=True)
+        open(os.path.join(annot_path, label_file), "w").write(
+            "\n".join(
+                [
+                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                        species_list.index(
+                            i["label"]
+                        ),  # single class vs multiple classes
+                        min((i["x"] + i["width"] / 2) / width, 1.0),
+                        min((i["y"] + i["height"] / 2) / height, 1.0),
+                        min(i["width"] / width, 1.0),
+                        min(i["height"] / height, 1.0),
+                    )
+                    for i in w_bbox.bboxes
+                ]
             )
-        else:
-            label_file = Path(image_file).name.replace('.jpg', '.txt')
-            # if the label_file needs to be created
-            open(os.path.join(os.path.join(image_path, 'annotate'), label_file), "w").write(
-                "\n".join(
-                    [
-                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                            species_list.index(
-                                i["label"]
-                            ),  # single class vs multiple classes
-                            min((i["x"] + i["width"] / 2) / width, 1.0),
-                            min((i["y"] + i["height"] / 2) / height, 1.0),
-                            min(i["width"] / width, 1.0),
-                            min(i["height"] / height, 1.0),
-                        )
-                        for i in w_bbox.bboxes
-                    ]
-                )
-            )
+        )
         # move on to the next file
         on_skip()
 
