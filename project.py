@@ -1,23 +1,20 @@
 # base imports
 import os
 import logging
-import sqlite3
 import asyncio
 import pandas as pd
 from dataclasses import dataclass
-from dataclass_csv import DataclassReader, DataclassWriter, exceptions
 import fiftyone as fo
-import fiftyone.core.labels as fol
 import ipywidgets as widgets
 from itertools import chain
+from pathlib import Path
+import imagesize
 
 # util imports
 import kso_utils.tutorials_utils as t_utils
-import kso_utils.koster_utils as k_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
-import kso_utils.zooniverse_utils as z_utils
 import kso_utils.yolo_utils as yolo_utils
 from IPython.display import display, HTML
 import kso_utils.t1_utils as t1_utils
@@ -250,9 +247,6 @@ class ProjectProcessor:
     def add_species(self):
         pass
 
-    def upload_zu_subjects(self):
-        pass
-
     def process_image(self):
         # code for processing image goes here
         pass
@@ -401,7 +395,9 @@ class MLProject:
         model_type,
     ):
         self.project_process = project
-        self.project_name = self.project_process.project.Project_name.lower().replace(" ", "_")
+        self.project_name = self.project_process.project.Project_name.lower().replace(
+            " ", "_"
+        )
         self.team_name = team_name
         self.config_path = config_path
         self.weights_path = weights_path
@@ -416,7 +412,7 @@ class MLProject:
         import wandb
         import yaml
         from yolov5.models.yolo import Model
-        from yolov5.datasets import create_dataloader
+        from yolov5.utils.dataloaders import create_dataloader
         from yolov5.utils.general import (
             check_dataset,
             check_file,
@@ -424,7 +420,7 @@ class MLProject:
             non_max_suppression,
             set_logging,
         )
-        from yolov5.utils.google_utils import attempt_download
+        from yolov5.utils.downloads import attempt_download
         from torch.utils.data import DataLoader
 
         wandb.login()
@@ -645,12 +641,16 @@ class Annotator:
         self.dataset_name = dataset_name
         self.images_path = images_path
         self.potential_labels = potential_labels
+        self.bboxes = []
 
-    def annotate(self):
-        # Connect to FiftyOne session
-        session = fo.launch_app()
+    def fiftyone_annotate(self):
 
         # Create a new dataset
+        try:
+            dataset = fo.load_dataset(self.dataset_name)
+            dataset.delete()
+        except ValueError:
+            pass
         dataset = fo.Dataset(self.dataset_name)
 
         # Add all the images in the directory to the dataset
@@ -661,25 +661,66 @@ class Annotator:
                 dataset.add_sample(sample)
 
         # Add the potential labels to the dataset
+        # Set default classes
         if self.potential_labels is not None:
+            label_field = "my_label"
             dataset.add_sample_field(
-                "tags",
-                fo.EmbeddedDocumentField,
-                embedded_doc_type=fol.Classification,
+                label_field, fo.core.fields.StringField, classes=self.potential_labels
             )
-            for label in self.potential_labels:
-                dataset.classes.add_class(label)
 
+        # Create a view with the desired labels
+
+        dataset.annotate(
+            self.dataset_name,
+            label_type="scalar",
+            label_field=label_field,
+            launch_editor=True,
+            backend="labelbox",
+        )
         # Open the dataset in the FiftyOne App
-        session.view(dataset)
+        # Connect to FiftyOne session
+        # session = fo.launch_app(dataset, view=view)
 
         # Start annotating
-        session.wait()
+        # session.wait()
 
         # Save the annotations
         dataset.save()
 
-    def get_annotator(self, image_path, species_list, autolabel_model):
-        return t6_utils.get_annotator(image_path, species_list, autolabel_model)
+    def annotate(self, autolabel_model: str = None):
+        return t6_utils.get_annotator(
+            self.images_path, self.potential_labels, autolabel_model
+        )
 
-    
+    def load_annotations(self):
+        images = sorted(
+            [
+                f
+                for f in os.listdir(self.images_path)
+                if os.path.isfile(os.path.join(self.images_path, f))
+                and f.endswith(".jpg")
+            ]
+        )
+        annot_path = os.path.join(Path(self.images_path).parent, "labels")
+        if len(os.listdir(annot_path)) > 0:
+            for label_file in os.listdir(annot_path):
+                image = os.path.join(self.images_path, images[0])
+                width, height = imagesize.get(image)
+                bboxes = []
+                with open(os.path.join(annot_path, label_file), "r") as f:
+                    for line in f:
+                        s = line.split(" ")
+                        left = (float(s[1]) - (float(s[3]) / 2)) * width
+                        top = (float(s[2]) - (float(s[4]) / 2)) * height
+                        bboxes.append(
+                            {
+                                "x": left,
+                                "y": top,
+                                "width": float(s[3]) * width,
+                                "height": float(s[4]) * height,
+                                "label": self.potential_labels[int(s[0])],
+                            }
+                        )
+            self.bboxes = bboxes
+        else:
+            self.bboxes = []
