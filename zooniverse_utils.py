@@ -219,7 +219,6 @@ def populate_subjects(
                     "locations",
                     "movie_id",
                     "frame_number",
-                    "movie_filepath",
                     "frame_exp_sp_id",
                     "upl_seconds",
                     "Subject_type",
