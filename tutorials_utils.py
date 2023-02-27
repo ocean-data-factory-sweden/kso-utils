@@ -519,11 +519,14 @@ def wait_for_change(widget1: widgets.Widget, widget2: widgets.Widget):
     widget2.on_click(getvalue)
     return future
 
+
 def single_wait_for_change(widget, value):
     future = asyncio.Future()
+
     def getvalue(change):
         future.set_result(change.new)
         widget.unobserve(getvalue, value)
+
     widget.observe(getvalue, value)
     return future
 
