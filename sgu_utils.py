@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 import splitfolders
 import fnmatch
+import glob
 tqdm.pandas()
 
 # Logging
@@ -22,7 +23,7 @@ def create_classification_dataset(data_path: str, out_path: str, test_size: floa
     logging.info(f"Training and test datasets saved at {out_path}") 
 
 
-def get_patch(row, out_path: str, pixels: int = 224):
+def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"):
     try:
         img = cv2.imread(row.fpath)
     except:
@@ -40,7 +41,7 @@ def get_patch(row, out_path: str, pixels: int = 224):
             return
 
         # Discard images where label is NA
-        if not isinstance(row.sub_type[ix], str):
+        if not isinstance(row[label_col][ix], str):
             logging.error(f"Invalid label in {os.path.basename(row.fpath)}. Skipping...")
             return
 
@@ -57,8 +58,6 @@ def get_patch(row, out_path: str, pixels: int = 224):
                 cropped_xs += x_diff
                 cropped_xe += x_diff
 
-
-
         # Specify cropped patch size
         cropped_image = img[
             cropped_ys:cropped_ye,
@@ -66,7 +65,7 @@ def get_patch(row, out_path: str, pixels: int = 224):
         ]
 
         # Get label
-        label = row.sub_type[ix]
+        label = row[label_col][ix]
         if not os.path.exists(Path(out_path, label)):
             os.mkdir(Path(out_path, label))
 
@@ -77,7 +76,7 @@ def get_patch(row, out_path: str, pixels: int = 224):
         )
 
 
-def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
+def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str, label_col: str = "sub_type"):
     """
     The function takes as input a folder with images, a metadata-sheet, a height/width in pixels, and an
     output path, and gives as output square patches from all points specified in the sheet, with size
@@ -119,24 +118,29 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str):
     df = pd.read_excel(Path(path_to_folder, meta_filename), engine='openpyxl')
     df["fpath"] = path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
     
-    # Assumption: Si not found in metadata, and UkSu refers to unknown substrate
-    df = df[~df["sub_type"].isin(["UkSu", "Si"])]
     
-    # Assumption: St, LaSt combined, Bo and LaBo combined
-    df['sub_type'] = df['sub_type'].replace(['LaSt'], 'St')
-    df['sub_type'] = df['sub_type'].replace(['LaBo'], 'Bo')
+    if label_col == "sub_type":
+        # Assumption: Si not found in metadata, and UkSu refers to unknown substrate
+        df = df[~df["sub_type"].isin(["UkSu"])]
+        # Assumption: St, LaSt combined, Bo and LaBo combined
+        df['sub_type'] = df['sub_type'].replace(['LaSt'], 'St')
+        df['sub_type'] = df['sub_type'].replace(['LaBo'], 'Bo')
+    
+    if label_col == "bio_type":
+        # Assumption: UdOrg removed
+        df = df[~df["sub_type"].isin(["UdOrg"])]
     
     df = df.groupby(['fpath'], 
-                  as_index=False)['pos_X','pos_Y','sub_type','point'].agg(lambda x: list(x))
+                  as_index=False)[['pos_X','pos_Y', label_col,'point']].agg(lambda x: list(x))
 
     # create patch folder
     if not os.path.exists(f"{out_path}"):
         Path(f"{out_path}").mkdir(parents=True, exist_ok=True)
         
-    df.progress_apply(lambda x: get_patch(x, out_path, pixels), axis=1)
+    df.progress_apply(lambda x: get_patch(x, out_path, pixels, label_col), axis=1)
     
     logging.info(
-        f"Patch creation completed successfully. Total patches: {len(fnmatch.filter(os.listdir(out_path), '*.jpg'))}"
+        f"Patch creation completed successfully. Total patches: {len(glob.glob(out_path + '/**/*.jpg', recursive=True))}"
     )
 
 
