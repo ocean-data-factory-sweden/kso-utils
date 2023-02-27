@@ -13,7 +13,11 @@ from IPython.display import HTML, display
 from ipywidgets import interactive, Layout
 import asyncio
 
-from panoptes_client import Project
+# temporary work around issue #133
+try:
+    from panoptes_client import Project
+except:
+    from panoptes_client import Project
 
 # util imports
 import kso_utils.server_utils as server_utils

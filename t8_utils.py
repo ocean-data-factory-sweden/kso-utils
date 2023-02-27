@@ -661,7 +661,7 @@ def process_clips(df: pd.DataFrame, project: project_utils.Project):
         annotations = json.loads(row["annotations"])
 
         # Select the information from the species identification task
-        if project.Project_name == "Koster_Seafloor_Obs":
+        if project.Zooniverse_number == 9747:
             rows_list = process_clips_koster(
                 annotations, row["classification_id"], rows_list
             )
@@ -810,6 +810,8 @@ def process_frames(df: pd.DataFrame, project_name: str):
             "user_name",
             "movie_id",
             "workflow_version",
+            "workflow_name",
+            "workflow_id",
         ]
     ]
 
