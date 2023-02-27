@@ -923,19 +923,18 @@ def create_clips(
 
     logging.info("Extracting clips")
 
-
     processlist = []
     # Read each movie and extract the clips
     for index, row in potential_start_df.iterrows():
         # Extract the videos and store them in the folder
         extract_clips(
-                movie_path,
-                clip_length,
-                row["upl_seconds"],
-                row["clip_path"],
-                modification_details,
-                gpu_available,
-            )
+            movie_path,
+            clip_length,
+            row["upl_seconds"],
+            row["clip_path"],
+            modification_details,
+            gpu_available,
+        )
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(modification_details)

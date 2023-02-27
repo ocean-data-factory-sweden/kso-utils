@@ -644,7 +644,6 @@ class Annotator:
         self.bboxes = []
 
     def fiftyone_annotate(self):
-
         # Create a new dataset
         try:
             dataset = fo.load_dataset(self.dataset_name)
