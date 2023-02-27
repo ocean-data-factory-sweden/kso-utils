@@ -177,13 +177,11 @@ def ProcFrameCuda(frame: np.ndarray, size=(416, 416), use_gpu=False):
         frame_device_small = cv.resize(frame_device, dsize=size)
         fg_device = cv.cvtColor(frame_device_small, cv.COLOR_BGR2RGB)
         fg_host = fg_device.download()
-        fg_host = applyMask(fg_device)
         return fg_host
     else:
         frame_device_small = cv.resize(frame, dsize=size)
         fg_device = cv.cvtColor(frame_device_small, cv.COLOR_BGR2RGB)
-        fg_host = applyMask(fg_device)
-        return fg_host
+        return fg_device
 
 
 def prepare(data_path, percentage_test, out_path):
@@ -469,7 +467,7 @@ def frame_aggregation(
     link_bool = "https_location" in train_rows.columns
     image_bool = project.photo_folder is not None
 
-    if not all([movie_bool, link_bool, image_bool]):
+    if not any([movie_bool, link_bool, image_bool]):
         logging.error(
             "No source of footage for aggregation found. Please check your metadata "
             "and project setup before running this function again."

@@ -222,6 +222,7 @@ def populate_subjects(
                     "frame_exp_sp_id",
                     "upl_seconds",
                     "Subject_type",
+                    "subject_type",
                     "#VideoFilename",
                     "#clip_length",
                     "classifications_count",
@@ -231,13 +232,19 @@ def populate_subjects(
                 ]
             ]
 
+            # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+            if "Subject_type" in subjects.columns:
+                subjects["subject_type"] = subjects[
+                    ["subject_type", "Subject_type"]
+                ].apply(lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
+                subjects.drop(columns=["Subject_type"], inplace=True)
+
             # Rename columns to match the db format
             subjects = subjects.rename(
                 columns={
                     "#VideoFilename": "filename",
                     "upl_seconds": "clip_start_time",
                     "#frame_number": "frame_number",
-                    "Subject_type": "subject_type",
                 }
             )
 
@@ -266,12 +273,6 @@ def populate_subjects(
     if movie_folder == "None" and server in ["LOCAL", "SNIC"]:
         subjects["movie_id"] = None
 
-    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-    if "Subject_type" in subjects.columns:
-        subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
-            lambda x: x[1] if isinstance(x[1], str) else x[0], 1
-        )
-
     # Fix subjects where clip_start_time is not provided but upl_seconds is
     if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
         subjects["clip_start_time"] = subjects[
@@ -298,6 +299,8 @@ def populate_subjects(
             "movie_id",
         ]
     ]
+
+    print(subjects.subject_type.value_counts())
 
     # Ensure that subject_ids are not duplicated by workflow
     subjects = subjects.drop_duplicates(subset="id")
