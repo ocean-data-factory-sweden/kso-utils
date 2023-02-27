@@ -48,7 +48,9 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
 
         # Discard images where label is NA
         if not isinstance(row[label_col][ix], str):
-            logging.error(f"Invalid label in {os.path.basename(row.fpath)}. Skipping...")
+            logging.error(
+                f"Invalid label in {os.path.basename(row.fpath)}. Skipping..."
+            )
             return
 
         cropped_ys, cropped_ye = int(coord[1] - pixels / 2), int(coord[1] + pixels / 2)
@@ -82,7 +84,13 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
         )
 
 
-def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str, label_col: str = "sub_type"):
+def get_patches(
+    root_path: str,
+    meta_filename: str,
+    pixels: int,
+    out_path: str,
+    label_col: str = "sub_type",
+):
     """
     The function takes as input a folder with images, a metadata-sheet, a height/width in pixels, and an
     output path, and gives as output square patches from all points specified in the sheet, with size
@@ -120,23 +128,25 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str, 
         return path
 
     # df: dataframe based on SGU metadata-sheet
-    df = pd.read_excel(Path(path_to_folder, meta_filename), engine='openpyxl')
-    df["fpath"] = path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
-    
-    
+    df = pd.read_excel(Path(path_to_folder, meta_filename), engine="openpyxl")
+    df["fpath"] = (
+        path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
+    )
+
     if label_col == "sub_type":
         # Assumption: Si not found in metadata, and UkSu refers to unknown substrate
         df = df[~df["sub_type"].isin(["UkSu"])]
         # Assumption: St, LaSt combined, Bo and LaBo combined
-        df['sub_type'] = df['sub_type'].replace(['LaSt'], 'St')
-        df['sub_type'] = df['sub_type'].replace(['LaBo'], 'Bo')
-    
+        df["sub_type"] = df["sub_type"].replace(["LaSt"], "St")
+        df["sub_type"] = df["sub_type"].replace(["LaBo"], "Bo")
+
     if label_col == "bio_type":
         # Assumption: UdOrg removed
         df = df[~df["sub_type"].isin(["UdOrg"])]
-    
-    df = df.groupby(['fpath'], 
-                  as_index=False)[['pos_X','pos_Y', label_col,'point']].agg(lambda x: list(x))
+
+    df = df.groupby(["fpath"], as_index=False)[
+        ["pos_X", "pos_Y", label_col, "point"]
+    ].agg(lambda x: list(x))
 
     # create patch folder
     if not os.path.exists(f"{out_path}"):
