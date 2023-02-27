@@ -9,6 +9,7 @@ from pathlib import Path
 import splitfolders
 import fnmatch
 import glob
+
 tqdm.pandas()
 
 # Logging
@@ -16,11 +17,15 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-def create_classification_dataset(data_path: str, out_path: str, test_size: float, seed: int = 1337):
+def create_classification_dataset(
+    data_path: str, out_path: str, test_size: float, seed: int = 1337
+):
     if not os.path.exists(out_path):
         os.mkdir(out_path)
-    splitfolders.ratio(data_path, output=out_path, seed=seed, ratio=(1-test_size, 0, test_size))
-    logging.info(f"Training and test datasets saved at {out_path}") 
+    splitfolders.ratio(
+        data_path, output=out_path, seed=seed, ratio=(1 - test_size, 0, test_size)
+    )
+    logging.info(f"Training and test datasets saved at {out_path}")
 
 
 def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"):
@@ -29,15 +34,16 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
     except:
         logging.info(f"No such image, {row.fpath}")
         return
-    
+
     for ix, (pos_X, pos_Y) in enumerate(zip(row.pos_X, row.pos_Y)):
-        
         # Use conversion between current XY position and actual pixel values
         coord = (pos_X / 15, pos_Y / 15)
 
         # Discard images where pos_X is negative
         if coord[0] < 0:
-            logging.error(f"Negative X value in {os.path.basename(row.fpath)}. Skipping...")
+            logging.error(
+                f"Negative X value in {os.path.basename(row.fpath)}. Skipping..."
+            )
             return
 
         # Discard images where label is NA
@@ -49,14 +55,14 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
         cropped_xs, cropped_xe = int(coord[0] - pixels / 2), int(coord[0] + pixels / 2)
 
         if cropped_ys < 0:
-                y_diff = -1 * cropped_ys
-                cropped_ys += y_diff
-                cropped_ye += y_diff
+            y_diff = -1 * cropped_ys
+            cropped_ys += y_diff
+            cropped_ye += y_diff
 
         if cropped_xs < 0:
-                x_diff = -1 * cropped_xs
-                cropped_xs += x_diff
-                cropped_xe += x_diff
+            x_diff = -1 * cropped_xs
+            cropped_xs += x_diff
+            cropped_xe += x_diff
 
         # Specify cropped patch size
         cropped_image = img[
@@ -72,7 +78,7 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
         # Write patches to a folder
         cv2.imwrite(
             f"{Path(out_path, label)}/{Path(row.fpath).stem}_patch_{row.point[ix]}.jpg",
-            cropped_image
+            cropped_image,
         )
 
 
@@ -94,26 +100,25 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str, 
     """
 
     path_to_folder = Path(root_path)
-    
+
     # get list of image files
-    orig_names = [f
+    orig_names = [
+        f
         for f in os.listdir(path_to_folder)
-        if imghdr.what(Path(path_to_folder, f)) is not None]
-    
-    image_list = [
-        f.lower()
-        for f in orig_names
+        if imghdr.what(Path(path_to_folder, f)) is not None
     ]
-    
-    img_2_orig = {k: v for k,v in zip(image_list, orig_names)}
-    
+
+    image_list = [f.lower() for f in orig_names]
+
+    img_2_orig = {k: v for k, v in zip(image_list, orig_names)}
+
     def find_image(path):
         try:
             path = img_2_orig[path]
         except KeyError:
             path = None
         return path
-    
+
     # df: dataframe based on SGU metadata-sheet
     df = pd.read_excel(Path(path_to_folder, meta_filename), engine='openpyxl')
     df["fpath"] = path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
@@ -136,9 +141,7 @@ def get_patches(root_path: str, meta_filename: str, pixels: int, out_path: str, 
     # create patch folder
     if not os.path.exists(f"{out_path}"):
         Path(f"{out_path}").mkdir(parents=True, exist_ok=True)
-        
     df.progress_apply(lambda x: get_patch(x, out_path, pixels, label_col), axis=1)
-    
     logging.info(
         f"Patch creation completed successfully. Total patches: {len(glob.glob(out_path + '/**/*.jpg', recursive=True))}"
     )

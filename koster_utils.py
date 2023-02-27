@@ -302,6 +302,7 @@ def process_clips_koster(annotations, row_class_id: str, rows_list: list):
                 # If choice = species, flatten follow-up answers
                 else:
                     answers = value_i["answers"]
+                    f_time, inds = None, None
                     for k in answers.keys():
                         if "FIRSTTIME" in k:
                             f_time = answers[k].replace("S", "")

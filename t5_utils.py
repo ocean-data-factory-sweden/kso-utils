@@ -83,6 +83,25 @@ def choose_experiment_name():
     return exp_name
 
 
+def choose_entity():
+    """
+    It creates a text box that allows you to enter your username or teamname of WandB
+    :return: The text box widget.
+    """
+    entity = widgets.Text(
+        value="koster",
+        placeholder="Give your user or team name",
+        description="User or Team name:",
+        disabled=False,
+        display="flex",
+        flex_flow="column",
+        align_items="stretch",
+        style={"description_width": "initial"},
+    )
+    display(entity)
+    return entity
+
+
 def choose_model_type():
     """
     It creates a dropdown box that allows you to choose a model type
