@@ -231,12 +231,12 @@ def populate_subjects(
                     "created_at",
                 ]
             ]
-            
+
             # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
             if "Subject_type" in subjects.columns:
-                subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
-                    lambda x: x[1] if isinstance(x[1], str) else x[0], 1
-                )
+                subjects["subject_type"] = subjects[
+                    ["subject_type", "Subject_type"]
+                ].apply(lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
                 subjects.drop(columns=["Subject_type"], inplace=True)
 
             # Rename columns to match the db format
@@ -299,7 +299,7 @@ def populate_subjects(
             "movie_id",
         ]
     ]
-    
+
     print(subjects.subject_type.value_counts())
 
     # Ensure that subject_ids are not duplicated by workflow
