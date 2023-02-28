@@ -208,7 +208,10 @@ class WidgetMaker(widgets.VBox):
         :param workflows_df: the dataframe of workflows
         """
         self.workflows_df = workflows_df
-        self.widget_count = widgets.IntText(
+        self.widget_count = widgets.BoundedIntText(
+            value=0,
+            min=0,
+            max=100,
             description="Number of workflows:",
             display="flex",
             flex_flow="column",
@@ -217,7 +220,7 @@ class WidgetMaker(widgets.VBox):
         )
         self.bool_widget_holder = widgets.HBox(
             layout=widgets.Layout(
-                width="100%", display="inline-flex", flex_flow="row wrap"
+                width="70%", display="inline-flex", flex_flow="row wrap"
             )
         )
         children = [
@@ -974,7 +977,7 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
         .apply(str)
         .unique()
     )
-    subject_widget = widgets.Combobox(
+    subject_widget = widgets.Dropdown(
         options=options,
         description="Subject id:",
         ensure_option=True,
@@ -1005,7 +1008,7 @@ def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: st
     """
 
     # Select the subject
-    subject_widget = widgets.Combobox(
+    subject_widget = widgets.Dropdown(
         options=tuple(class_df.subject_ids.apply(int).apply(str).unique()),
         description="Subject id:",
         ensure_option=True,
