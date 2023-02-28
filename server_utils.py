@@ -842,34 +842,38 @@ def download_gdrive(gdrive_id: str, folder_name: str):
 
     # Remove the zipped file
     os.remove(zip_file)
-    
+
     # Correct the file names by using correct encoding
     fix_text_encoding(folder_name)
 
+
 def fix_text_encoding(folder_name):
     """
-    This function corrects for text encoding errors, which occur when there is 
-    for example an ä,å,ö present. It runs through all the file and folder names 
-    of the directory you give it. It uses the package ftfy, which recognizes 
-    which encoding the text has based on the text itself, and it encodes/decodes 
-    it to utf8. 
+    This function corrects for text encoding errors, which occur when there is
+    for example an ä,å,ö present. It runs through all the file and folder names
+    of the directory you give it. It uses the package ftfy, which recognizes
+    which encoding the text has based on the text itself, and it encodes/decodes
+    it to utf8.
     This function was tested on a Linux and Windows device with package version
     6.1.1. With package version 5.8 it did not work.
 
-    This function can replace the unswedify and reswedify functions from 
-    koster_utils, but this is not implemented yet. 
+    This function can replace the unswedify and reswedify functions from
+    koster_utils, but this is not implemented yet.
     """
     dirpaths = []
-    for (dirpath, dirnames, filenames) in os.walk(folder_name):
+    for dirpath, dirnames, filenames in os.walk(folder_name):
         for filename in filenames:
-            os.rename(os.path.join(dirpath,filename), os.path.join(dirpath,ftfy.fix_text(filename)))
+            os.rename(
+                os.path.join(dirpath, filename),
+                os.path.join(dirpath, ftfy.fix_text(filename)),
+            )
         dirpaths.append(dirpath)
 
     for dirpath in dirpaths:
-        if sys.platform.startswith('win'): # windows has different file-path formatting
-            index = dirpath.rfind('\\')
-        else: # mac and linux have the same file-path formatting
-            index = dirpath.rfind('/')
+        if sys.platform.startswith("win"):  # windows has different file-path formatting
+            index = dirpath.rfind("\\")
+        else:  # mac and linux have the same file-path formatting
+            index = dirpath.rfind("/")
         old_dir = ftfy.fix_text(dirpath[:index]) + dirpath[index:]
         new_dir = ftfy.fix_text(dirpath)
         os.rename(old_dir, new_dir)
