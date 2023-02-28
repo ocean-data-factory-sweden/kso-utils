@@ -92,7 +92,7 @@ def retrieve_zoo_info(
 
     for info_n in zoo_info:
         logging.info(f"Retrieving {info_n} from Zooniverse")
-        
+
         try:
             # Get the information of interest from Zooniverse
             if generate_export:
@@ -107,7 +107,7 @@ def retrieve_zoo_info(
                     export = zoo_project.get_export(info_n, generate=False)
             else:
                 export = zoo_project.get_export(info_n, generate=generate_export)
-    
+
             # Save the info as pandas data frame
             try:
                 export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
@@ -117,14 +117,16 @@ def retrieve_zoo_info(
                 )
                 export_df = {}
         except:
-            logging.info("No connection with Zooniverse, retrieve template info from google drive.")
+            logging.info(
+                "No connection with Zooniverse, retrieve template info from google drive."
+            )
             if info_n == "classifications":
                 url = "https://drive.google.com/file/d/1DvJ2nOrG32MR2D7faAJZXMNbEm_ra3rb/view?usp=sharing"
             if info_n == "subjects":
                 url = "https://drive.google.com/file/d/18AWRPx3erL25IHekncgKfI_kXHFYAl8e/view?usp=sharing"
             if info_n == "workflows":
                 url = "https://drive.google.com/file/d/1bZ6CSxJLxeoX8xVgMU7ZqL76RZDv-09A/view?usp=sharing"
-            export = gdown.download(url, info_n+'.csv', quiet=False, fuzzy=True)
+            export = gdown.download(url, info_n + ".csv", quiet=False, fuzzy=True)
             export_df = pd.read_csv(export)
 
         if len(export_df) > 0:

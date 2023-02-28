@@ -46,16 +46,16 @@ def choose_species(zoo_info_dict: dict):
     """
     This function generates a widget to select the species of interest.
     The options visible in the widgets are all the names that are given in the annotations from Zooniverse.
-    :param zoo_info_dict: a dictionary containing the information of the subjects uploaded to Zooniverse 
+    :param zoo_info_dict: a dictionary containing the information of the subjects uploaded to Zooniverse
     :type zoo_info_dict: dict
     """
     species = set()
 
-    all_annotations = zoo_info_dict['classifications']['annotations']
+    all_annotations = zoo_info_dict["classifications"]["annotations"]
     for index in range(len(all_annotations)):
-      annotation =  eval(all_annotations[index])[0]['value']
-      for ii in range(len(annotation)): 
-        species.add(annotation[ii]['choice'])
+        annotation = eval(all_annotations[index])[0]["value"]
+        for ii in range(len(annotation)):
+            species.add(annotation[ii]["choice"])
 
     species_list = list(species)
 
@@ -131,7 +131,7 @@ def get_species_frames(
         "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
         conn,
     )
-    
+
     agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
     subjects_df["id"] = subjects_df["id"].astype(int)
 
