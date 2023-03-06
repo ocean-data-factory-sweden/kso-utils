@@ -1,6 +1,5 @@
 # base imports
 import os
-import csv
 import sqlite3
 import logging
 import pandas as pd

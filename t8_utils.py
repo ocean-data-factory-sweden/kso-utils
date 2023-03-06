@@ -1,5 +1,4 @@
 # base imports
-import sys
 import os
 import requests
 import random
@@ -21,7 +20,6 @@ import kso_utils.zooniverse_utils as zoo_utils
 # widget imports
 from IPython.display import HTML, display, clear_output
 import ipywidgets as widgets
-from itables import show
 from PIL import Image as PILImage, ImageDraw
 import imagesize
 from jupyter_bbox_widget import BBoxWidget
@@ -631,11 +629,11 @@ def aggregrate_classifications(
         on="classification_id",
     )
 
-    print(
-        agg_class_df.shape[0],
-        "classifications aggregated out of",
-        df.subject_ids.nunique(),
-        "unique subjects available",
+    logging.info(
+        f"{agg_class_df.shape[0]}"
+        "classifications aggregated out of"
+        f"{df.subject_ids.nunique()}"
+        "unique subjects available"
     )
 
     return agg_class_df, raw_class_df
@@ -1115,8 +1113,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
 
             bboxes.append(
                 {
-                    "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                    "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                    "x": left,
+                    "y": top,
                     "width": float(s[3]) * width,
                     "height": float(s[4]) * height,
                     "label": species_list[int(s[0])],
@@ -1154,8 +1152,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
 
                 bboxes.append(
                     {
-                        "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                        "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                        "x": left,
+                        "y": top,
                         "width": float(s[3]) * width,
                         "height": float(s[4]) * height,
                         "label": species_list[int(s[0])],
@@ -1201,8 +1199,8 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     top = (float(s[2]) - (float(s[4]) / 2)) * height
                     bboxes.append(
                         {
-                            "x": left,  # (float(s[1])-(float(s[3])/2))*width,
-                            "y": top,  # (float(s[2])-(float(s[4])/2))*height,
+                            "x": left,
+                            "y": top,
                             "width": float(s[3]) * width,
                             "height": float(s[4]) * height,
                             "label": species_list[int(s[0])],
@@ -1276,7 +1274,7 @@ def format_to_gbif_occurence(
 
         # Retrieve list of subjects
         subjects_df = pd.read_sql_query(
-            f"SELECT id, clip_start_time, frame_number, movie_id FROM subjects",
+            "SELECT id, clip_start_time, frame_number, movie_id FROM subjects",
             conn,
         )
 
@@ -1445,14 +1443,14 @@ def format_to_gbif_occurence(
 
     # If classifications have been created by biologists
     if classified_by == "biologists":
-        logging.info(f"This sections is currently under development")
+        logging.info("This sections is currently under development")
 
     # If classifications have been created by ml algorithms
     if classified_by == "ml_algorithms":
-        logging.info(f"This sections is currently under development")
+        logging.info("This sections is currently under development")
     else:
         raise ValueError(
-            f"Specify who classified the species of interest (citizen_scientists, biologists or ml_algorithms)"
+            "Specify who classified the species of interest (citizen_scientists, biologists or ml_algorithms)"
         )
 
 

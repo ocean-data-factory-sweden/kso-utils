@@ -10,7 +10,7 @@ from pathlib import Path
 # widget imports
 import ipywidgets as widgets
 from ipywidgets import interactive, Layout, HBox
-from IPython.display import display, clear_output
+from IPython.display import display
 import asyncio
 import ipysheet
 from ipyfilechooser import FileChooser
@@ -26,7 +26,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 # Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 ####################################################
 ############### SURVEY FUNCTIONS ###################
@@ -1750,7 +1750,7 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         column_headers=movies_df.columns.tolist(),
     )
     for index, movie in enumerate(movie_list):
-        remote_fpath = Path(f"{snic_path}/tmp_dir/" + movie[1])
+        remote_fpath = Path(snic_path, "tmp_dir", movie[1])
         if os.path.exists(remote_fpath):
             logging.info(
                 "Filename "

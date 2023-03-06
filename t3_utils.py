@@ -10,7 +10,7 @@ import datetime
 import subprocess
 import logging
 import random
-import threading
+from pathlib import Path
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 
@@ -72,6 +72,7 @@ def check_movie_uploaded(movie_i: str, db_info_dict: dict):
     if already_uploaded:
         clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
         logging.info(f"{movie_i} has clips already uploaded.")
+        logging.info(clips_uploaded.head())
     else:
         logging.info(f"{movie_i} has not been uploaded to Zooniverse yet")
 
@@ -225,14 +226,15 @@ def create_example_clips(
     # Specify the temp folder to host the clips
     output_clip_folder = movie_i + "_clips"
     if server == "SNIC":
-        clips_folder = os.path.join(f"{snic_path}/tmp_dir/", output_clip_folder)
+        clips_folder = Path(snic_path, "tmp_dir", output_clip_folder)
     else:
         clips_folder = output_clip_folder
 
     # Create the folder to store the videos if not exist
     if not os.path.exists(clips_folder):
-        os.mkdir(clips_folder)
-        os.chmod(clips_folder, 0o777)
+        Path(clips_folder).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(clips_folder)]
 
     # Specify the number of parallel items
     pool = Pool(pool_size)
@@ -246,7 +248,7 @@ def create_example_clips(
         output_clip_name = (
             movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
         )
-        output_clip_path = os.path.join(clips_folder, output_clip_name)
+        output_clip_path = Path(clips_folder, output_clip_name)
 
         # Add the path of the clip to the list
         example_clips = example_clips + [output_clip_path]
@@ -490,7 +492,7 @@ def create_modified_clips(
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
     if server == "SNIC":
-        mod_clips_folder = os.path.join(f"{snic_path}/tmp_dir", mod_clip_folder)
+        mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
     else:
         mod_clips_folder = mod_clip_folder
 
@@ -501,8 +503,9 @@ def create_modified_clips(
     if len(modification_details.values()) > 0:
         # Create the folder to store the videos if not exist
         if not os.path.exists(mod_clips_folder):
-            os.mkdir(mod_clips_folder)
-            os.chmod(str(mod_clips_folder), 0o777)
+            Path(mod_clips_folder).mkdir(parents=True, exist_ok=True)
+            # Recursively add permissions to folders created
+            [os.chmod(root, 0o777) for root, dirs, files in os.walk(mod_clips_folder)]
 
         # Specify the number of parallel items
         pool = Pool(pool_size)
@@ -514,7 +517,7 @@ def create_modified_clips(
         for clip_i in clips_list:
             # Create the filename and path of the modified clip
             output_clip_name = "modified_" + os.path.basename(clip_i)
-            output_clip_path = os.path.join(mod_clips_folder, output_clip_name)
+            output_clip_path = Path(mod_clips_folder, output_clip_name)
 
             # Add the path of the clip to the list
             modified_clips = modified_clips + [output_clip_path]
@@ -557,7 +560,7 @@ def view_clips(example_clips: list, modified_clip_path: str):
     )
 
     # Get the extension of the video
-    extension = os.path.splitext(example_clip_path)[1]
+    extension = Path(example_clip_path).suffix
 
     # Open original video
     vid1 = open(example_clip_path, "rb").read()
@@ -891,7 +894,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     temp_clip_folder = movie_i + "_zooniverseclips"
     if server == "SNIC":
-        clips_folder = os.path.join(f"{snic_path}/tmp_dir/", temp_clip_folder)
+        clips_folder = Path(snic_path, "tmp_dir", temp_clip_folder)
     else:
         clips_folder = temp_clip_folder
 
@@ -906,18 +909,16 @@ def create_clips(
     )
 
     # Set the path of the clips
-    potential_start_df["clip_path"] = (
-        clips_folder + os.sep + potential_start_df["clip_filename"]
+    potential_start_df["clip_path"] = potential_start_df["clip_filename"].apply(
+        lambda x: Path(clips_folder, x), 1
     )
 
     # Create the folder to store the videos if not exist
-    if not os.path.exists(clips_folder):
-        os.mkdir(clips_folder)
-        os.chmod(str(clips_folder), 0o777)
-    else:
+    if os.path.exists(clips_folder):
         shutil.rmtree(clips_folder)
-        os.mkdir(clips_folder)
-        os.chmod(str(clips_folder), 0o777)
+    Path(clips_folder).mkdir(parents=True, exist_ok=True)
+    # Recursively add permissions to folders created
+    [os.chmod(root, 0o777) for root, dirs, files in os.walk(clips_folder)]
 
     logging.info("Extracting clips")
 

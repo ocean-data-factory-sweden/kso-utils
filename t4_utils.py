@@ -1,7 +1,6 @@
 # t4 utils
 # base imports
 import os
-import sys
 import sqlite3
 import ffmpeg as ffmpeg_python
 import re
@@ -39,7 +38,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 # Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 
 def choose_species(db_info_dict: dict):
@@ -60,7 +59,7 @@ def choose_species(db_info_dict: dict):
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
         raise ValueError(
-            f"Your database contains no species, please add at least one species before continuing."
+            "Your database contains no species, please add at least one species before continuing."
         )
 
     # Generate the widget
@@ -147,7 +146,6 @@ def get_species_frames(
 
     if server == "SNIC":
         movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
-        movie_folder = project.movie_folder
 
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
@@ -186,6 +184,7 @@ def get_species_frames(
 
     if server == "AWS":
         # Include movies' filepath and fps to the df
+        # TODO: Define fpaths?
         frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
 
         ##### Add species_id info ####
@@ -343,8 +342,6 @@ def extract_frames(
     """
     Extract frames and save them in chosen folder.
     """
-    # Extract server info
-    project_name = project.Project_name
 
     # Set the filename of the frames
     df["frame_path"] = (
@@ -395,23 +392,17 @@ def get_frames(
     # Roadblock to check if species list is empty
     if len(species_names) == 0:
         raise ValueError(
-            f"No species were selected. Please select at least one species before continuing."
+            "No species were selected. Please select at least one species before continuing."
         )
 
     # Transform species names to species ids
     species_ids = get_species_ids(project, species_names)
-
-    # Retrieve project-specific information and connect to db
-    movie_df = s_utils.retrieve_movie_info_from_server(
-        project=project, db_info_dict=server_dict
-    )
-
     conn = db_utils.create_connection(db_path)
 
     if project.movie_folder is None:
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
-            df = FileChooser(f"{snic_path}/tmp_dir")
+            df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
         df.title = "<b>Select frame folder location</b>"
@@ -442,7 +433,7 @@ def get_frames(
 
         # Select the temp location to store frames before uploading them to Zooniverse
         if project.server == "SNIC":
-            df = FileChooser(f"{snic_path}/tmp_dir")
+            df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
         df.title = "<b>Choose location to store frames</b>"
@@ -497,7 +488,7 @@ def get_frames(
             # Extract the frames from the videos and store them in the temp location
             if project.server == "SNIC":
                 folder_name = chooser.selected
-                frames_folder = os.path.join(
+                frames_folder = Path(
                     folder_name, "_".join(species_names_zoo) + "_frames/"
                 )
             else:
@@ -644,10 +635,10 @@ def modify_frames(
 ):
     server = project.server
 
-    # Specify the folder to host the modified clips
+    # Specify the folder to host the modified frames
     if server == "SNIC":
         folder_name = f"{snic_path}/tmp_dir/frames/"
-        mod_frames_folder = os.path.join(
+        mod_frames_folder = Path(
             folder_name, "modified_" + "_".join(species_i) + "_frames/"
         )
     else:
