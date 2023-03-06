@@ -489,30 +489,35 @@ def get_data_viewer(data_path: str):
 
     :param data_path: the path to the data folder
     :type data_path: str
-    :return: A function that takes in a parameter k and returns a widget that displays the image at
-    index k in the list of images.
+    :return: A function that takes in a parameter k and a scale parameter and returns a widget that displays the image at
+    index k in the list of images with the specified scale.
     """
     if "empty_string" in data_path:
         logging.info("No files.")
         return None
     imgs = list(filter(lambda fn: fn.lower().endswith(".jpg"), os.listdir(data_path)))
 
-    def loadimg(k):
-        display(draw_box(os.path.join(data_path, imgs[k])))
+    def loadimg(k, scale=0.4):
+        display(draw_box(os.path.join(data_path, imgs[k]), scale))
 
-    return widgets.interact(loadimg, k=(0, len(imgs) - 1))
+    return widgets.interact(loadimg, k=(0, len(imgs) - 1), scale=(0.1, 1.0))
 
 
-def draw_box(path: str):
+def draw_box(path: str, scale: float):
     """
-    It takes a path to an image, opens it, opens the corresponding label file, and draws a box around
-    each object in the image
+    It takes a path to an image and a scale parameter, opens the image and resizes it to the specified scale,
+    opens the corresponding label file, and draws a box around each object in the image
 
     :param path: the path to the image
     :type path: str
-    :return: The image with the bounding boxes drawn on it.
+    :param scale: scale of the image to show
+    :type scale: float
+    :return: The image resized to the specified scale with the bounding boxes drawn on it.
     """
+
     im = PILImage.open(path)
+    dw, dh = im._size
+    im = im.resize((int(dw * scale), int(dh * scale)))
     d = {
         line.split()[0]: line.split()[1:]
         for line in open(path.replace("images", "labels").replace(".jpg", ".txt"))

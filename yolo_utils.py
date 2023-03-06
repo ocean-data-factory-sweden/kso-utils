@@ -462,6 +462,9 @@ def frame_aggregation(
                 "numbers and will therefore not be used."
             )
             movie_bool = False
+    else:
+        movie_bool = False
+
     link_bool = "https_location" in train_rows.columns
     image_bool = project.photo_folder is not None
 
