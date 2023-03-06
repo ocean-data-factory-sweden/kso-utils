@@ -810,8 +810,8 @@ def process_frames(df: pd.DataFrame, project_name: str):
             "user_name",
             "movie_id",
             "workflow_version",
-            "workflow_id",
             "workflow_name",
+            "workflow_id",
         ]
     ]
 
