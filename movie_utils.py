@@ -1,13 +1,10 @@
 # base imports
-from lib2to3.pytree import convert
 import os
 import cv2
-import pandas as pd
-from tqdm import tqdm
-import difflib
 import logging
 import subprocess
 import urllib
+from pathlib import Path
 
 # util imports
 import kso_utils.server_utils as server_utils
@@ -58,7 +55,7 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: project_utils.Proje
 
     if server == "AWS":
         # Extract the key from the orignal path of the movie
-        movie_key = f_path.replace("%20", " ").split("/", 3)[3]
+        movie_key = urllib.parse.unquote(f_path).split("/", 3)[3]
 
         # Generate presigned url
         movie_url = db_info_dict["client"].generate_presigned_url(
@@ -69,8 +66,8 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: project_utils.Proje
         return movie_url
 
     elif server == "SNIC":
-        return f_path
         logging.error("Getting the path of the movies is still work in progress")
+        return f_path
 
     else:
         return f_path
@@ -78,8 +75,7 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: project_utils.Proje
 
 def get_movie_extensions():
     # Specify the formats of the movies to select
-    movie_formats = tuple(["wmv", "mpg", "mov", "avi", "mp4", "MOV", "MP4"])
-    return movie_formats
+    return tuple(["wmv", "mpg", "mov", "avi", "mp4", "MOV", "MP4"])
 
 
 def standarise_movie_format(
@@ -107,7 +103,7 @@ def standarise_movie_format(
     """
 
     ##### Check movie format ######
-    filename, ext = os.path.splitext(movie_filename)
+    ext = Path(movie_filename).suffix
 
     if not ext.lower() == "mp4":
         logging.info(f"Extension of {movie_filename} not supported.")
@@ -216,6 +212,7 @@ def convert_video(
     :type compression: bool
     :return: The path to the converted video file.
     """
+    movie_filename = Path(movie_path).name
     conv_filename = "conv_" + movie_filename
 
     # Check the movie is accessible locally

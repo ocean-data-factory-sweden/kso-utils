@@ -52,9 +52,6 @@ def check_movies_from_server(db_info_dict: dict, project: project_utils.Project)
         "There are", len(missing_from_csv.index), "movies missing from movies.csv"
     )
 
-    #     print("There are", len(missing_from_csv.index), "movies missing from movies.csv. Their filenames are:")
-    #     print(*missing_from_csv.filename.unique(), sep = "\n")
-
     return missing_from_server, missing_from_csv
 
 

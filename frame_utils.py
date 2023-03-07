@@ -6,6 +6,7 @@ import pims
 import db_utils
 import cv2 as cv
 import pandas as pd
+from pathlib import Path
 from tqdm import tqdm
 
 # Logging
@@ -25,11 +26,9 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
     :param out_path: The path to the directory where you want to save the images with the bounding boxes
     drawn on them
     """
-    df["movie_path"] = (
-        movie_dir
-        + "/"
-        + df["filename"].apply(
-            lambda x: os.path.basename(x.rsplit("_frame_")[0]) + ".mov"
+    df["movie_path"] = df["filename"].apply(
+        lambda x: str(
+            (Path(movie_dir) / Path(x).name.rsplit("_frame_")[0]).with_suffix(".mp4")
         )
     )
     movie_dict = {i: pims.Video(i) for i in df["movie_path"].unique()}
@@ -48,8 +47,10 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
             # changed color and width to make it visible
             cv.rectangle(frame, (int(box[0]), int(box[1])), end_box, (255, 0, 0), 1)
         if not os.path.exists(out_path):
-            os.mkdir(out_path)
-        cv.imwrite(out_path + "/" + os.path.basename(name[3]), frame)
+            Path(out_path).mkdir(parents=True, exist_ok=True)
+            # Recursively add permissions to folders created
+            [os.chmod(root, 0o777) for root, dirs, files in os.walk(out_path)]
+        cv.imwrite(Path(out_path, Path(name[3]).name), frame)
 
 
 def main():

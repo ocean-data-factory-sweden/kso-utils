@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 # widget imports
 from IPython.display import display
-from ipywidgets import interactive, Layout, HBox
+from ipywidgets import Layout, HBox
 import ipywidgets as widgets
 import ipysheet
 import folium
@@ -28,9 +28,6 @@ import kso_utils.project_utils as project_utils
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
-
-out_df = pd.DataFrame()
-
 
 ####################################################
 ############ CSV/iPysheet FUNCTIONS ################
@@ -685,7 +682,7 @@ def check_species_csv(db_info_dict: dict, project: project_utils.Project):
 
     # Retrieve the names of the basic columns in the sql db
     conn = db_utils.create_connection(db_info_dict["db_path"])
-    data = conn.execute(f"SELECT * FROM species")
+    data = conn.execute("SELECT * FROM species")
     field_names = [i[0] for i in data.description]
 
     # Select the basic fields for the db check

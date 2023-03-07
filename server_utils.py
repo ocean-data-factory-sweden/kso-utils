@@ -12,6 +12,7 @@ import paramiko
 import logging
 import sys
 import ftfy
+import urllib
 from tqdm import tqdm
 from pathlib import Path
 from paramiko import SFTPClient, SSHClient
@@ -28,7 +29,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 # Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 ######################################
 # ###### Common server functions ######
@@ -117,7 +118,9 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
 
     # Create the folder to store the csv files if not exist
     if not os.path.exists(db_csv_info):
-        os.mkdir(db_csv_info)
+        Path(db_csv_info).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(db_csv_info)]
 
     if server == "AWS":
         # Download csv files from AWS
@@ -157,7 +160,7 @@ def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
             logging.info(
                 "No movies or photos found, an empty movies file will be created."
             )
-            with open(f"{csv_folder}/movies.csv", "w") as fp:
+            with open(str(Path(f"{csv_folder}", "movies.csv")), "w") as fp:
                 fp.close()
 
         db_initial_info = {}
@@ -304,13 +307,10 @@ def upload_movie_server(
     :param project: The filename of the movie file you want to convert
     :type movie_path: str
     """
-    # Get the project-specific server
-    server = project.server
-
-    if server == "AWS":
+    if project.server == "AWS":
         # Retrieve the key of the movie of interest
         f_path_key = f_path.split("/").str[:2].str.join("/")
-        print(f_path_key)
+        logging.info(f_path_key)
 
         # Upload the movie to AWS
         # upload_file_to_s3(db_info_dict["client"],
@@ -320,13 +320,13 @@ def upload_movie_server(
 
         # logging.info(f"{movie_path} has been added to the server")
 
-    elif server == "TEMPLATE":
+    elif project.server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
 
-    elif server == "SNIC":
+    elif project.server == "SNIC":
         logging.error("Uploading the movies to the server is a work in progress")
 
-    elif server == "LOCAL":
+    elif project.server == "LOCAL":
         logging.error(f"{movie_path} not uploaded to the server as project is local")
 
     else:
@@ -353,7 +353,6 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     server = project.server
     bucket_i = project.bucket
     movie_folder = project.movie_folder
-    project_name = project.Project_name
 
     if server == "AWS":
         logging.info("Retrieving movies from AWS server")
@@ -364,14 +363,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
             suffix=movie_utils.get_movie_extensions(),
         )
         # Get the fpath(html) from the key
-        server_df[
-            "spath"
-        ] = "http://marine-buv.s3.ap-southeast-2.amazonaws.com/" + server_df[
-            "Key"
-        ].str.replace(
-            " ", "%20"
-        ).replace(
-            "\\", "/"
+        server_df["spath"] = server_df["Key"].apply(
+            lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
+            + urllib.parse.quote(x, safe="://").replace("\\", "/")
         )
 
     elif server == "SNIC":
@@ -393,9 +387,8 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         # Get the fpath(html) from the key
         server_df = server_df.rename(columns={"filename": "fpath"})
 
-        server_df["spath"] = (
-            "https://www.wildlife.ai/wp-content/uploads/2022/06/"
-            + server_df.fpath.astype(str)
+        server_df["spath"] = server_df["fpath"].apply(
+            lambda x: "https://www.wildlife.ai/wp-content/uploads/2022/06/" + str(x), 1
         )
 
         # Remove fpath values
@@ -412,8 +405,10 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: koster_utils.reswedify(x).replace(" ", "%20").replace("\\", "/")
-        if koster_utils.reswedify(x).replace(" ", "%20").replace("\\", "/")
+        lambda x: urllib.parse.quote(
+            koster_utils.reswedify(x).replace("\\", "/"), safe="://"
+        )
+        if urllib.parse.quote(koster_utils.reswedify(x).replace("\\", "/"), safe="://")
         in server_df["spath"].unique()
         else koster_utils.unswedify(x)
     )
@@ -458,7 +453,7 @@ def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str
     """
     server = project.server
     if server == "AWS":
-        movie_key = f_path.replace("%20", " ").split("/", 3)[3]
+        movie_key = urllib.parse.unquote(f_path).split("/", 3)[3]
         movie_url = server_dict["client"].generate_presigned_url(
             "get_object",
             Params={"Bucket": project.bucket, "Key": movie_key},
@@ -817,7 +812,7 @@ def download_csv_from_google_drive(file_url: str):
     # the movies and the species
 
     file_id = file_url.split("/")[-2]
-    dwn_url = "https://drive.google.com/uc?export=download&id=" + file_id
+    dwn_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     url = requests.get(dwn_url).text.encode("ISO-8859-1").decode()
     csv_raw = io.StringIO(url)
     dfs = pd.read_csv(csv_raw)
@@ -826,7 +821,7 @@ def download_csv_from_google_drive(file_url: str):
 
 def download_gdrive(gdrive_id: str, folder_name: str):
     # Specify the url of the file to download
-    url_input = "https://drive.google.com/uc?&confirm=s5vl&id=" + str(gdrive_id)
+    url_input = f"https://drive.google.com/uc?&confirm=s5vl&id={gdrive_id}"
 
     logging.info(f"Retrieving the file from {url_input}")
 
