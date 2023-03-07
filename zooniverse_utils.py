@@ -300,8 +300,6 @@ def populate_subjects(
         ]
     ]
 
-    print(subjects.subject_type.value_counts())
-
     # Ensure that subject_ids are not duplicated by workflow
     subjects = subjects.drop_duplicates(subset="id")
 

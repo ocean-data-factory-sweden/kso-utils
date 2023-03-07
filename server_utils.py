@@ -365,7 +365,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         # Get the fpath(html) from the key
         server_df["spath"] = server_df["Key"].apply(
             lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
-            + urllib.parse.quote(x).replace("\\", "/")
+            + urllib.parse.quote(x, safe="://").replace("\\", "/")
         )
 
     elif server == "SNIC":
@@ -387,9 +387,8 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         # Get the fpath(html) from the key
         server_df = server_df.rename(columns={"filename": "fpath"})
 
-        server_df["spath"] = (
-            "https://www.wildlife.ai/wp-content/uploads/2022/06/"
-            + server_df.fpath.astype(str)
+        server_df["spath"] = server_df["fpath"].apply(
+            lambda x: "https://www.wildlife.ai/wp-content/uploads/2022/06/" + str(x), 1
         )
 
         # Remove fpath values
@@ -406,8 +405,10 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: urllib.parse.quote(Path(koster_utils.reswedify(x).as_posix()))
-        if urllib.parse.quote(Path(koster_utils.reswedify(x).as_posix()))
+        lambda x: urllib.parse.quote(
+            koster_utils.reswedify(x).replace("\\", "/"), safe="://"
+        )
+        if urllib.parse.quote(koster_utils.reswedify(x).replace("\\", "/"), safe="://")
         in server_df["spath"].unique()
         else koster_utils.unswedify(x)
     )

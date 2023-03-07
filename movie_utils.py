@@ -66,8 +66,8 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: project_utils.Proje
         return movie_url
 
     elif server == "SNIC":
-        return f_path
         logging.error("Getting the path of the movies is still work in progress")
+        return f_path
 
     else:
         return f_path
