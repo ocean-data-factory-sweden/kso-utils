@@ -33,7 +33,6 @@ logging.getLogger().setLevel(logging.INFO)
 ############ CSV/iPysheet FUNCTIONS ################
 ####################################################
 
-
 def select_sheet_range(db_info_dict: dict, orig_csv: str):
     """
     > This function loads the csv file of interest into a pandas dataframe and enables users to pick a range of rows and columns to display

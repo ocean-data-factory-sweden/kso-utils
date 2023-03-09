@@ -13,6 +13,7 @@ import logging
 import sys
 import ftfy
 import urllib
+import shutil
 from tqdm import tqdm
 from pathlib import Path
 from paramiko import SFTPClient, SSHClient
@@ -404,6 +405,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
+    movies_df = movies_df.rename(columns={"id": "movie_id"})
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     movies_df["fpath"] = movies_df["fpath"].apply(
@@ -431,7 +433,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     movies_df = movies_df.drop("_merge", axis=1)
 
     # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df["exists"]].reset_index()
+    available_movies_df = movies_df[movies_df["exists"]]
 
     # Create a filename with ext column
     available_movies_df["filename_ext"] = (

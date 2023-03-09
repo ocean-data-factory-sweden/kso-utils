@@ -2,6 +2,7 @@
 import os
 import logging
 import asyncio
+import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 import fiftyone as fo
@@ -17,17 +18,28 @@ import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
 from IPython.display import display, HTML
-import kso_utils.t1_utils as t1_utils
-import kso_utils.t3_utils as t3_utils
-import kso_utils.t4_utils as t4_utils
-import kso_utils.t8_utils as t8_utils
-import kso_utils.t2_utils as t2_utils
-import kso_utils.t6_utils as t6_utils
 
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
+
+# use functions, classes, and variables from my_module here
+
+# def load_utils(kind: str = "dm"):
+#     if kind == "dm":
+#         import kso_utils.t1_utils as t1_utils
+#         import kso_utils.t2_utils as t2_utils
+#         import kso_utils.t3_utils as t3_utils
+#         import kso_utils.t4_utils as t4_utils
+#         import kso_utils.t8_utils as t8_utils
+#     elif kind == "ml":
+#         import kso_utils.t5_utils as t5_utils
+#         import kso_utils.t6_utils as t6_utils
+#         import kso_utils.t7_utils as t7_utils
+#     else:
+#         logging.error("No kind specified, no utils will be imported.")
+#         return
 
 
 @dataclass
@@ -44,6 +56,18 @@ class Project:
     ml_folder: str = None
 
 
+def import_modules(module_names):
+    importlib = __import__("importlib")
+    modules = {}
+    for module_name in module_names:
+        module_full = "kso_utils." + module_name
+        try:
+            modules[module_name] = importlib.import_module(module_full)
+        except ModuleNotFoundError:
+            logging.error(f"Module {module_name} could not be imported.")
+    return modules
+
+
 class ProjectProcessor:
     def __init__(self, project: Project):
         self.project = project
@@ -51,65 +75,35 @@ class ProjectProcessor:
         self.server_info = {}
         self.db_info = {}
         self.zoo_info = {}
-        self.local_movies_csv = pd.DataFrame()
-        self.local_species_csv = pd.DataFrame()
-        self.local_sites_csv = pd.DataFrame()
-        self.server_movies_csv = pd.DataFrame()
         self.annotation_engine = None
         self.annotations = pd.DataFrame()
         self.classifications = pd.DataFrame()
         self.generated_clips = pd.DataFrame()
 
+        # Create empty meta tables
+        self.init_meta()
+        # Setup initial db
         self.setup_db()
+        # Get server details
         self.get_server_info()
+        # Check movies on server
         self.get_movie_info()
-        self.load_meta()
-
-    def update_meta(self, new_table, meta_name):
-        return t1_utils.update_csv(
-            self.db_info,
-            self.project,
-            new_table,
-            getattr(self, "local_" + meta_name + "_csv"),
-            "local_" + meta_name + "_csv",
-            "server_" + meta_name + "_csv",
+        # Reads csv files
+        #self.load_meta()
+        # Import modules
+        self.modules = import_modules(
+            ["t1_utils", "t2_utils", "t3_utils", "t4_utils", "t8_utils"]
         )
 
-    def preview_media(self):
-        movie_selected = t_utils.select_movie(self.server_movies_csv)
+    def __repr__(self):
+        return repr(self.__dict__)
 
-        async def f(project, db_info, server_movies_csv):
-            x = await t_utils.single_wait_for_change(movie_selected, "value")
-            display(t_utils.preview_movie(project, db_info, server_movies_csv, x)[0])
+    def keys(self):
+        '''Print keys of ProjectProcessor object'''
+        logging.info("Stored variable names.")
+        return list(self.__dict__.keys())
 
-        asyncio.create_task(f(self.project, self.db_info, self.server_movies_csv))
-
-    def map_sites(self):
-        return t1_utils.map_site(self.db_info, self.project)
-
-    def load_meta(self, base_keys=["sites", "species", "movies"]):
-        for key, val in self.db_info.items():
-            if any(ext in key for ext in base_keys):
-                setattr(self, key, pd.read_csv(val))
-
-    def check_subject_size(self, subject_type: str, subjects_df: pd.DataFrame):
-        if subject_type == "clip":
-            t3_utils.check_clip_size(subjects_df)
-        elif subject_type == "frame":
-            t4_utils.check_frame_size(subjects_df)
-
-    def check_movies_meta(self):
-        return t1_utils.check_movies_csv(
-            self.db_info, self.server_movies_csv, self.project, "Basic", False
-        )
-
-    def check_sites_meta(self):
-        # code for processing movie metadata (t1_utils.check_sites_csv)
-        pass
-
-    def check_species_meta(self):
-        return t1_utils.check_species_csv(self.db_info, self.project)
-
+    # general
     def setup_db(self):
         # code for setting up the SQLite database goes here
         db_utils.init_db(self.project.db_path)
@@ -121,91 +115,97 @@ class ProjectProcessor:
         self.server_info = server_utils.connect_to_server(self.project)
 
     def get_zoo_info(self):
-        self.zoo_project = t_utils.connect_zoo_project(self.project)
-        self.zoo_info = t_utils.retrieve__populate_zoo_info(
-            self.project,
-            self.db_info,
-            self.zoo_project,
-            zoo_info=["subjects", "workflows", "classifications"],
-        )
+        if self.project.Zooniverse_number is not None:
+            self.zoo_project = t_utils.connect_zoo_project(self.project)
+            self.zoo_info = t_utils.retrieve__populate_zoo_info(
+                self.project,
+                self.db_info,
+                self.zoo_project,
+                zoo_info=["subjects", "workflows", "classifications"],
+            )
+        else:
+            logging.error("This project is not registered with ZU.")
+            return
 
     def get_movie_info(self):
         self.server_movies_csv = server_utils.retrieve_movie_info_from_server(
             self.project, self.db_info
         )
+        logging.info("server_movies_csv updated")
 
     def load_movie(self, filepath):
         return movie_utils.get_movie_path(filepath, self.db_info, self.project)
+    
+    # t1
+    def init_meta(self, init_keys=["movies", "species", "sites"]):
+        for meta_name in init_keys:
+            setattr(self, "local_" + meta_name + "_csv", pd.DataFrame())
+            setattr(self, "server_" + meta_name + "_csv", pd.DataFrame())
 
-    def view_annotations(self, folder_path: str, annotation_classes: list):
-        return t8_utils.get_annotations_viewer(
-            folder_path, species_list=annotation_classes
+    def load_meta(self, base_keys=["movies", "species", "sites"]):
+        for key, val in self.db_info.items():
+            if any(ext in key for ext in base_keys):
+                setattr(self, key, pd.read_csv(val))
+
+    def update_meta(self, new_table, meta_name):
+        return self.modules["t1_utils"].update_csv(
+            self.db_info,
+            self.project,
+            new_table,
+            getattr(self, "local_" + meta_name + "_csv"),
+            "local_" + meta_name + "_csv",
+            "server_" + meta_name + "_csv",
         )
+    
+    def map_sites(self):
+        return self.modules["t1_utils"].map_site(self.db_info, self.project)
 
-    def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
+    def preview_media(self):
+        movie_selected = t_utils.select_movie(self.server_movies_csv)
+
+        async def f(project, db_info, server_movies_csv):
+            x = await t_utils.single_wait_for_change(movie_selected, "value")
+            display(t_utils.preview_movie(project, db_info, server_movies_csv, x)[0])
+
+        asyncio.create_task(f(self.project, self.db_info, self.server_movies_csv))
+
+    def check_meta_sync(self, meta_key: str):
+        try:
+            local_csv, server_csv = getattr(self, "local_" + meta_key + "_csv"), getattr(self, "server_" + meta_key + "_csv")
+            common_keys = np.intersect1d(local_csv.columns, server_csv.columns)
+            assert local_csv[common_keys].equals(server_csv[common_keys])
+            logging.info(f"Local and server versions of {meta_key} are synced.")
+        except AssertionError:
+            logging.error(f"Local and server versions of {meta_key} are not synced.")
+            return
+
+
+    def check_movies_meta(self, review_method: str = "Basic", gpu: bool = False):
+        return self.modules["t1_utils"].check_movies_csv(
+            self.db_info, self.server_movies_csv, self.project, review_method, gpu
+        )
+    
+    def check_species_meta(self):
+        return self.modules["t1_utils"].check_species_csv(self.db_info, self.project)
+
+    def check_subject_size(self, subject_type: str, subjects_df: pd.DataFrame):
         if subject_type == "clip":
-            upload_df, sitename, created_on = t3_utils.set_zoo_metadata(
-                self.db_info, upload_data, self.project
-            )
-            t3_utils.upload_clips_to_zooniverse(
-                upload_df, sitename, created_on, self.project.Zooniverse_number
-            )
+            self.modules["t3_utils"].check_clip_size(subjects_df)
         elif subject_type == "frame":
-            species_list = []
-            upload_df = t4_utils.set_zoo_metadata(
-                upload_data, species_list, self.project, self.db_info
-            )
-            t4_utils.upload_frames_to_zooniverse(
-                upload_df, species_list, self.db_info, self.project
-            )
+            self.modules["t4_utils"].check_frame_size(subjects_df)
 
-    def generate_zu_clips(self, movie_name, movie_path):
-        # t3_utils.create_clips
-
-        clip_selection = t3_utils.select_clip_n_len(
-            movie_i=movie_name, db_info_dict=self.db_info
-        )
-
-        clip_modification = t3_utils.clip_modification_widget()
-
-        button = widgets.Button(
-            description="Click to extract clips.",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.generated_clips = t3_utils.create_clips(
-                self.server_movies_csv,
-                movie_name,
-                movie_path,
-                self.db_info,
-                clip_selection,
-                self.project,
-                clip_modification.checks,
-                False,
-                1,
-            )
-
-        button.on_click(on_button_clicked)
-        display(clip_modification)
-        display(button)
-
-    def generate_zu_frames(self):
-        # t4_utils.create_frames
+    def check_sites_meta(self):
+        # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
         pass
 
-    def get_ml_data(self):
-        # get template ml data
-        pass
-
+    # t2
     def upload_movies(self, movie_list: list):
-        return t2_utils.upload_new_movies(self.project, self.db_info, movie_list)
+        return self.modules["t2_utils"].upload_new_movies(
+            self.project, self.db_info, movie_list
+        )
 
     def add_movies(self):
-        movie_list = t2_utils.choose_new_videos_to_upload()
+        movie_list = self.modules["t2_utils"].choose_new_videos_to_upload()
         button = widgets.Button(
             description="Click to upload movies",
             disabled=False,
@@ -227,7 +227,7 @@ class ProjectProcessor:
             )
 
             def on_button_clicked2(b):
-                self.local_movies_csv = t2_utils.add_new_rows_to_csv(
+                self.local_movies_csv = self.modules["t2_utils"].add_new_rows_to_csv(
                     self.db_info, new_sheet
                 )
                 logging.info("Changed saved locally")
@@ -245,6 +245,71 @@ class ProjectProcessor:
         pass
 
     def add_species(self):
+        pass
+
+
+    def view_annotations(self, folder_path: str, annotation_classes: list):
+        return self.modules["t8_utils"].get_annotations_viewer(
+            folder_path, species_list=annotation_classes
+        )
+
+    def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
+        if subject_type == "clip":
+            upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
+                self.db_info, upload_data, self.project
+            )
+            self.modules["t3_utils"].upload_clips_to_zooniverse(
+                upload_df, sitename, created_on, self.project.Zooniverse_number
+            )
+        elif subject_type == "frame":
+            species_list = []
+            upload_df = self.modules["t4_utils"].set_zoo_metadata(
+                upload_data, species_list, self.project, self.db_info
+            )
+            self.modules["t4_utils"].upload_frames_to_zooniverse(
+                upload_df, species_list, self.db_info, self.project
+            )
+
+    def generate_zu_clips(self, movie_name, movie_path):
+        # t3_utils.create_clips
+
+        clip_selection = self.modules["t3_utils"].select_clip_n_len(
+            movie_i=movie_name, db_info_dict=self.db_info
+        )
+
+        clip_modification = self.modules["t3_utils"].clip_modification_widget()
+
+        button = widgets.Button(
+            description="Click to extract clips.",
+            disabled=False,
+            display="flex",
+            flex_flow="column",
+            align_items="stretch",
+        )
+
+        def on_button_clicked(b):
+            self.generated_clips = self.modules["t3_utils"].create_clips(
+                self.server_movies_csv,
+                movie_name,
+                movie_path,
+                self.db_info,
+                clip_selection,
+                self.project,
+                clip_modification.checks,
+                False,
+                1,
+            )
+
+        button.on_click(on_button_clicked)
+        display(clip_modification)
+        display(button)
+
+    def generate_zu_frames(self):
+        # t4_utils.create_frames
+        pass
+
+    def get_ml_data(self):
+        # get template ml data
         pass
 
     def process_image(self):
@@ -332,7 +397,9 @@ class ProjectProcessor:
 
             return classes_df
 
-        agg_class_df, raw_class_df = t8_utils.aggregrate_classifications(
+        agg_class_df, raw_class_df = self.modules[
+            "t8_utils"
+        ].aggregrate_classifications(
             get_classifications(classifications_data, subject_type),
             subject_type,
             self.project,
@@ -405,6 +472,7 @@ class MLProject:
         self.model_type = model_type
         self.run_history = None
         self.best_model_path = None
+        self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
 
     def train_yolov5(self, train_data, val_data, epochs=50, batch_size=16, lr=0.001):
         # Train a new YOLOv5 model on the given training and validation data
@@ -642,6 +710,10 @@ class Annotator:
         self.images_path = images_path
         self.potential_labels = potential_labels
         self.bboxes = []
+        self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
+
+    def __repr__(self):
+        return repr(self.__dict__)
 
     def fiftyone_annotate(self):
         # Create a new dataset
@@ -687,7 +759,7 @@ class Annotator:
         dataset.save()
 
     def annotate(self, autolabel_model: str = None):
-        return t6_utils.get_annotator(
+        return self.modules['t6_utils'].get_annotator(
             self.images_path, self.potential_labels, autolabel_model
         )
 
