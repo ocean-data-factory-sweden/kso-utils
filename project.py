@@ -89,7 +89,7 @@ class ProjectProcessor:
         # Check movies on server
         self.get_movie_info()
         # Reads csv files
-        #self.load_meta()
+        self.load_meta()
         # Import modules
         self.modules = import_modules(
             ["t1_utils", "t2_utils", "t3_utils", "t4_utils", "t8_utils"]
@@ -99,7 +99,7 @@ class ProjectProcessor:
         return repr(self.__dict__)
 
     def keys(self):
-        '''Print keys of ProjectProcessor object'''
+        """Print keys of ProjectProcessor object"""
         logging.info("Stored variable names.")
         return list(self.__dict__.keys())
 
@@ -135,7 +135,7 @@ class ProjectProcessor:
 
     def load_movie(self, filepath):
         return movie_utils.get_movie_path(filepath, self.db_info, self.project)
-    
+
     # t1
     def init_meta(self, init_keys=["movies", "species", "sites"]):
         for meta_name in init_keys:
@@ -144,7 +144,7 @@ class ProjectProcessor:
 
     def load_meta(self, base_keys=["movies", "species", "sites"]):
         for key, val in self.db_info.items():
-            if any(ext in key for ext in base_keys):
+            if any("local_" + ext in key for ext in base_keys):
                 setattr(self, key, pd.read_csv(val))
 
     def update_meta(self, new_table, meta_name):
@@ -156,7 +156,7 @@ class ProjectProcessor:
             "local_" + meta_name + "_csv",
             "server_" + meta_name + "_csv",
         )
-    
+
     def map_sites(self):
         return self.modules["t1_utils"].map_site(self.db_info, self.project)
 
@@ -171,7 +171,9 @@ class ProjectProcessor:
 
     def check_meta_sync(self, meta_key: str):
         try:
-            local_csv, server_csv = getattr(self, "local_" + meta_key + "_csv"), getattr(self, "server_" + meta_key + "_csv")
+            local_csv, server_csv = getattr(
+                self, "local_" + meta_key + "_csv"
+            ), getattr(self, "server_" + meta_key + "_csv")
             common_keys = np.intersect1d(local_csv.columns, server_csv.columns)
             assert local_csv[common_keys].equals(server_csv[common_keys])
             logging.info(f"Local and server versions of {meta_key} are synced.")
@@ -179,12 +181,11 @@ class ProjectProcessor:
             logging.error(f"Local and server versions of {meta_key} are not synced.")
             return
 
-
     def check_movies_meta(self, review_method: str = "Basic", gpu: bool = False):
         return self.modules["t1_utils"].check_movies_csv(
             self.db_info, self.server_movies_csv, self.project, review_method, gpu
         )
-    
+
     def check_species_meta(self):
         return self.modules["t1_utils"].check_species_csv(self.db_info, self.project)
 
@@ -246,7 +247,6 @@ class ProjectProcessor:
 
     def add_species(self):
         pass
-
 
     def view_annotations(self, folder_path: str, annotation_classes: list):
         return self.modules["t8_utils"].get_annotations_viewer(
@@ -759,7 +759,7 @@ class Annotator:
         dataset.save()
 
     def annotate(self, autolabel_model: str = None):
-        return self.modules['t6_utils'].get_annotator(
+        return self.modules["t6_utils"].get_annotator(
             self.images_path, self.potential_labels, autolabel_model
         )
 
