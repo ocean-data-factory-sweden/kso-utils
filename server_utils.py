@@ -62,7 +62,6 @@ def connect_to_server(project: project_utils.Project):
     elif server == "SNIC":
         # Connect to SNIC as a client and get sftp
         client, sftp_client = get_snic_client()
-
     else:
         server_dict = {}
 
@@ -372,7 +371,11 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
         )
 
     elif server == "SNIC":
-        server_df = get_snic_files(client=db_info_dict["client"], folder=movie_folder)
+        if "client" in db_info_dict:
+            server_df = get_snic_files(client=db_info_dict["client"], folder=movie_folder)
+        else:
+            logging.error("No database connection could be established.")
+            return pd.DataFrame(columns=["filename"])
 
     elif server == "LOCAL":
         if [movie_folder, bucket_i] == ["None", "None"]:
@@ -402,6 +405,7 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
+
 
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
@@ -742,6 +746,10 @@ def connect_snic(snic_user: str, snic_pass: str):
         hostname="129.16.125.130", port=22, username=snic_user, password=snic_pass
     )
     return client
+
+#def mount_snic(snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):
+#    self.
+
 
 
 def create_snic_transport(snic_user: str, snic_pass: str):

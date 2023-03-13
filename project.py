@@ -10,14 +10,16 @@ import ipywidgets as widgets
 from itertools import chain
 from pathlib import Path
 import imagesize
+import traitlets
 
 # util imports
 import kso_utils.tutorials_utils as t_utils
+import kso_utils.project_utils as p_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
-from IPython.display import display, HTML
+from IPython.display import display, HTML, clear_output
 
 
 # Logging
@@ -67,7 +69,6 @@ def import_modules(module_names):
             logging.error(f"Module {module_name} could not be imported.")
     return modules
 
-
 class ProjectProcessor:
     def __init__(self, project: Project):
         self.project = project
@@ -82,10 +83,10 @@ class ProjectProcessor:
 
         # Create empty meta tables
         self.init_meta()
-        # Setup initial db
-        self.setup_db()
         # Get server details
         self.get_server_info()
+        # Setup initial db
+        self.setup_db()
         # Check movies on server
         self.get_movie_info()
         # Reads csv files
@@ -104,15 +105,36 @@ class ProjectProcessor:
         return list(self.__dict__.keys())
 
     # general
+    def mount_snic(self, snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):    
+        cmd = "sshfs {}:{} {}".format(self.server_info["client"].get_transport().get_username(), snic_path, snic_path)
+        stdin, stdout, stderr = self.server_info["client"].exec_command(cmd)
+        # Print output and errors (if any)
+        print("Output:", stdout.read().decode("utf-8"))
+        print("Errors:", stderr.read().decode("utf-8"))
+        # Verify that the remote directory is mounted
+        if os.path.ismount(snic_path):
+            print("Remote directory mounted successfully!")
+        else:
+            print("Failed to mount remote directory!")
+
     def setup_db(self):
         # code for setting up the SQLite database goes here
+        if self.project.server == "SNIC":
+            if not os.path.exists(self.project.csv_folder):
+                logging.error("Not running on SNIC server, attempting to mount...")
+                
         db_utils.init_db(self.project.db_path)
         self.db_info = t_utils.initiate_db(self.project)
         # connect to the database and add to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
     def get_server_info(self):
-        self.server_info = server_utils.connect_to_server(self.project)
+        try:
+            self.server_info = server_utils.connect_to_server(self.project)
+        except BaseException as e:
+            logging.error(f"Server connection could not be established. Details {e}")
+            return
+
 
     def get_zoo_info(self):
         if self.project.Zooniverse_number is not None:
