@@ -339,9 +339,12 @@ def retrieve__populate_zoo_info(
         )
 
         # Populate the sql with subjects uploaded to Zooniverse
-        zooniverse_utils.populate_subjects(
-            zoo_info_dict["subjects"], project, db_info_dict["db_path"]
-        )
+        if "db_path" in db_info_dict:
+            zooniverse_utils.populate_subjects(
+                zoo_info_dict["subjects"], project, db_info_dict["db_path"]
+            )
+        else:
+            logging.info("No database path found. Subjects have not been added to db")
         return zoo_info_dict
 
 
