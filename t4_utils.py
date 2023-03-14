@@ -41,28 +41,24 @@ logging.getLogger().setLevel(logging.INFO)
 # Specify volume allocated by SNIC
 snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
 
-
-def choose_species(zoo_info_dict: dict):
+def choose_species(db_info_dict: dict):
     """
-    This function generates a widget to select the species of interest.
-    The options visible in the widgets are all the names that are given in the annotations from Zooniverse.
-    :param zoo_info_dict: a dictionary containing the information of the subjects uploaded to Zooniverse
-    :type zoo_info_dict: dict
+    This function generates a widget to select the species of interest
+    :param db_info_dict: a dictionary containing the path to the database
+    :type db_info_dict: dict
     """
-    species = set()
+    # Create connection to db
+    conn = db_utils.create_connection(db_info_dict["db_path"])
 
-    all_annotations = zoo_info_dict["classifications"]["annotations"]
-    for index in range(len(all_annotations)):
-        annotation = eval(all_annotations[index])[0]["value"]
-        for ii in range(len(annotation)):
-            species.add(annotation[ii]["choice"])
-
-    species_list = list(species)
+    # Get a list of the species available
+    species_list = pd.read_sql_query("SELECT label from species", conn)[
+        "label"
+    ].tolist()
 
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
         raise ValueError(
-            f"Your annotations do not contain any species, please check the annotations before continuing."
+            "Your database contains no species, please add at least one species before continuing."
         )
 
     # Generate the widget
