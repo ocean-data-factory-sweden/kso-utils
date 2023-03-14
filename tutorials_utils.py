@@ -243,25 +243,60 @@ def initiate_db(project: project_utils.Project):
     return db_info_dict
 
 
-def connect_zoo_project(project: project_utils.Project):
+def connect_zoo_project(project: project_utils.Project, connect=True):
     """
     It takes a project name as input, and returns a Zooniverse project object
+    It can optionally take in a connect parameter that is True or False, 
+    depending on the choice of the user in the ask_if_zooniverse widget.
+    This is to make it possible to run the template project for non-zooniverse 
+    users.
 
     :param project: the project you want to connect to
     :return: A Zooniverse project object.
     """
-    # Save your Zooniverse user name and password.
-    zoo_user, zoo_pass = zooniverse_utils.zoo_credentials()
-
-    # Get the project-specific zooniverse number
-    project_n = project.Zooniverse_number
-
-    # Connect to the Zooniverse project
-    project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
-
-    logging.info("Connected to Zooniverse")
+    if connect == True:
+        # Save your Zooniverse user name and password.
+        zoo_user, zoo_pass = zooniverse_utils.zoo_credentials()
+    
+        # Get the project-specific zooniverse number
+        project_n = project.Zooniverse_number
+    
+        # Connect to the Zooniverse project
+        project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
+    
+        logging.info("Connected to Zooniverse")
+    if connect == False:
+        project = 'None'
 
     return project
+
+def ask_if_connect_zooniverse():
+    """
+    It creates a radiobutton widget to select if you want to connect to zooniverse or not. 
+    Use in the notebook is as follows:
+    connect = ask_if_connect_zooniverse()
+    Then you can give connect.result as extra input to the connect_zoo_project.
+    """    
+    def evaluate(selection):
+      if selection == "Yes":
+          generate =  True
+      else:
+          generate = False
+      return generate
+
+    log_in = interactive(evaluate,
+                         selection = widgets.RadioButtons(
+                              options=["Yes", "No, I just want to run the template project without connection to Zooniverse"],
+                              value="Yes",
+                              layout={"width": "max-content"},
+                              description="Do you want to log in to Zooniverse?",
+                              disabled=False,
+                              style={"description_width": "initial"},
+                          ),
+                        )
+
+    display(log_in)
+    return log_in
 
 
 def select_retrieve_info():
