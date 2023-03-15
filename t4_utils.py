@@ -40,11 +40,9 @@ logging.getLogger().setLevel(logging.INFO)
 # Specify volume allocated by SNIC
 snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
-
 def choose_species(db_info_dict: dict):
     """
     This function generates a widget to select the species of interest
-
     :param db_info_dict: a dictionary containing the path to the database
     :type db_info_dict: dict
     """
@@ -144,66 +142,43 @@ def get_species_frames(
 
     server = project.server
 
-    if server == "SNIC":
-        movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
+    movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
+    movie_folder = project.movie_folder
 
-        # Include movies' filepath and fps to the df
-        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
-        frames_df["fpath"] = frames_df["spath"]
+    # Include movies' filepath and fps to the df
+    frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
+    frames_df["fpath"] = frames_df["spath"]
 
-        if len(frames_df[~frames_df.exists]) > 0:
-            logging.error(
-                f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
-            )
-
-        # Select only frames from movies that can be found
-        frames_df = frames_df[frames_df.exists]
-        if len(frames_df) == 0:
-            logging.error(
-                "There are no frames for this species that meet your aggregation criteria."
-                "Please adjust your aggregation criteria / species choice and try again."
-            )
-
-        ##### Add species_id info ####
-        # Retrieve species info
-        species_df = pd.read_sql_query(
-            "SELECT id, label, scientificName FROM species",
-            conn,
+    if len(frames_df[~frames_df.exists]) > 0:
+        logging.error(
+            f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
         )
 
-        # Retrieve species info
-        species_df = species_df.rename(columns={"id": "species_id"})
-
-        # Match format of species name to Zooniverse labels
-        species_df["label"] = species_df["label"].apply(clean_label)
-
-        # Combine the aggregated clips and subjects dataframes
-        frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(
-            columns=["id"]
+    # Select only frames from movies that can be found
+    frames_df = frames_df[frames_df.exists]
+    if len(frames_df) == 0:
+        logging.error(
+            "There are no frames for this species that meet your aggregation criteria."
+            "Please adjust your aggregation criteria / species choice and try again."
         )
 
-    if server == "AWS":
-        # Include movies' filepath and fps to the df
-        # TODO: Define fpaths?
-        frames_df = frames_df.merge(f_paths, left_on="movie_id", right_on="id")
+    ##### Add species_id info ####
+    # Retrieve species info
+    species_df = pd.read_sql_query(
+        "SELECT id, label, scientificName FROM species",
+        conn,
+    )
 
-        ##### Add species_id info ####
-        # Retrieve species info
-        species_df = pd.read_sql_query(
-            "SELECT id, label, scientificName FROM species",
-            conn,
-        )
+    # Retrieve species info
+    species_df = species_df.rename(columns={"id": "species_id"})
 
-        # Retrieve species info
-        species_df = species_df.rename(columns={"id": "species_id"})
+    # Match format of species name to Zooniverse labels
+    species_df["label"] = species_df["label"].apply(clean_label)
 
-        # Match format of species name to Zooniverse labels
-        species_df["label"] = species_df["label"].apply(clean_label)
-
-        # Combine the aggregated clips and subjects dataframes
-        frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(
-            columns=["id"]
-        )
+    # Combine the aggregated clips and subjects dataframes
+    frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(
+        columns=["id"]
+    )
 
     # Identify the ordinal number of the frames expected to be extracted
     if len(frames_df) == 0:
@@ -397,6 +372,7 @@ def get_frames(
 
     # Transform species names to species ids
     species_ids = get_species_ids(project, species_names)
+
     conn = db_utils.create_connection(db_path)
 
     if project.movie_folder is None:
@@ -729,7 +705,7 @@ def set_zoo_metadata(
         df["frame_path"] = df["modif_frame_path"]
 
     # Set project-specific metadata
-    if project.Zooniverse_number == 9747:
+    if project.Zooniverse_number == 9747 or 9754:
         conn = db_utils.create_connection(project.db_path)
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")

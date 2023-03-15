@@ -68,6 +68,8 @@ def choose_agg_parameters(subject_type: str):
         align_items="stretch",
         style={"description_width": "initial"},
     )
+    
+    print('Aggregation threshold: (0-1) Minimum proportion of citizen scientists that agree in their classification of the clip/frame.')
     display(agg_users)
     min_users = widgets.IntSlider(
         value=3,
@@ -85,6 +87,7 @@ def choose_agg_parameters(subject_type: str):
         align_items="stretch",
         style={"description_width": "initial"},
     )
+    print('Min numbers of users: Minimum number of citizen scientists that need to classify the clip/frame.')
     display(min_users)
     if subject_type == "frame":
         agg_obj = widgets.FloatSlider(
@@ -103,6 +106,7 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        print('Object threshold (0-1): Minimum proportion of citizen scientists that agree that there is at least one object in the frame.')
         display(agg_obj)
         agg_iou = widgets.FloatSlider(
             value=0.5,
@@ -120,6 +124,7 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        print('IOU Epsilon (0-1): Minimum area of overlap among the classifications provided by the citizen scientists so that they will be considered to be in the same cluster.')
         display(agg_iou)
         agg_iua = widgets.FloatSlider(
             value=0.8,
@@ -137,6 +142,7 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        print('Inter user agreement (0-1):  The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.')
         display(agg_iua)
         return agg_users, min_users, agg_obj, agg_iou, agg_iua
     else:
@@ -206,7 +212,10 @@ class WidgetMaker(widgets.VBox):
         :param workflows_df: the dataframe of workflows
         """
         self.workflows_df = workflows_df
-        self.widget_count = widgets.IntText(
+        self.widget_count = widgets.BoundedIntText(
+            value=0,
+            min=0,
+            max=100,
             description="Number of workflows:",
             display="flex",
             flex_flow="column",
@@ -215,7 +224,7 @@ class WidgetMaker(widgets.VBox):
         )
         self.bool_widget_holder = widgets.HBox(
             layout=widgets.Layout(
-                width="100%", display="inline-flex", flex_flow="row wrap"
+                width="70%", display="inline-flex", flex_flow="row wrap"
             )
         )
         children = [
@@ -972,7 +981,7 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
         .apply(str)
         .unique()
     )
-    subject_widget = widgets.Combobox(
+    subject_widget = widgets.Dropdown(
         options=options,
         description="Subject id:",
         ensure_option=True,
@@ -1003,7 +1012,7 @@ def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: st
     """
 
     # Select the subject
-    subject_widget = widgets.Combobox(
+    subject_widget = widgets.Dropdown(
         options=tuple(class_df.subject_ids.apply(int).apply(str).unique()),
         description="Subject id:",
         ensure_option=True,

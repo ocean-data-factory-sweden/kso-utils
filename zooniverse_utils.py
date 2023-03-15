@@ -19,6 +19,7 @@ from kso_utils.koster_utils import (
 from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.db_utils as db_utils
 import kso_utils.project_utils as project_utils
+import gdown
 
 # Logging
 logging.basicConfig()
@@ -92,28 +93,41 @@ def retrieve_zoo_info(
     for info_n in zoo_info:
         logging.info(f"Retrieving {info_n} from Zooniverse")
 
-        # Get the information of interest from Zooniverse
-        if generate_export:
-            try:
-                export = zoo_project.get_export(
-                    info_n, generate=generate_export, wait=True, wait_timeout=1800
-                )
-            except panoptes.PanoptesAPIException:
-                logging.error(
-                    "Export generation time out, retrieving the last available information..."
-                )
-                export = zoo_project.get_export(info_n, generate=False)
-        else:
-            export = zoo_project.get_export(info_n, generate=generate_export)
-
-        # Save the info as pandas data frame
         try:
-            export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
-        except pd.errors.ParserError:
-            logging.error(
-                "Export retrieval time out, please try again in 1 minute or so."
+            # Get the information of interest from Zooniverse
+            if generate_export:
+                try:
+                    export = zoo_project.get_export(
+                        info_n, generate=generate_export, wait=True, wait_timeout=1800
+                    )
+                except panoptes.PanoptesAPIException:
+                    logging.error(
+                        "Export generation time out, retrieving the last available information..."
+                    )
+                    export = zoo_project.get_export(info_n, generate=False)
+            else:
+                export = zoo_project.get_export(info_n, generate=generate_export)
+
+            # Save the info as pandas data frame
+            try:
+                export_df = pd.read_csv(io.StringIO(export.content.decode("utf-8")))
+            except pd.errors.ParserError:
+                logging.error(
+                    "Export retrieval time out, please try again in 1 minute or so."
+                )
+                export_df = {}
+        except:
+            logging.info(
+                "No connection with Zooniverse, retrieve template info from google drive."
             )
-            export_df = {}
+            if info_n == "classifications":
+                url = "https://drive.google.com/file/d/1DvJ2nOrG32MR2D7faAJZXMNbEm_ra3rb/view?usp=sharing"
+            if info_n == "subjects":
+                url = "https://drive.google.com/file/d/18AWRPx3erL25IHekncgKfI_kXHFYAl8e/view?usp=sharing"
+            if info_n == "workflows":
+                url = "https://drive.google.com/file/d/1bZ6CSxJLxeoX8xVgMU7ZqL76RZDv-09A/view?usp=sharing"
+            export = gdown.download(url, info_n + ".csv", quiet=False, fuzzy=True)
+            export_df = pd.read_csv(export)
 
         if len(export_df) > 0:
             # If KSO deal with duplicated subjects
