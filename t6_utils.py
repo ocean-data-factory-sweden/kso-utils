@@ -2,8 +2,6 @@
 import os
 import pandas as pd
 import numpy as np
-import subprocess
-import tempfile
 import shutil
 import logging
 import wandb
@@ -11,7 +9,6 @@ import torch
 import base64
 import ffmpeg
 from itertools import chain
-from ast import literal_eval
 from pathlib import Path
 from natsort import index_natsorted
 
@@ -204,9 +201,9 @@ def generate_counts(
         tracker_df["species_name"] = tracker_df["class_id"].apply(
             lambda x: names[int(x)]
         )
-        print("------- DETECTION REPORT -------")
-        print("--------------------------------")
-        print(tracker_df.groupby(["species_name"])["tracker_id"].nunique())
+        logging.info("------- DETECTION REPORT -------")
+        logging.info("--------------------------------")
+        logging.info(tracker_df.groupby(["species_name"])["tracker_id"].nunique())
         final_df = (
             tracker_df.groupby(["species_name"])["tracker_id"]
             .nunique()
@@ -252,7 +249,6 @@ def track_objects(
     ][0]
 
     best_model = Path(model_path)
-    main_tracker_folder = Path("../yolov5_tracker").resolve()
 
     if not gpu:
         track.run(
@@ -757,9 +753,9 @@ def view_file(path: str):
                         </video>
                     """
             )
-        except:
+        except Exception as e:
             logging.error(
-                "Cannot write to local files, viewing not currently possible."
+                f"Cannot write to local files, viewing not currently possible. {e}"
             )
             widget = widgets.Image()
 

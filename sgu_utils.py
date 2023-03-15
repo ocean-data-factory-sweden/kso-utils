@@ -7,7 +7,6 @@ import imghdr
 from tqdm import tqdm
 from pathlib import Path
 import splitfolders
-import fnmatch
 import glob
 
 tqdm.pandas()
@@ -21,7 +20,9 @@ def create_classification_dataset(
     data_path: str, out_path: str, test_size: float, seed: int = 1337
 ):
     if not os.path.exists(out_path):
-        os.mkdir(out_path)
+        Path(out_path).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(out_path)]
     splitfolders.ratio(
         data_path, output=out_path, seed=seed, ratio=(1 - test_size, 0, test_size)
     )
@@ -31,7 +32,8 @@ def create_classification_dataset(
 def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"):
     try:
         img = cv2.imread(row.fpath)
-    except:
+    except Exception as e:
+        logging.info(e)
         logging.info(f"No such image, {row.fpath}")
         return
 
@@ -75,7 +77,12 @@ def get_patch(row, out_path: str, pixels: int = 224, label_col: str = "sub_type"
         # Get label
         label = row[label_col][ix]
         if not os.path.exists(Path(out_path, label)):
-            os.mkdir(Path(out_path, label))
+            Path(out_path, label).mkdir(parents=True, exist_ok=True)
+            # Recursively add permissions to folders created
+            [
+                os.chmod(root, 0o777)
+                for root, dirs, files in os.walk(str(Path(out_path, label)))
+            ]
 
         # Write patches to a folder
         cv2.imwrite(
@@ -117,7 +124,6 @@ def get_patches(
     ]
 
     image_list = [f.lower() for f in orig_names]
-
     img_2_orig = {k: v for k, v in zip(image_list, orig_names)}
 
     def find_image(path):
@@ -129,8 +135,8 @@ def get_patches(
 
     # df: dataframe based on SGU metadata-sheet
     df = pd.read_excel(Path(path_to_folder, meta_filename), engine="openpyxl")
-    df["fpath"] = (
-        path_to_folder.as_posix() + "/" + df["image_name"].apply(find_image, 1)
+    df["fpath"] = df["image_name"].apply(
+        lambda x: str(Path(path_to_folder.as_posix(), find_image(x))), 1
     )
 
     if label_col == "sub_type":
@@ -150,7 +156,9 @@ def get_patches(
 
     # create patch folder
     if not os.path.exists(f"{out_path}"):
-        Path(f"{out_path}").mkdir(parents=True, exist_ok=True)
+        Path(out_path).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(out_path)]
     df.progress_apply(lambda x: get_patch(x, out_path, pixels, label_col), axis=1)
     logging.info(
         f"Patch creation completed successfully. Total patches: {len(glob.glob(out_path + '/**/*.jpg', recursive=True))}"

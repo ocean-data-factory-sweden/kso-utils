@@ -14,7 +14,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
+snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 
 @dataclass

@@ -143,7 +143,7 @@ def choose_baseline_model(download_path: str):
     """
     api = wandb.Api()
     # weird error fix (initialize api another time)
-    api.runs(path=f"koster/model-registry")
+    api.runs(path="koster/model-registry")
     api = wandb.Api()
     collections = [
         coll
@@ -186,7 +186,7 @@ def choose_baseline_model(download_path: str):
                     model_widget.artifact_path = artifact_file
             except Exception as e:
                 logging.error(
-                    "Failed to download the baseline model. Please ensure you are logged in to WANDB."
+                    f"Failed to download the baseline model. Please ensure you are logged in to WANDB. {e}"
                 )
 
     model_widget.observe(on_change, names="value")
