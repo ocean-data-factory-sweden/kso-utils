@@ -437,12 +437,10 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     movies_df = movies_df.drop("_merge", axis=1)
 
     # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df["exists"]]
+    available_movies_df = movies_df[movies_df["exists"]].copy()
 
     # Create a filename with ext column
-    available_movies_df["filename_ext"] = (
-        available_movies_df["spath"].str.split("/").str[-1]
-    )
+    available_movies_df["filename_ext"] = available_movies_df["spath"].apply(lambda x: x.split("/")[-1], 1)
 
     # Add movie folder for SNIC
     if server == "SNIC":
@@ -499,7 +497,9 @@ def connect_s3(aws_access_key_id: str, aws_secret_access_key: str):
 
 def get_aws_client():
     # Set aws account credentials
-    aws_access_key_id, aws_secret_access_key = aws_credentials()
+    aws_access_key_id, aws_secret_access_key = os.getenv("SPY_KEY"), os.getenv("SPY_SECRET")
+    if aws_access_key_id is None or aws_secret_access_key is None:
+        aws_access_key_id, aws_secret_access_key = aws_credentials()
 
     # Connect to S3
     client = connect_s3(aws_access_key_id, aws_secret_access_key)
