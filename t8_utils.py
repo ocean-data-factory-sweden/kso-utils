@@ -38,7 +38,7 @@ snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
 
 
 #### Set up ####
-def choose_agg_parameters(subject_type: str):
+def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = True):
     """
     > This function creates a set of sliders that allow you to set the parameters for the aggregation
     algorithm
@@ -50,7 +50,7 @@ def choose_agg_parameters(subject_type: str):
         Min numbers of users: Minimum number of citizen scientists that need to classify the clip/frame.
         Object threshold (0-1): Minimum proportion of citizen scientists that agree that there is at least one object in the frame.
         IOU Epsilon (0-1): Minimum area of overlap among the classifications provided by the citizen scientists so that they will be considered to be in the same cluster.
-        Inter user agreement (0-1):  The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.
+        Inter user agreement (0-1): The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.
     """
     agg_users = widgets.FloatSlider(
         value=0.8,
@@ -68,7 +68,12 @@ def choose_agg_parameters(subject_type: str):
         align_items="stretch",
         style={"description_width": "initial"},
     )
+    # Create HTML widget for description
+    description_widget = HTML(f'<p>Minimum proportion of citizen scientists that agree in their classification of the {subject_type}.</p>')
+    # Display both widgets in a VBox
     display(agg_users)
+    if full_description:
+        display(description_widget)
     min_users = widgets.IntSlider(
         value=3,
         min=1,
@@ -85,7 +90,12 @@ def choose_agg_parameters(subject_type: str):
         align_items="stretch",
         style={"description_width": "initial"},
     )
+    # Create HTML widget for description
+    description_widget = HTML(f'<p>Minimum number of citizen scientists that need to classify the {subject_type}.</p>')
+    # Display both widgets in a VBox
     display(min_users)
+    if full_description:
+        display(description_widget)
     if subject_type == "frame":
         agg_obj = widgets.FloatSlider(
             value=0.8,
@@ -103,7 +113,12 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        # Create HTML widget for description
+        description_widget = HTML('<p>Minimum proportion of citizen scientists that agree that there is at least one object in the frame.</p>')
+        # Display both widgets in a VBox
         display(agg_obj)
+        if full_description:
+            display(description_widget)
         agg_iou = widgets.FloatSlider(
             value=0.5,
             min=0,
@@ -120,7 +135,12 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        # Create HTML widget for description
+        description_widget = HTML('<p>Minimum area of overlap among the citizen science classifications to be considered as being in the same cluster.</p>')
+        # Display both widgets in a VBox
         display(agg_iou)
+        if full_description:
+            display(description_widget)
         agg_iua = widgets.FloatSlider(
             value=0.8,
             min=0,
@@ -137,7 +157,12 @@ def choose_agg_parameters(subject_type: str):
             align_items="stretch",
             style={"description_width": "initial"},
         )
+        # Create HTML widget for description
+        description_widget = HTML('<p>The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.</p>')
+        # Display both widgets in a VBox
         display(agg_iua)
+        if full_description:
+            display(description_widget)
         return agg_users, min_users, agg_obj, agg_iou, agg_iua
     else:
         return agg_users, min_users
@@ -382,7 +407,7 @@ def get_classifications(
     return classes_df
 
 
-def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: int):
+def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: int):
     """
     > This function takes a dataframe of classifications and returns a dataframe of classifications that
     have been filtered by the number of users that classified each subject and the proportion of users
@@ -426,8 +451,8 @@ def aggregrate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: i
     return agg_class_df
 
 
-def aggregrate_classifications(
-    df: pd.DataFrame, subj_type: str, project: project_utils.Project, agg_params
+def aggregate_classifications(
+    df: pd.DataFrame, subj_type: str, project: project_utils.Project, agg_params: list
 ):
     """
     We take the raw classifications and process them to get the aggregated labels
@@ -439,11 +464,11 @@ def aggregrate_classifications(
     :return: the aggregated classifications and the raw classifications.
     """
 
-    logging.info("Aggregrating the classifications")
+    logging.info("Aggregating the classifications")
 
     # We take the raw classifications and process them to get the aggregated labels.
     if subj_type == "frame":
-        # Get the aggregration parameters
+        # Get the aggregation parameters
         if not isinstance(agg_params, list):
             agg_users, min_users, agg_obj, agg_iou, agg_iua = [
                 i.value for i in agg_params
@@ -467,15 +492,15 @@ def aggregrate_classifications(
         # Process the raw classifications
         raw_class_df = process_frames(df, project.Project_name)
 
-        # Aggregrate frames based on their labels
-        agg_labels_df = aggregrate_labels(raw_class_df, agg_users, min_users)
+        # Aggregate frames based on their labels
+        agg_labels_df = aggregate_labels(raw_class_df, agg_users, min_users)
 
         # Get rid of the "empty" labels if other species are among the volunteer consensus
         agg_labels_df = agg_labels_df[
             ~((agg_labels_df["class_n_agg"] > 1) & (agg_labels_df["label"] == "empty"))
         ]
 
-        # Select frames aggregrated only as empty
+        # Select frames aggregated only as empty
         agg_labels_df_empty = agg_labels_df[agg_labels_df["label"] == "empty"]
         agg_labels_df_empty = agg_labels_df_empty.rename(
             columns={"frame_number": "start_frame"}
@@ -484,7 +509,7 @@ def aggregrate_classifications(
             ["label", "subject_ids", "x", "y", "w", "h"]
         ]
 
-        # Temporary exclude frames aggregrated as empty
+        # Temporary exclude frames aggregated as empty
         agg_labels_df = agg_labels_df[agg_labels_df["label"] != "empty"]
 
         # Map the position of the annotation parameters
@@ -592,7 +617,7 @@ def aggregrate_classifications(
         )
 
     else:
-        # Get the aggregration parameters
+        # Get the aggregation parameters
         if not isinstance(agg_params, list):
             agg_users, min_users = [i.value for i in agg_params]
         else:
@@ -601,8 +626,8 @@ def aggregrate_classifications(
         # Process the raw classifications
         raw_class_df = process_clips(df, project)
 
-        # Aggregrate clips based on their labels
-        agg_class_df = aggregrate_labels(raw_class_df, agg_users, min_users)
+        # aggregate clips based on their labels
+        agg_class_df = aggregate_labels(raw_class_df, agg_users, min_users)
 
         # Extract the median of the second where the animal/object is and number of animals
         agg_class_df = agg_class_df.groupby(

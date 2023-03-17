@@ -41,15 +41,29 @@ class Project:
     ml_folder: str = None
 
 
-def import_modules(module_names, utils: bool = True):
+def import_model_modules(module_names):
     importlib = __import__("importlib")
     modules = {}
-    for module_name in module_names:
+    for module_name, module_full in zip(["train", "detect", "val"], module_names):
+        try:
+            modules[module_name] = importlib.import_module(module_full)
+        except ModuleNotFoundError:
+            logging.error(f"Module {module_name} could not be imported.")
+    return modules
+
+
+def import_modules(module_names, utils: bool = True, models: bool = False):
+    importlib = __import__("importlib")
+    modules = {}
+    model_presets = ["train", "detect", "val"]
+    for i, module_name in enumerate(module_names):
         if utils:
             module_full = "kso_utils." + module_name
         else:
             module_full = module_name
         try:
+            if models:
+                module_name = model_presets[i]
             modules[module_name] = importlib.import_module(module_full)
         except ModuleNotFoundError:
             logging.error(f"Module {module_name} could not be imported.")
@@ -74,8 +88,9 @@ class ProjectProcessor:
         self.get_server_info()
         # Setup initial db
         self.setup_db()
-        # Check movies on server
-        self.get_movie_info()
+        if self.project.movie_folder is not None:
+            # Check movies on server
+            self.get_movie_info()
         # Reads csv files
         self.load_meta()
         # Import modules
@@ -755,9 +770,7 @@ class ProjectProcessor:
 
             return classes_df
 
-        agg_class_df, raw_class_df = self.modules[
-            "t8_utils"
-        ].aggregrate_classifications(
+        agg_class_df, raw_class_df = self.modules["t8_utils"].aggregate_classifications(
             get_classifications(classifications_data, subject_type),
             subject_type,
             self.project,
@@ -779,25 +792,63 @@ class MLProjectProcessor(ProjectProcessor):
         self,
         project_process: ProjectProcessor,
         team_name: str,
-        config_path,
-        weights_path,
-        classes,
-        model_type,
+        config_path: str,
+        weights_path: str,
+        output_path: str,
+        classes: list,
     ):
         self.__dict__ = project_process.__dict__.copy()
-        super().__init__(self.project)
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
         self.team_name = team_name
         self.config_path = config_path
         self.weights_path = weights_path
+        self.output_path = output_path
         self.classes = classes
-        self.model_type = model_type
         self.run_history = None
         self.best_model_path = None
         self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
         self.modules.update(
             import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
+
+        model_selected = self.modules["t5_utils"].choose_model_type()
+
+        async def f():
+            x = await t_utils.single_wait_for_change(model_selected, "value")
+            self.model_type = x
+            self.modules.update(self.load_yolov5_modules())
+            self.train, self.run, self.test = (
+                self.modules["train"],
+                self.modules["detect"],
+                self.modules["val"],
+            )
+
+        asyncio.create_task(f())
+
+    def load_yolov5_modules(self):
+        # Model-specific imports
+        if self.model_type == 1:
+            module_names = ["yolov5.train", "yolov5.detect", "yolov5.val"]
+            print("Object detection model loaded")
+            return import_modules(module_names, utils=False, models=True)
+        elif self.model_type == 2:
+            print("Image classification model loaded")
+            module_names = [
+                "yolov5.classify.train",
+                "yolov5.classify.predict",
+                "yolov5.classify.val",
+            ]
+            return import_modules(module_names, utils=False, models=True)
+        elif self.model_type == 3:
+            print("Image segmentation model loaded")
+            module_names = [
+                "yolov5.segment.train",
+                "yolov5.segment.predict",
+                "yolov5.segment.val",
+            ]
+            return import_modules(module_names, utils=False, models=True)
+        else:
+            print("Invalid model specification")
 
     def prepare_dataset(
         self,
@@ -960,10 +1011,9 @@ class MLProjectProcessor(ProjectProcessor):
     def download_project_runs(self):
         # Download all the runs from the given project ID using Weights and Biases API,
         # sort them by the specified metric, and assign them to the run_history attribute
-        import wandb
 
-        wandb.login()
-        runs = wandb.Api().runs(f"{self.team_name}/{self.project_name}")
+        self.modules["wandb"].login()
+        runs = self.modules["wandb"].Api().runs(f"{self.team_name}/{self.project_name}")
         self.run_history = []
         for run in runs:
             run_info = {}
@@ -999,9 +1049,8 @@ class MLProjectProcessor(ProjectProcessor):
             )
             if artifact.type == "model"
         ][0]
-        import wandb
 
-        api = wandb.Api()
+        api = self.modules["wandb"].Api()
         artifact = api.artifact(
             f"{self.team_name}/{self.project_name}"
             + "/"
@@ -1011,7 +1060,7 @@ class MLProjectProcessor(ProjectProcessor):
         logging.info("Downloading model checkpoint...")
         artifact_dir = artifact.download(root=download_path)
         logging.info("Checkpoint downloaded.")
-        return os.path.realpath(artifact_dir)
+        self.best_model_path = os.path.realpath(artifact_dir)
 
     def export_best_model(self, output_path):
         # Export the best model to PyTorch format
@@ -1034,7 +1083,7 @@ class Annotator:
         self.dataset_name = dataset_name
         self.images_path = images_path
         self.potential_labels = potential_labels
-        self.bboxes = []
+        self.bboxes = {}
         self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
 
     def __repr__(self):
@@ -1097,17 +1146,28 @@ class Annotator:
                 and f.endswith(".jpg")
             ]
         )
+        bbox_dict = {}
         annot_path = os.path.join(Path(self.images_path).parent, "labels")
         if len(os.listdir(annot_path)) > 0:
             for label_file in os.listdir(annot_path):
                 image = os.path.join(self.images_path, images[0])
                 width, height = imagesize.get(image)
                 bboxes = []
+                bbox_dict[image] = []
                 with open(os.path.join(annot_path, label_file), "r") as f:
                     for line in f:
                         s = line.split(" ")
                         left = (float(s[1]) - (float(s[3]) / 2)) * width
                         top = (float(s[2]) - (float(s[4]) / 2)) * height
+                        bbox_dict[image].append(
+                            {
+                                "x": left,
+                                "y": top,
+                                "width": float(s[3]) * width,
+                                "height": float(s[4]) * height,
+                                "label": self.potential_labels[int(s[0])],
+                            }
+                        )
                         bboxes.append(
                             {
                                 "x": left,
@@ -1117,6 +1177,6 @@ class Annotator:
                                 "label": self.potential_labels[int(s[0])],
                             }
                         )
-            self.bboxes = bboxes
+            self.bboxes = bbox_dict
         else:
-            self.bboxes = []
+            self.bboxes = {}

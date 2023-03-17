@@ -108,7 +108,7 @@ def choose_model_type():
     :return: The dropdown box widget.
     """
     model_type = widgets.Dropdown(
-        value=1,
+        value=None,
         description="Required model type:",
         options=[
             (
