@@ -10,7 +10,6 @@ import ipywidgets as widgets
 from itertools import chain
 from pathlib import Path
 import imagesize
-import traitlets
 
 # util imports
 import kso_utils.tutorials_utils as t_utils
@@ -19,7 +18,7 @@ import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
-from IPython.display import display, HTML, clear_output
+from IPython.display import display, HTML
 
 
 # Logging
@@ -574,8 +573,6 @@ class ProjectProcessor:
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
         """
 
-        # t4_utils.create_frames
-
         frame_modification = self.modules["t3_utils"].clip_modification_widget()
 
         button = widgets.Button(
@@ -791,7 +788,6 @@ class MLProjectProcessor(ProjectProcessor):
     def __init__(
         self,
         project_process: ProjectProcessor,
-        team_name: str,
         config_path: str,
         weights_path: str,
         output_path: str,
@@ -799,18 +795,21 @@ class MLProjectProcessor(ProjectProcessor):
     ):
         self.__dict__ = project_process.__dict__.copy()
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
-        self.team_name = team_name
-        self.config_path = config_path
+        self.data_path = config_path
         self.weights_path = weights_path
         self.output_path = output_path
         self.classes = classes
         self.run_history = None
         self.best_model_path = None
-        self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
+        self.model_type = None
+        self.train, self.run, self.test = (None,) * 3
+        self.modules = import_modules(["t4_utils", "t5_utils", "t6_utils", "t7_utils"])
         self.modules.update(
             import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
-
+        self.team_name = self.modules["t6_utils"].get_team_name(
+            self.project.Project_name
+        )
         model_selected = self.modules["t5_utils"].choose_model_type()
 
         async def f():
@@ -829,10 +828,10 @@ class MLProjectProcessor(ProjectProcessor):
         # Model-specific imports
         if self.model_type == 1:
             module_names = ["yolov5.train", "yolov5.detect", "yolov5.val"]
-            print("Object detection model loaded")
+            logging.info("Object detection model loaded")
             return import_modules(module_names, utils=False, models=True)
         elif self.model_type == 2:
-            print("Image classification model loaded")
+            logging.info("Image classification model loaded")
             module_names = [
                 "yolov5.classify.train",
                 "yolov5.classify.predict",
@@ -840,7 +839,7 @@ class MLProjectProcessor(ProjectProcessor):
             ]
             return import_modules(module_names, utils=False, models=True)
         elif self.model_type == 3:
-            print("Image segmentation model loaded")
+            logging.info("Image segmentation model loaded")
             module_names = [
                 "yolov5.segment.train",
                 "yolov5.segment.predict",
@@ -848,32 +847,69 @@ class MLProjectProcessor(ProjectProcessor):
             ]
             return import_modules(module_names, utils=False, models=True)
         else:
-            print("Invalid model specification")
+            logging.info("Invalid model specification")
 
     def prepare_dataset(
         self,
-        out_path,
-        perc_test,
-        class_list,
-        img_size,
-        remove_nulls,
-        track_frames,
-        n_tracked_frames,
-        agg_df,
+        agg_df: pd.DataFrame,
+        out_path: str,
+        perc_test: float = 0.2,
+        img_size: tuple = (224, 224),
+        remove_nulls: bool = False,
+        track_frames: bool = False,
+        n_tracked_frames: int = 0,
     ):
-        # code for prepare dataset for machine learning
-        yolo_utils.frame_aggregation(
-            self.project,
-            self.db_info,
-            out_path,
-            perc_test,
-            class_list,
-            img_size,
-            remove_nulls,
-            track_frames,
-            n_tracked_frames,
-            agg_df,
+
+        species_list = self.modules["t4_utils"].choose_species(self.db_info)
+
+        button = widgets.Button(
+            description="Aggregate frames",
+            disabled=False,
+            display="flex",
+            flex_flow="column",
+            align_items="stretch",
+            style={"description_width": "initial"},
         )
+
+        def on_button_clicked(b):
+            self.species_of_interest = species_list.value
+            # code for prepare dataset for machine learning
+            yolo_utils.frame_aggregation(
+                self.project,
+                self.db_info,
+                out_path,
+                perc_test,
+                self.species_of_interest,
+                img_size,
+                remove_nulls,
+                track_frames,
+                n_tracked_frames,
+                agg_df,
+            )
+
+        button.on_click(on_button_clicked)
+        display(button)
+
+    def choose_entity(self, alt_name: bool = False):
+        if self.team_name is None:
+            return self.modules["t5_utils"].choose_entity()
+        else:
+            if not alt_name:
+                logging.info(
+                    f"Found team name: {self.team_name}. If you want"
+                    " to use a different team name for this experiment"
+                    " set the argument alt_name to True"
+                )
+            else:
+                return self.modules["t5_utils"].choose_entity()
+
+    def setup_paths(self):
+        self.data_path, self.hyp_path = self.modules["t5_utils"].setup_paths(
+            self.output_path, self.model_type
+        )
+
+    def choose_train_params(self):
+        self.modules["t5_utils"].choose_train_params(self.model_type)
 
     def train_yolov5(self, train_data, val_data, epochs=50, batch_size=16, lr=0.001):
         # Train a new YOLOv5 model on the given training and validation data
