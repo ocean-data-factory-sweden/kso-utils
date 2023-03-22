@@ -127,8 +127,8 @@ def get_species_frames(
         conn,
     )
 
-    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
-    subjects_df["id"] = subjects_df["id"].astype(int)
+    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].copy().astype(int)
+    subjects_df["id"] = subjects_df["id"].copy().astype(int)
 
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
@@ -142,12 +142,12 @@ def get_species_frames(
 
     server = project.server
 
-    movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
-    movie_folder = project.movie_folder
+    if server in ["SNIC", "TEMPLATE"]:
+        movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
 
-    # Include movies' filepath and fps to the df
-    frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
-    frames_df["fpath"] = frames_df["spath"]
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
+        frames_df["fpath"] = frames_df["spath"]
 
     if len(frames_df[~frames_df.exists]) > 0:
         logging.error(
@@ -426,7 +426,7 @@ def get_frames(
                 project,
             )
 
-            agg_clips_df, raw_clips_df = t8.aggregrate_classifications(
+            agg_clips_df, raw_clips_df = t8.aggregate_classifications(
                 clips_df, "clip", project, agg_params=agg_params
             )
 

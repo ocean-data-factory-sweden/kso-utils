@@ -330,14 +330,19 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
         logging.getLogger("yolov5").setLevel(logging.WARNING)
         if predict:
             detect.run(
-                    weights=autolabel_model,
-                    source=image,
-                    conf_thres=0.5,
-                    nosave=True,
-                    name="labels",
-                )
-        label_file = [f for f in os.listdir(annot_path) if os.path.isfile(os.path.join(annot_path, f))
-                    and f.endswith(".txt") and Path(f).stem == Path(image).stem]
+                weights=autolabel_model,
+                source=image,
+                conf_thres=0.5,
+                nosave=True,
+                name="labels",
+            )
+        label_file = [
+            f
+            for f in os.listdir(annot_path)
+            if os.path.isfile(os.path.join(annot_path, f))
+            and f.endswith(".txt")
+            and Path(f).stem == Path(image).stem
+        ]
         if len(label_file) == 1:
             label_file = label_file[0]
             with open(os.path.join(annot_path, label_file), "r") as f:
@@ -360,7 +365,7 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
             w_status.value = "Annotations loaded"
         else:
             w_status.value = "No annotations found"
-        return bboxes, labels         
+        return bboxes, labels
 
     # the bbox widget
     image = os.path.join(image_path, images[0])
@@ -368,10 +373,10 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
     bboxes, labels = [], []
     if autolabel_model is not None:
         w_status.value = "Loading annotations..."
-        bboxes, labels = get_bboxes(image, bboxes, labels, predict = True)
+        bboxes, labels = get_bboxes(image, bboxes, labels, predict=True)
     else:
         w_status.value = "No predictions, using existing labels if available"
-        bboxes, labels = get_bboxes(image, bboxes, labels)        
+        bboxes, labels = get_bboxes(image, bboxes, labels)
     w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
@@ -395,10 +400,10 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
         bboxes, labels = [], []
         if autolabel_model is not None:
             w_status.value = "Loading annotations..."
-            bboxes, labels = get_bboxes(image, bboxes, labels, predict = True)
+            bboxes, labels = get_bboxes(image, bboxes, labels, predict=True)
         else:
             w_status.value = "No annotations found"
-            bboxes, labels = get_bboxes(image, bboxes, labels)      
+            bboxes, labels = get_bboxes(image, bboxes, labels)
         w_bbox.image = encode_image(image)
 
         # here we assign an empty list to bboxes but
@@ -433,10 +438,10 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
             bboxes, labels = [], []
             if autolabel_model is not None:
                 w_status.value = "Loading annotations..."
-                bboxes, labels = get_bboxes(image_p, bboxes, labels, predict = True)
+                bboxes, labels = get_bboxes(image_p, bboxes, labels, predict=True)
             else:
                 w_status.value = "No annotations found"
-                bboxes, labels = get_bboxes(image_p, bboxes, labels) 
+                bboxes, labels = get_bboxes(image_p, bboxes, labels)
 
             # here we assign an empty list to bboxes but
             # we could also run a detection model on the file

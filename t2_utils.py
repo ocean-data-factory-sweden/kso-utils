@@ -34,8 +34,9 @@ snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 ############### SURVEY FUNCTIONS ###################
 ####################################################
 
+
 def progress_handler(progress_info):
-    print('{:.2f}'.format(progress_info['percentage']))
+    print("{:.2f}".format(progress_info["percentage"]))
 
 
 def select_survey(db_info_dict: dict):
@@ -1783,8 +1784,7 @@ def upload_new_movies(project: p_utils.Project, db_info_dict: dict, movie_list: 
                 pix_fmt="yuv420p",
                 vcodec="libx264",
                 threads=4,
-            ).run(capture_stdout=True, capture_stderr=True, overwrite_output=True
-            )
+            ).run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
 
             if project.server == "SNIC":
                 server_utils.upload_object_to_snic(
@@ -1844,16 +1844,16 @@ def choose_new_videos_to_upload():
     def change_dir(chooser):
         sel.options = os.listdir(chooser.selected)
         fc.children[1].children[2].layout.display = "none"
-        sel.layout.visibility = 'visible'
-    
+        sel.layout.visibility = "visible"
+
     fc.register_callback(change_dir)
 
     sel = widgets.SelectMultiple(options=os.listdir(fc.selected))
 
     display(fc)
     display(sel)
-    
-    sel.layout.visibility = 'hidden'
+
+    sel.layout.visibility = "hidden"
 
     button_add = widgets.Button(description="Add selected file")
     output_add = widgets.Output()
@@ -1868,8 +1868,8 @@ def choose_new_videos_to_upload():
         with output_add:
             if sel.value is not None:
                 for movie in sel.value:
-                    
-                    if Path(movie).suffix in ['.mp4', '.mov']:
+
+                    if Path(movie).suffix in [".mp4", ".mov"]:
                         movie_list.append([Path(fc.selected, movie), movie])
                         logging.info(Path(fc.selected, movie))
                     else:
@@ -1878,5 +1878,3 @@ def choose_new_videos_to_upload():
 
     button_add.on_click(on_button_add_clicked)
     return movie_list
-
-

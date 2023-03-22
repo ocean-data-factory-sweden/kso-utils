@@ -372,7 +372,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     elif server == "SNIC":
         if "client" in db_info_dict:
-            server_df = get_snic_files(client=db_info_dict["client"], folder=movie_folder)
+            server_df = get_snic_files(
+                client=db_info_dict["client"], folder=movie_folder
+            )
         else:
             logging.error("No database connection could be established.")
             return pd.DataFrame(columns=["filename"])
@@ -405,7 +407,6 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
 
     # Create connection to db
     conn = db_utils.create_connection(db_info_dict["db_path"])
-
 
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
@@ -440,7 +441,9 @@ def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict
     available_movies_df = movies_df[movies_df["exists"]].copy()
 
     # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["spath"].apply(lambda x: x.split("/")[-1], 1)
+    available_movies_df["filename_ext"] = available_movies_df["spath"].apply(
+        lambda x: x.split("/")[-1], 1
+    )
 
     # Add movie folder for SNIC
     if server == "SNIC":
@@ -497,7 +500,9 @@ def connect_s3(aws_access_key_id: str, aws_secret_access_key: str):
 
 def get_aws_client():
     # Set aws account credentials
-    aws_access_key_id, aws_secret_access_key = os.getenv("SPY_KEY"), os.getenv("SPY_SECRET")
+    aws_access_key_id, aws_secret_access_key = os.getenv("SPY_KEY"), os.getenv(
+        "SPY_SECRET"
+    )
     if aws_access_key_id is None or aws_secret_access_key is None:
         aws_access_key_id, aws_secret_access_key = aws_credentials()
 
@@ -747,9 +752,9 @@ def connect_snic(snic_user: str, snic_pass: str):
     )
     return client
 
-#def mount_snic(snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):
-#    self.
 
+# def mount_snic(snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):
+#    self.
 
 
 def create_snic_transport(snic_user: str, snic_pass: str):
