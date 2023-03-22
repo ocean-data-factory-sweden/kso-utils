@@ -526,10 +526,20 @@ class ProjectProcessor:
                 self.db_info,
                 clip_selection,
                 self.project,
-                clip_modification.checks,
+                {},
                 use_gpu,
                 pool_size,
             )
+            mod_clips = self.modules["t3_utils"].create_modified_clips(
+                            self.generated_clips.clip_path,
+                            movie_name,
+                            clip_modification.checks,
+                            self.project,
+                            use_gpu,
+                            pool_size
+                        )
+            # Temporary workaround to get both clip paths
+            self.generated_clips['modif_clip_path'] = mod_clips
 
         button.on_click(on_button_clicked)
         display(clip_modification)
