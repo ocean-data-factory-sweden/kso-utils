@@ -395,7 +395,7 @@ def select_movie(available_movies_df: pd.DataFrame):
     select_movie_widget = widgets.Dropdown(
         options=available_movies_tuple,
         description="Movie of interest:",
-        ensure_option=True,
+        ensure_option=False,
         value=None,
         disabled=False,
         layout=widgets.Layout(width="50%"),

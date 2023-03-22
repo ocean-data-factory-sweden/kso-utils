@@ -864,19 +864,22 @@ def create_clips(
     # Calculate the max number of clips available
     clip_length = clip_selection.kwargs["clip_length"]
     clip_numbers = clip_selection.result
-    start_trim = clip_selection.kwargs["clips_range"][0]
-    end_trim = clip_selection.kwargs["clips_range"][1]
+    if "clips_range" in clip_selection.kwargs:
+        start_trim = clip_selection.kwargs["clips_range"][0]
+        end_trim = clip_selection.kwargs["clips_range"][1]
 
-    # Calculate all the seconds for the new clips to start
-    movie_i_df["seconds"] = [
-        list(
-            range(
-                start_trim,
-                int(math.floor(end_trim / clip_length) * clip_length),
-                clip_length,
+        # Calculate all the seconds for the new clips to start
+        movie_i_df["seconds"] = [
+            list(
+                range(
+                    start_trim,
+                    int(math.floor(end_trim / clip_length) * clip_length),
+                    clip_length,
+                )
             )
-        )
-    ]
+        ]
+    else:
+        movie_i_df["seconds"] = [[0]]
 
     # Reshape the dataframe with the seconds for the new clips to start on the rows
     potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")

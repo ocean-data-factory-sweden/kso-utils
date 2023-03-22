@@ -38,7 +38,7 @@ snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
 
 
 #### Set up ####
-def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = True):
+def choose_agg_parameters(subject_type: str = "clip", full_description: bool = True):
     """
     > This function creates a set of sliders that allow you to set the parameters for the aggregation
     algorithm
@@ -69,7 +69,9 @@ def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = T
         style={"description_width": "initial"},
     )
     # Create HTML widget for description
-    description_widget = HTML(f'<p>Minimum proportion of citizen scientists that agree in their classification of the {subject_type}.</p>')
+    description_widget = HTML(
+        f"<p>Minimum proportion of citizen scientists that agree in their classification of the {subject_type}.</p>"
+    )
     # Display both widgets in a VBox
     display(agg_users)
     if full_description:
@@ -91,7 +93,9 @@ def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = T
         style={"description_width": "initial"},
     )
     # Create HTML widget for description
-    description_widget = HTML(f'<p>Minimum number of citizen scientists that need to classify the {subject_type}.</p>')
+    description_widget = HTML(
+        f"<p>Minimum number of citizen scientists that need to classify the {subject_type}.</p>"
+    )
     # Display both widgets in a VBox
     display(min_users)
     if full_description:
@@ -114,7 +118,9 @@ def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = T
             style={"description_width": "initial"},
         )
         # Create HTML widget for description
-        description_widget = HTML('<p>Minimum proportion of citizen scientists that agree that there is at least one object in the frame.</p>')
+        description_widget = HTML(
+            "<p>Minimum proportion of citizen scientists that agree that there is at least one object in the frame.</p>"
+        )
         # Display both widgets in a VBox
         display(agg_obj)
         if full_description:
@@ -136,7 +142,9 @@ def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = T
             style={"description_width": "initial"},
         )
         # Create HTML widget for description
-        description_widget = HTML('<p>Minimum area of overlap among the citizen science classifications to be considered as being in the same cluster.</p>')
+        description_widget = HTML(
+            "<p>Minimum area of overlap among the citizen science classifications to be considered as being in the same cluster.</p>"
+        )
         # Display both widgets in a VBox
         display(agg_iou)
         if full_description:
@@ -158,7 +166,9 @@ def choose_agg_parameters(subject_type: str = 'clip', full_description: bool = T
             style={"description_width": "initial"},
         )
         # Create HTML widget for description
-        description_widget = HTML('<p>The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.</p>')
+        description_widget = HTML(
+            "<p>The minimum proportion of users inside a given cluster that must agree on the frame annotation for it to be accepted.</p>"
+        )
         # Display both widgets in a VBox
         display(agg_iua)
         if full_description:

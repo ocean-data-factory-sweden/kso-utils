@@ -190,7 +190,7 @@ class ProjectProcessor:
             logging.error(f"Server connection could not be established. Details {e}")
             return
 
-    def get_zoo_info(self):
+    def get_zoo_info(self, generate_export: bool = False):
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
@@ -203,6 +203,7 @@ class ProjectProcessor:
                 self.db_info,
                 self.zoo_project,
                 zoo_info=["subjects", "workflows", "classifications"],
+                generate_export=generate_export,
             )
         else:
             logging.error("This project is not registered with ZU.")
@@ -341,7 +342,12 @@ class ProjectProcessor:
 
         async def f(project, db_info, server_movies_csv):
             x = await t_utils.single_wait_for_change(movie_selected, "value")
-            display(t_utils.preview_movie(project, db_info, server_movies_csv, x)[0])
+            html, movie_path = t_utils.preview_movie(
+                project, db_info, server_movies_csv, x
+            )
+            display(html)
+            self.movie_selected = x
+            self.movie_path = movie_path
 
         asyncio.create_task(f(self.project, self.db_info, self.server_movies_csv))
 
@@ -777,21 +783,31 @@ class ProjectProcessor:
             agg_class_df = (
                 agg_class_df.groupby("label")["subject_ids"].agg("count").to_frame()
             )
-        return agg_class_df
+        return agg_class_df, raw_class_df
 
     def process_annotations(self):
         # code for prepare dataset for machine learning
         pass
+
+    def format_to_gbif(self, agg_df: pd.DataFrame, subject_type: str):
+        return self.modules["t8_utils"].format_to_gbif_occurence(
+            df=agg_df,
+            classified_by="citizen_scientists",
+            subject_type=subject_type,
+            db_info_dict=self.db_info,
+            project=self.project,
+            zoo_info_dict=self.zoo_info,
+        )
 
 
 class MLProjectProcessor(ProjectProcessor):
     def __init__(
         self,
         project_process: ProjectProcessor,
-        config_path: str,
-        weights_path: str,
-        output_path: str,
-        classes: list,
+        config_path: str = None,
+        weights_path: str = None,
+        output_path: str = None,
+        classes: list = [],
     ):
         self.__dict__ = project_process.__dict__.copy()
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
@@ -807,22 +823,25 @@ class MLProjectProcessor(ProjectProcessor):
         self.modules.update(
             import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
-        self.team_name = self.modules["t6_utils"].get_team_name(
-            self.project.Project_name
-        )
-        model_selected = self.modules["t5_utils"].choose_model_type()
-
-        async def f():
-            x = await t_utils.single_wait_for_change(model_selected, "value")
-            self.model_type = x
-            self.modules.update(self.load_yolov5_modules())
-            self.train, self.run, self.test = (
-                self.modules["train"],
-                self.modules["detect"],
-                self.modules["val"],
+        if "t6_utils" in self.modules:
+            self.team_name = self.modules["t6_utils"].get_team_name(
+                self.project.Project_name
             )
+        if "t5_utils" in self.modules:
+            model_selected = self.modules["t5_utils"].choose_model_type()
 
-        asyncio.create_task(f())
+            async def f():
+                x = await t_utils.single_wait_for_change(model_selected, "value")
+                self.model_type = x
+                self.modules.update(self.load_yolov5_modules())
+                if all(["train", "detect", "val"]) in self.modules:
+                    self.train, self.run, self.test = (
+                        self.modules["train"],
+                        self.modules["detect"],
+                        self.modules["val"],
+                    )
+
+            asyncio.create_task(f())
 
     def load_yolov5_modules(self):
         # Model-specific imports
