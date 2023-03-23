@@ -733,7 +733,11 @@ def get_dataset(project_name: str, model: str, team_name: str = "koster"):
     api = wandb.Api()
     if "_" in model:
         run_id = model.split("_")[1]
-        run = api.run(f"{team_name}/{project_name.lower()}/runs/{run_id}")
+        try:
+            run = api.run(f"{team_name}/{project_name.lower()}/runs/{run_id}")
+        except wandb.CommError:
+            logging.error("Run data not found")
+            return "empty_string", "empty_string"
         datasets = [
             artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
         ]
