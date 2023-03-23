@@ -53,6 +53,7 @@ def setup_paths(output_folder: str, model_type: str):
             logging.error(
                 f"{e}, Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory."
             )
+            return None, None
         return data_path, hyps_path
     elif model_type == 2:
         logging.info("Paths do not need to be changed for this model type.")
@@ -295,16 +296,16 @@ def choose_train_params(model_type: str):
     if model_type == 1:
         box = widgets.HBox([v, z, h, w])
         display(box)
-        return v, z, (h, w)
+        return v, z, h, w
     elif model_type == 2:
         box = widgets.HBox([v, z, s])
         display(box)
-        return v, z, s
+        return v, z, s, None
     else:
         logging.warning("Model in experimental stage.")
         box = widgets.HBox([v, z])
         display(box)
-        return v, z, None
+        return v, z, None, None
 
 
 def choose_eval_params():

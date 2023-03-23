@@ -531,15 +531,15 @@ class ProjectProcessor:
                 pool_size,
             )
             mod_clips = self.modules["t3_utils"].create_modified_clips(
-                            self.generated_clips.clip_path,
-                            movie_name,
-                            clip_modification.checks,
-                            self.project,
-                            use_gpu,
-                            pool_size
-                        )
+                self.generated_clips.clip_path,
+                movie_name,
+                clip_modification.checks,
+                self.project,
+                use_gpu,
+                pool_size,
+            )
             # Temporary workaround to get both clip paths
-            self.generated_clips['modif_clip_path'] = mod_clips
+            self.generated_clips["modif_clip_path"] = mod_clips
 
         button.on_click(on_button_clicked)
         display(clip_modification)
@@ -933,145 +933,153 @@ class MLProjectProcessor(ProjectProcessor):
                 return self.modules["t5_utils"].choose_entity()
 
     def setup_paths(self):
+        if not isinstance(self.output_path, str):
+            self.output_path = self.output_path.selected
         self.data_path, self.hyp_path = self.modules["t5_utils"].setup_paths(
             self.output_path, self.model_type
         )
 
     def choose_train_params(self):
-        self.modules["t5_utils"].choose_train_params(self.model_type)
+        return self.modules["t5_utils"].choose_train_params(self.model_type)
 
-    def train_yolov5(self, train_data, val_data, epochs=50, batch_size=16, lr=0.001):
-        # Train a new YOLOv5 model on the given training and validation data
-        import torch
-        import wandb
-        import yaml
-        from yolov5.models.yolo import Model
-        from yolov5.utils.dataloaders import create_dataloader
-        from yolov5.utils.general import (
-            check_dataset,
-            check_file,
-            check_img_size,
-            non_max_suppression,
-            set_logging,
+    def train_yolov5(
+        self, exp_name, weights, epochs=50, batch_size=16, img_size=[720, 540]
+    ):
+        if self.model_type == 1:
+            self.modules["train"].run(
+                entity=self.team_name,
+                data=self.data_path,
+                hyp=self.hyp_path,
+                weights=weights,
+                project=self.project_name,
+                name=exp_name,
+                img_size=img_size,
+                batch_size=int(batch_size),
+                epochs=epochs,
+                workers=1,
+                single_cls=False,
+                cache_images=True,
+            )
+        elif self.model_type == 2:
+            self.modules["train"].run(
+                entity=self.team_name,
+                data=self.data_path,
+                model=weights,
+                project=self.project_name,
+                name=exp_name,
+                img_size=img_size[0],
+                batch_size=int(batch_size),
+                epochs=epochs,
+                workers=1,
+            )
+        else:
+            print("Segmentation model training not yet supported.")
+
+    def eval_yolov5(self, exp_name: str, model_folder: str, conf_thres: float):
+        # Find trained model weights
+        project_path = str(Path(self.output_path, self.project.Project_name.lower()))
+        self.tuned_weights = f"{Path(project_path, model_folder, 'weights', 'best.pt')}"
+        try:
+            self.modules["val"].run(
+                data=self.data_path,
+                weights=self.tuned_weights,
+                conf_thres=conf_thres,
+                imgsz=640 if self.model_type == 1 else 224,
+                half=False,
+                project=self.project_name,
+                name=str(exp_name) + "_val",
+            )
+        except Exception as e:
+            logging.errro("Encountered {e}, terminating run...")
+            self.modules["wandb"].finish()
+        logging.info("Run succeeded, finishing run...")
+        self.modules["wandb"].finish()
+
+    def detect_yolov5(
+        self, source: str, save_dir: str, conf_thres: float, artifact_dir: str
+    ):
+        self.run = self.modules["wandb"].init(
+            entity=self.team_name,
+            project="model-evaluations",
+            settings=self.modules["wandb"].Settings(start_method="fork"),
         )
-        from yolov5.utils.downloads import attempt_download
-        from torch.utils.data import DataLoader
-
-        wandb.login()
-        set_logging()
-
-        # Check if the specified data directories and configuration files exist
-        check_dataset(train_data)
-        check_dataset(val_data)
-        check_file(self.config_path)
-        check_file(self.weights_path)
-
-        # Load the configuration file and create the model
-        with open(self.config_path) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        model = Model(
-            config["nc"], config["anchors"], config["ch"], self.weights_path
-        ).to("cuda")
-
-        # Create the data loaders for training and validation data
-        train_loader = create_dataloader(
-            train_data,
-            batch_size,
-            config["img_size"],
-            "cuda",
-            augment=True,
-            hyp=None,
-            rect=True,
-            cache=False,
-            image_weights=False,
-            quad=False,
-            prefix="",
-        )
-        val_loader = create_dataloader(
-            val_data,
-            batch_size,
-            config["img_size"],
-            "cuda",
-            augment=False,
-            hyp=None,
-            rect=True,
-            cache=False,
-            image_weights=False,
-            quad=False,
-            prefix="",
-        )
-
-        # Set up the optimizer and learning rate scheduler
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-            optimizer, T_0=1, T_mult=2
-        )
-
-        # Set up Weights and Biases logging
-        wandb.init(
-            project="yolov5",
-            name="run",
-            config={
-                "epochs": epochs,
-                "batch_size": batch_size,
-                "learning_rate": lr,
-                "train_data": train_data,
-                "val_data": val_data,
-                "model_type": self.model_type,
-                "classes": self.classes,
-            },
+        self.modules["detect"].run(
+            weights=[
+                f
+                for f in Path(artifact_dir).iterdir()
+                if f.is_file()
+                and str(f).endswith((".pt", ".model"))
+                and "osnet" not in str(f)
+            ][0],
+            source=source,
+            conf_thres=conf_thres,
+            save_txt=True,
+            save_conf=True,
+            project=save_dir,
+            name="detect",
         )
 
-        # Train the model
-        for epoch in range(epochs):
-            model.train()
-            loss = 0.0
-            for i, (images, targets, paths, _) in enumerate(train_loader):
-                images = images.to("cuda").float() / 255.0
-                targets = targets.to("cuda")
-                loss_item = model(images, targets)
-                loss += loss_item.item()
-                optimizer.zero_grad()
-                loss_item.backward()
-                optimizer.step()
-                if i % 100 == 0:
-                    wandb.log({"train_loss": loss / (i + 1)})
-            wandb.log({"epoch": epoch + 1, "train_loss": loss / len(train_loader)})
-            scheduler.step()
+    def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
+        self.modules["t6_utils"].set_config(conf_thres, model, eval_dir)
+        self.modules["t6_utils"].add_data_wandb(eval_dir, "detection_output", self.run)
+        self.csv_report = self.modules["t6_utils"].generate_csv_report(
+            eval_dir.selected, wandb_log=True
+        )
+        self.modules["wandb"].finish()
 
-            # Validate the model
-            model.eval()
-            val_loss = 0.0
-            with torch.no_grad():
-                for images, targets, paths, _ in val_loader:
-                    images = images.to("cuda").float() / 255.0
-                    targets = targets.to("cuda")
-                    loss_item = model(images, targets)
-                    val_loss += loss_item.item()
-                wandb.log({"val_loss": val_loss / len(val_loader)})
+    def track_individuals(
+        self,
+        source: str,
+        artifact_dir: str,
+        eval_dir: str,
+        conf_thres: float,
+        img_size: tuple = (540, 540),
+    ):
+        latest_tracker = self.modules["t6_utils"].track_objects(
+            source_dir=source,
+            artifact_dir=artifact_dir,
+            tracker_folder=eval_dir,
+            conf_thres=conf_thres,
+            img_size=img_size,
+            gpu=True if self.modules["torch"].cuda.is_available() else False,
+        )
+        self.modules["t6_utils"].add_data_wandb(
+            Path(latest_tracker).parent.absolute(), "tracker_output", self.run
+        )
+        self.csv_report = self.modules["t6_utils"].generate_csv_report(
+            eval_dir, wandb_log=True
+        )
+        self.tracking_report = self.modules["t6_utils"].generate_counts(
+            eval_dir, latest_tracker, artifact_dir, wandb_log=True
+        )
+        self.modules["wandb"].finish()
 
-            # Save the model checkpoint
-            if (epoch + 1) % 10 == 0:
-                checkpoint_path = f"yolov5_{self.model_type}_epoch{epoch+1}.pt"
-                torch.save(model.state_dict(), checkpoint_path)
-                wandb.save(checkpoint_path)
+    def enhance_yolov5(self, conf_thres: float, img_size=[640, 640]):
+        if self.model_type == 1:
+            logging.info("Enhancement running...")
+            self.modules["detect"].run(
+                weights=self.tuned_weights,
+                source=str(Path(self.output_path, "images")),
+                imgsz=img_size,
+                conf_thres=conf_thres,
+                save_txt=True,
+            )
+            self.modules["wandb"].finish()
+        elif self.model_type == 2:
+            logging.info(
+                "Enhancements not supported for image classification models at this time."
+            )
+        else:
+            logging.info(
+                "Enhancements not supported for segmentation models at this time."
+            )
 
-            # Export the best model
-            best_model_path = f"yolov5_{self.model_type}_best.pt"
-            best_val_loss = float("inf")
-            for file in os.listdir(wandb.run.dir):
-                if file.endswith(".pt"):
-                    val_loss = float(file.split("_")[3][:-3])
-                    if val_loss < best_val_loss:
-                        best_val_loss = val_loss
-                        best_model_path = os.path.join(wandb.run.dir, file)
-            optimized_model_path = f"yolov5_{self.model_type}_optimized.pt"
-            model.load_state_dict(torch.load(best_model_path))
-            model.to("cpu")
-            model = model.fuse().eval()
-            model.export(optimized_model_path)
-            wandb.save(optimized_model_path)
-            wandb.finish()
+    def enhance_replace(self, run_folder: str):
+        if self.model_type == 1:
+            os.move(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
+            os.move(f"{run_folder}/labels", f"{self.output_path}/labels")
+        else:
+            logging.error("This option is not supported for other model types.")
 
     def download_project_runs(self):
         # Download all the runs from the given project ID using Weights and Biases API,
@@ -1089,6 +1097,14 @@ class MLProjectProcessor(ProjectProcessor):
         # self.run_history = sorted(
         #    self.run_history, key=lambda x: x["metrics"]["metrics/"+sort_metric]
         # )
+
+    def get_model(self, model: str, download_dir: str):
+        return self.modules["t6_utils"].get_model(
+            model_name=model,
+            project_name=self.project_name,
+            download_path=download_dir,
+            team_name=self.team_name,
+        )
 
     def get_best_model(self, metric="mAP_0.5", download_path: str = ""):
         # Get the best model from the run history according to the specified metric
