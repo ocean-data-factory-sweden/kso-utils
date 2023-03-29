@@ -43,7 +43,10 @@ def process_source(source):
     """
     try:
         source.value
-        return write_urls_to_file(source.value)
+        if source.value is not None:
+            return write_urls_to_file(source.value)
+        else:
+            raise AttributeError
     except AttributeError:
         try:
             source.selected
