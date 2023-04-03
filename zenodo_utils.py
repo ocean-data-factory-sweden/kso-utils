@@ -1,6 +1,39 @@
 import wandb
 import requests
 import os, json
+import logging
+from pathlib import Path
+
+# Logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
+
+
+def upload_archive(access_key: str, artifact_dir: str):
+    """
+    > Uploads the last file in the `artifact_dir` to Zenodo
+
+    :param access_key: the access token you got from Zenodo
+    :type access_key: str
+    :param bucket_url: the url of the bucket you want to upload to
+    :type bucket_url: str
+    :param file_path: the path to the file you want to upload
+    :type file_path: str
+    :param artifact_dir: the directory where the artifacts are stored
+    :type artifact_dir: str
+    """
+
+    depo_id, bucket_url = get_zenodo_id_bucket(access_key=access_key)
+
+    add_file_to_zenodo_upload(
+        access_key,
+        bucket_url,
+        [f for f in Path(artifact_dir).iterdir() if f.is_file() and ".pt" in str(f)][
+            -1
+        ],
+    )
+
+    return depo_id
 
 
 # Get deposition id, i.e. "id" field from this response and bucket
