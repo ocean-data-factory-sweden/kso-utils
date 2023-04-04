@@ -36,8 +36,6 @@ import kso_utils.t8_utils as t8
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 def choose_species(db_info_dict: dict):
     """
@@ -377,6 +375,8 @@ def get_frames(
     if project.movie_folder is None:
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
@@ -408,6 +408,8 @@ def get_frames(
 
         # Select the temp location to store frames before uploading them to Zooniverse
         if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
@@ -612,6 +614,8 @@ def modify_frames(
 
     # Specify the folder to host the modified frames
     if server == "SNIC":
+        # Specify volume allocated by SNIC
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
         mod_frames_folder = Path(
             folder_name, "modified_" + "_".join(species_i) + "_frames/"
