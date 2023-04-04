@@ -673,7 +673,6 @@ class ProjectProcessor:
         agg_params: list,
         summary: bool = False,
     ):
-
         """
         It takes in a dataframe of classifications, a subject type (clip or frame), a list of
         aggregation parameters, and a boolean for whether or not to return a summary of the
@@ -876,7 +875,6 @@ class MLProjectProcessor(ProjectProcessor):
         track_frames: bool = False,
         n_tracked_frames: int = 0,
     ):
-
         species_list = self.modules["t4_utils"].choose_species(self.db_info)
 
         button = widgets.Button(
