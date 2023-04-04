@@ -176,9 +176,7 @@ def get_species_frames(
     species_df["label"] = species_df["label"].apply(clean_label)
 
     # Combine the aggregated clips and subjects dataframes
-    frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(
-        columns=["id"]
-    )
+    frames_df = pd.merge(frames_df, species_df, how="left", on="label")
 
     # Identify the ordinal number of the frames expected to be extracted
     if len(frames_df) == 0:
