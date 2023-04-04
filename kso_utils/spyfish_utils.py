@@ -8,9 +8,13 @@ import subprocess
 from pathlib import Path
 
 # util imports
-import kso_utils.server_utils as server_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.db_utils as db_utils
+from kso_utils.movie_utils import get_movie_extensions
+from kso_utils.server_utils import (
+    get_matching_s3_keys,
+    download_object_from_s3,
+    upload_file_to_s3,
+)
+from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -93,10 +97,10 @@ def check_spyfish_movies(movies_df: pd.DataFrame, db_info_dict: dict):
     #     movies_df["deployment_folder"] = movies_df["ShortFolder"] + "-buv-" + movies_df["survey_year"] + "/"
 
     # Get a dataframe of all movies from AWS
-    movies_s3_pd = server_utils.get_matching_s3_keys(
+    movies_s3_pd = get_matching_s3_keys(
         db_info_dict["client"],
         db_info_dict["bucket"],
-        suffix=movie_utils.get_movie_extensions(),
+        suffix=get_movie_extensions(),
     )
 
     # Specify the key of the movies (path in S3 of the object)
@@ -138,7 +142,7 @@ def add_fps_length_spyfish(
     for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
         if not os.path.exists(row["filename"]):
             # Download the movie locally
-            server_utils.download_object_from_s3(
+            download_object_from_s3(
                 client,
                 bucket="marine-buv",
                 key=row["Key"],
@@ -146,9 +150,7 @@ def add_fps_length_spyfish(
             )
 
         # Set the fps and duration of the movie
-        df.at[index, "fps"], df.at[index, "duration"] = movie_utils.get_length(
-            row["filename"]
-        )
+        df.at[index, "fps"], df.at[index, "duration"] = get_length(row["filename"])
 
         # Delete the downloaded movie
         os.remove(row["filename"])
@@ -242,7 +244,7 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
 
             # Download the files from the S3 bucket
             if not os.path.exists(go_pro_output):
-                server_utils.download_object_from_s3(
+                download_object_from_s3(
                     session,
                     bucket=row["bucket"],
                     key=go_pro_i,
@@ -283,7 +285,7 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
 
         # Upload the concatenated video to the S3
         s3_destination = row["prefix"] + "/" + concat_video
-        server_utils.upload_file_to_s3(
+        upload_file_to_s3(
             session,
             bucket=row["bucket"],
             key=s3_destination,
@@ -300,7 +302,7 @@ def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
         os.remove(textfile_name)
 
         # Update the fps and length info
-        # movie_utils.get_length(concat_video)
+        # get_length(concat_video)
 
         # Delete the concat video
         os.remove(concat_video)
@@ -351,7 +353,7 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
 
     # Create connection to db
-    conn = db_utils.create_connection(db_path)
+    conn = create_connection(db_path)
 
     ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
     # Query id and sci. names from the species table
@@ -449,7 +451,7 @@ def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: s
     :return: The db_initial_info dictionary with the server and local paths of the choices csv
     """
     # Get the server path of the csv with sites and survey choices
-    server_choices_csv = server_utils.get_matching_s3_keys(
+    server_choices_csv = get_matching_s3_keys(
         server_dict["client"],
         db_initial_info["bucket"],
         prefix=db_initial_info["key"] + "/" + "choices",
@@ -459,7 +461,7 @@ def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: s
     local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
 
     # Download the csv
-    server_utils.download_object_from_s3(
+    download_object_from_s3(
         server_dict["client"],
         bucket=db_initial_info["bucket"],
         key=server_choices_csv,

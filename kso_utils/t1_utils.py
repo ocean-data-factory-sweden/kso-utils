@@ -6,24 +6,57 @@ import numpy as np
 import datetime
 import logging
 from tqdm import tqdm
+from pathlib import Path
 
 # widget imports
-from IPython.display import display
+from IPython.display import HTML, display
 from ipywidgets import Layout, HBox
 import ipywidgets as widgets
+from folium.plugins import MiniMap
+from ipyfilechooser import FileChooser
+import asyncio
 import ipysheet
 import folium
-from folium.plugins import MiniMap
-import asyncio
 
 # util imports
-import kso_utils.db_utils as db_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.spyfish_utils as spyfish_utils
-import kso_utils.server_utils as server_utils
-import kso_utils.tutorials_utils as t_utils
-import kso_utils.koster_utils as koster_utils
+from kso_utils.db_utils import (
+    create_connection,
+    test_table,
+    add_to_table,
+    get_column_names_db,
+    init_db,
+)
+from kso_utils.movie_utils import (
+    retrieve_movie_info_from_server,
+    get_movie_path,
+    get_fps_duration,
+    standarise_movie_format,
+    get_movie_extensions,
+)
+from kso_utils.server_utils import (
+    connect_to_server,
+    update_csv_server,
+    get_matching_s3_keys,
+    upload_file_to_s3,
+    download_object_from_s3,
+    delete_file_from_s3,
+    download_csv_aws,
+    download_gdrive,
+)
 import kso_utils.project_utils as project_utils
+from kso_utils.tutorials_utils import wait_for_change
+
+# project-specific imports
+from kso_utils.koster_utils import process_koster_movies_csv
+from kso_utils.spyfish_utils import (
+    process_spyfish_movies,
+    process_spyfish_sites,
+    check_spyfish_movies,
+    get_spyfish_choices,
+    get_spyfish_col_names,
+)
+from kso_utils.sgu_utils import process_sgu_photos_csv
+
 
 # Logging
 logging.basicConfig()
@@ -200,7 +233,7 @@ def update_csv(
 
     # Save changes in survey csv locally and in the server
     async def f(sheet_df, df, local_csv, serv_csv):
-        x = await t_utils.wait_for_change(
+        x = await wait_for_change(
             confirm_button, deny_button
         )  # <---- Pass both buttons into the function
         if (
@@ -218,7 +251,7 @@ def update_csv(
             df.reset_index(drop=False, inplace=True)
 
             # Process the csv of interest and tests for compatibility with sql table
-            csv_i, df_to_db = db_utils.process_test_csv(
+            csv_i, df_to_db = process_test_csv(
                 db_info_dict=db_info_dict, project=project, local_csv=local_csv
             )
 
@@ -228,7 +261,7 @@ def update_csv(
 
             if project.server == "AWS":
                 # Save the updated df in the server
-                server_utils.update_csv_server(
+                update_csv_server(
                     project, db_info_dict, orig_csv=serv_csv, updated_csv=local_csv
                 )
 
@@ -405,7 +438,7 @@ def check_movies_csv(
             # Read the movies and overwrite the existing fps and duration info
             df_missing[[col_fps, col_duration]] = pd.DataFrame(
                 [
-                    movie_utils.get_fps_duration(i)
+                    get_fps_duration(i)
                     for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])
                 ],
                 columns=[col_fps, col_duration],
@@ -422,7 +455,7 @@ def check_movies_csv(
         # Add a column with the path (or url) where the movies can be accessed from
         df["movie_path"] = pd.Series(
             [
-                movie_utils.get_movie_path(i, db_info_dict, project)
+                get_movie_path(i, db_info_dict, project)
                 for i in tqdm(df[col_fpath], total=df.shape[0])
             ]
         )
@@ -430,10 +463,7 @@ def check_movies_csv(
         logging.info("Getting the fps and duration of the movies")
         # Read the movies and overwrite the existing fps and duration info
         df[[col_fps, col_duration]] = pd.DataFrame(
-            [
-                movie_utils.get_fps_duration(i)
-                for i in tqdm(df["movie_path"], total=df.shape[0])
-            ],
+            [get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])],
             columns=[col_fps, col_duration],
         )
 
@@ -441,9 +471,7 @@ def check_movies_csv(
 
         # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
         [
-            movie_utils.standarise_movie_format(
-                i, j, k, db_info_dict, project, gpu_available
-            )
+            standarise_movie_format(i, j, k, db_info_dict, project, gpu_available)
             for i, j, k in tqdm(
                 zip(df["movie_path"], df["filename"], df[col_fpath]), total=df.shape[0]
             )
@@ -470,7 +498,7 @@ def check_movies_csv(
     logging.info("The local movies.csv file has been updated")
 
     # Save the updated df in the server
-    server_utils.update_csv_server(
+    update_csv_server(
         project,
         db_info_dict,
         orig_csv="server_movies_csv",
@@ -492,7 +520,7 @@ def check_movies_from_server(db_info_dict: dict, project: project_utils.Project)
     # Check if the project is the Spyfish Aotearoa
     if project.Project_name == "Spyfish_Aotearoa":
         # Retrieve movies that are missing info in the movies.csv
-        missing_info = spyfish_utils.check_spyfish_movies(movies_df, db_info_dict)
+        missing_info = check_spyfish_movies(movies_df, db_info_dict)
 
     # Find out files missing from the Server
     missing_from_server = missing_info[missing_info["_merge"] == "left_only"]
@@ -567,11 +595,11 @@ def update_new_deployments(
         )
 
         # Get a dataframe of movies from the deployment
-        movies_s3_pd = server_utils.get_matching_s3_keys(
+        movies_s3_pd = get_matching_s3_keys(
             db_info_dict["client"],
             db_info_dict["bucket"],
             prefix=deployment_i,
-            suffix=movie_utils.get_movie_extensions(),
+            suffix=get_movie_extensions(),
         )
 
         # Create a list of the list of movies inside the deployment selected
@@ -596,7 +624,7 @@ def update_new_deployments(
 
                 # Download the files from the S3 bucket
                 if not os.path.exists(movie_i_output):
-                    server_utils.download_object_from_s3(
+                    download_object_from_s3(
                         client=db_info_dict["client"],
                         bucket=db_info_dict["bucket"],
                         key=movie_i,
@@ -638,7 +666,7 @@ def update_new_deployments(
                 )
 
             # Upload the concatenated video to the S3
-            server_utils.upload_file_to_s3(
+            upload_file_to_s3(
                 db_info_dict["client"],
                 bucket=db_info_dict["bucket"],
                 key=deployment_i + "/" + filename,
@@ -659,7 +687,7 @@ def update_new_deployments(
 
             # Delete the movies from the S3 bucket
             for movie_i in sorted(movie_files_server):
-                server_utils.delete_file_from_s3(
+                delete_file_from_s3(
                     client=db_info_dict["client"],
                     bucket=db_info_dict["bucket"],
                     key=movie_i,
@@ -680,7 +708,7 @@ def check_species_csv(db_info_dict: dict, project: project_utils.Project):
     species_df = pd.read_csv(db_info_dict["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
+    conn = create_connection(db_info_dict["db_path"])
     data = conn.execute("SELECT * FROM species")
     field_names = [i[0] for i in data.description]
 
@@ -688,9 +716,508 @@ def check_species_csv(db_info_dict: dict, project: project_utils.Project):
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]
 
     # Roadblock to prevent empty lat/long/datum/countrycode
-    db_utils.test_table(df_to_db, "species", df_to_db.columns)
+    test_table(df_to_db, "species", df_to_db.columns)
 
     logging.info("The species dataframe is complete")
+
+
+def process_test_csv(
+    db_info_dict: dict, project: project_utils.Project, local_csv: str
+):
+    """
+    > This function process a csv of interest and tests for compatibility with the respective sql table of interest
+
+    :param db_info_dict: The dictionary containing the database information
+    :param project: The project object
+    :param local_csv: a string of the names of the local csv to populate from
+    :return a string of the category of interest and the processed dataframe
+    """
+    # Load the csv with the information of interest
+    df = pd.read_csv(db_info_dict[local_csv])
+
+    # Save the category of interest and process the df
+    if "sites" in local_csv:
+        field_names, csv_i, df = process_sites_df(db_info_dict, df, project)
+
+    if "movies" in local_csv:
+        field_names, csv_i, df = process_movies_df(db_info_dict, df, project)
+
+    if "species" in local_csv:
+        field_names, csv_i, df = process_species_df(db_info_dict, df, project)
+
+    if "photos" in local_csv:
+        field_names, csv_i, df = process_photos_df(db_info_dict, df, project)
+
+    # Add the names of the basic columns in the sql db
+    field_names = field_names + get_column_names_db(db_info_dict, csv_i)
+    field_names.remove("id")
+
+    # Select relevant fields
+    df.rename(columns={"Author": "author"}, inplace=True)
+    df = df[[c for c in field_names if c in df.columns]]
+
+    # Roadblock to prevent empty rows in id_columns
+    test_table(df, csv_i, [df.columns[0]])
+
+    return csv_i, df
+
+
+def process_sites_df(
+    db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project
+):
+    """
+    > This function processes the sites dataframe and returns a string with the category of interest
+
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Rename columns to match schema fields
+        df = process_spyfish_sites(df)
+
+    # Specify the category of interest
+    csv_i = "sites"
+
+    # Specify the id of the df of interest
+    field_names = ["site_id"]
+
+    return field_names, csv_i, df
+
+
+def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
+    """
+    This function downloads the csv files from the server and returns a dictionary with the paths to the
+    csv files
+
+    :param project: the project object
+    :param server_dict: a dictionary containing the server information
+    :type server_dict: dict
+    :return: A dictionary with the paths to the csv files with the initial info to build the db.
+    """
+
+    # Define the path to the csv files with initial info to build the db
+    db_csv_info = project.csv_folder
+
+    # Get project-specific server info
+    server = project.server
+    project_name = project.Project_name
+
+    # Create the folder to store the csv files if not exist
+    if not os.path.exists(db_csv_info):
+        Path(db_csv_info).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(db_csv_info)]
+
+    if server == "AWS":
+        # Download csv files from AWS
+        db_initial_info = download_csv_aws(project_name, server_dict, db_csv_info)
+
+        if project_name == "Spyfish_Aotearoa":
+            db_initial_info = get_spyfish_choices(
+                server_dict, db_initial_info, db_csv_info
+            )
+
+    elif server in ["LOCAL", "SNIC"]:
+        csv_folder = db_csv_info
+
+        # Define the path to the csv files with initial info to build the db
+        if not os.path.exists(csv_folder):
+            logging.error(
+                "Invalid csv folder specified, please provide the path to the species, sites and movies (optional)"
+            )
+
+        for file in Path(csv_folder).rglob("*.csv"):
+            if "sites" in file.name:
+                sites_csv = file
+            if "movies" in file.name:
+                movies_csv = file
+            if "photos" in file.name:
+                photos_csv = file
+            if "survey" in file.name:
+                surveys_csv = file
+            if "species" in file.name:
+                species_csv = file
+
+        if (
+            "movies_csv" not in vars()
+            and "photos_csv" not in vars()
+            and os.path.exists(csv_folder)
+        ):
+            logging.info(
+                "No movies or photos found, an empty movies file will be created."
+            )
+            with open(str(Path(f"{csv_folder}", "movies.csv")), "w") as fp:
+                fp.close()
+
+        db_initial_info = {}
+
+        if "sites_csv" in vars():
+            db_initial_info["local_sites_csv"] = sites_csv
+
+        if "species_csv" in vars():
+            db_initial_info["local_species_csv"] = species_csv
+
+        if "movies_csv" in vars():
+            db_initial_info["local_movies_csv"] = movies_csv
+
+        if "photos_csv" in vars():
+            db_initial_info["local_photos_csv"] = photos_csv
+
+        if "surveys_csv" in vars():
+            db_initial_info["local_surveys_csv"] = surveys_csv
+
+        if len(db_initial_info) == 0:
+            logging.error(
+                "Insufficient information to build the database. Please fix the path to csv files."
+            )
+
+    elif server == "TEMPLATE":
+        # Specify the id of the folder with csv files of the template project
+        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+
+        # Download template csv files from Gdrive
+        db_initial_info = download_gdrive(gdrive_id, db_csv_info)
+
+        for file in Path(db_csv_info).rglob("*.csv"):
+            if "sites" in file.name:
+                sites_csv = file
+            if "movies" in file.name:
+                movies_csv = file
+            if "photos" in file.name:
+                photos_csv = file
+            if "survey" in file.name:
+                surveys_csv = file
+            if "species" in file.name:
+                species_csv = file
+
+        db_initial_info = {}
+
+        if "sites_csv" in vars():
+            db_initial_info["local_sites_csv"] = sites_csv
+
+        if "species_csv" in vars():
+            db_initial_info["local_species_csv"] = species_csv
+
+        if "movies_csv" in vars():
+            db_initial_info["local_movies_csv"] = movies_csv
+
+        if "photos_csv" in vars():
+            db_initial_info["local_photos_csv"] = photos_csv
+
+        if "surveys_csv" in vars():
+            db_initial_info["local_surveys_csv"] = surveys_csv
+
+        if len(db_initial_info) == 0:
+            logging.error(
+                "Insufficient information to build the database. Please fix the path to csv files."
+            )
+
+    else:
+        raise ValueError(
+            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
+        )
+
+    # Add project-specific db_path
+    db_initial_info["db_path"] = project.db_path
+    if "client" in server_dict:
+        db_initial_info["client"] = server_dict["client"]
+
+    return db_initial_info
+
+
+def process_movies_df(
+    db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project
+):
+    """
+    > This function processes the movies dataframe and returns a string with the category of interest
+
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        df = process_spyfish_movies(df)
+
+    # Check if the project is the KSO
+    if project.Project_name == "Koster_Seafloor_Obs":
+        df = process_koster_movies_csv(df)
+
+    # Connect to database
+    conn = create_connection(db_info_dict["db_path"])
+
+    # Reference movies with their respective sites
+    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
+    sites_df = sites_df.rename(columns={"id": "site_id"})
+
+    # Merge movies and sites dfs
+    df = pd.merge(df, sites_df, how="left", on="siteName")
+
+    # Select only those fields of interest
+    if "fpath" not in df.columns:
+        df["fpath"] = df["filename"]
+
+    # Specify the category of interest
+    csv_i = "movies"
+
+    # Specify the id of the df of interest
+    field_names = ["movie_id"]
+
+    return field_names, csv_i, df
+
+
+def process_photos_df(
+    db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project
+):
+    """
+    > This function processes the photos dataframe and returns a string with the category of interest
+
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+    # Check if the project is the SGU
+    if project.Project_name == "SGU":
+        df = process_sgu_photos_csv(db_info_dict)
+
+    # Specify the category of interest
+    csv_i = "photos"
+
+    # Specify the id of the df of interest
+    field_names = ["ID"]
+
+    return field_names, csv_i, df
+
+
+def process_species_df(
+    db_info_dict: dict, df: pd.DataFrame, project: project_utils.Project
+):
+    """
+    > This function processes the species dataframe and returns a string with the category of interest
+
+    :param db_info_dict: The dictionary containing the database information
+    :param df: a pandas dataframe of the information of interest
+    :param project: The project object
+    :return: a string of the category of interest and the processed dataframe
+    """
+
+    # Rename columns to match sql fields
+    df = df.rename(columns={"commonName": "label"})
+
+    # Specify the category of interest
+    csv_i = "species"
+
+    # Specify the id of the df of interest
+    field_names = ["species_id"]
+
+    return field_names, csv_i, df
+
+
+def populate_db(db_initial_info: dict, project: project_utils.Project, local_csv: str):
+    """
+    > This function populates a sql table of interest based on the info from the respective csv
+
+    :param db_initial_info: The dictionary containing the initial database information
+    :param project: The project object
+    :param local_csv: a string of the names of the local csv to populate from
+    """
+
+    # Process the csv of interest and tests for compatibility with sql table
+    csv_i, df = process_test_csv(
+        db_info_dict=db_initial_info, project=project, local_csv=local_csv
+    )
+
+    # Add values of the processed csv to the sql table of interest
+    add_to_table(
+        db_initial_info["db_path"],
+        csv_i,
+        [tuple(i) for i in df.values],
+        len(df.columns),
+    )
+
+
+def get_col_names(project: project_utils.Project, local_csv: str):
+    """Return a dictionary with the project-specific column names of a csv of interest
+    This function helps matching the schema format without modifying the column names of the original csv.
+
+    :param project: The project object
+    :param local_csv: a string of the name of the local csv of interest
+    :return: a dictionary with the names of the columns
+    """
+
+    # Get project-specific server info
+    project_name = project.Project_name
+
+    if "sites" in local_csv:
+        # Get spyfish specific column names
+        if project_name == "Spyfish_Aotearoa":
+            col_names_sites = get_spyfish_col_names("sites")
+
+        else:
+            # Save the column names of interest in a dict
+            col_names_sites = {
+                "siteName": "siteName",
+                "decimalLatitude": "decimalLatitude",
+                "decimalLongitude": "decimalLongitude",
+                "geodeticDatum": "geodeticDatum",
+                "countryCode": "countryCode",
+            }
+
+        return col_names_sites
+
+    if "movies" in local_csv:
+        # Get spyfish specific column names
+        if project_name == "Spyfish_Aotearoa":
+            col_names_movies = get_spyfish_col_names("movies")
+
+        elif project_name == "Koster_Seafloor_Obs":
+            # Save the column names of interest in a dict
+            col_names_movies = {
+                "filename": "filename",
+                "created_on": "created_on",
+                "fps": "fps",
+                "duration": "duration",
+                "sampling_start": "SamplingStart",
+                "sampling_end": "SamplingEnd",
+                "author": "Author",
+                "site_id": "site_id",
+                "fpath": "fpath",
+            }
+
+        else:
+            # Save the column names of interest in a dict
+            col_names_movies = {
+                "filename": "filename",
+                "created_on": "created_on",
+                "fps": "fps",
+                "duration": "duration",
+                "sampling_start": "sampling_start",
+                "sampling_end": "sampling_end",
+                "author": "author",
+                "site_id": "site_id",
+                "fpath": "fpath",
+            }
+
+        return col_names_movies
+
+    if "species" in local_csv:
+        # Save the column names of interest in a dict
+        col_names_species = {
+            "label": "label",
+            "scientificName": "scientificName",
+            "taxonRank": "taxonRank",
+            "kingdom": "kingdom",
+        }
+        return col_names_species
+
+    else:
+        raise ValueError("The local csv doesn't have a table match in the schema")
+
+
+def initiate_db(project: project_utils.Project):
+    """
+    This function takes a project name as input and returns a dictionary with all the information needed
+    to connect to the project's database
+
+    :param project: The name of the project. This is used to get the project-specific info from the
+    config file
+    :return: A dictionary with the following keys:
+        - db_path
+        - project_name
+        - server_i_dict
+        - db_initial_info
+    """
+
+    # Check if template project
+    if project.Project_name == "model-registry":
+        return {}
+
+    # Get project specific info
+    server_i_dict, db_initial_info = get_project_details(project)
+
+    # Check if server and db info
+    if len(server_i_dict) == 0 and len(db_initial_info) == 0:
+        return {}
+
+    # Initiate the sql db
+    init_db(db_initial_info["db_path"])
+
+    # List the csv files of interest
+    list_of_init_csv = [
+        "local_sites_csv",
+        "local_movies_csv",
+        "local_photos_csv",
+        "local_species_csv",
+    ]
+
+    # Populate the sites, movies, photos, info
+    for local_i_csv in list_of_init_csv:
+        if local_i_csv in db_initial_info.keys():
+            populate_db(
+                db_initial_info=db_initial_info, project=project, local_csv=local_i_csv
+            )
+
+    # Combine server/project info in a dictionary
+    db_info_dict = {**db_initial_info, **server_i_dict}
+
+    return db_info_dict
+
+
+def get_project_details(project: project_utils.Project):
+    """
+    > This function connects to the server (or folder) hosting the csv files, and gets the initial info
+    from the database
+
+    :param project: the project object
+    """
+
+    # Connect to the server (or folder) hosting the csv files
+    server_i_dict = connect_to_server(project)
+
+    # Get the initial info
+    db_initial_info = get_db_init_info(project, server_i_dict)
+
+    return server_i_dict, db_initial_info
+
+
+def choose_footage(
+    project: project_utils.Project, start_path: str = ".", folder_type: str = ""
+):
+    if project.server == "AWS":
+        db_info_dict = initiate_db(project)
+        available_movies_df = retrieve_movie_info_from_server(
+            project=project, db_info_dict=db_info_dict
+        )
+        movie_dict = {
+            name: get_movie_path(f_path, db_info_dict, project)
+            for name, f_path in available_movies_df[["filename", "fpath"]].values
+        }
+
+        movie_widget = widgets.SelectMultiple(
+            options=[(name, movie) for name, movie in movie_dict.items()],
+            description="Select movie(s):",
+            ensure_option=False,
+            disabled=False,
+            layout=Layout(width="50%"),
+            style={"description_width": "initial"},
+        )
+
+        display(movie_widget)
+        return movie_widget
+
+    else:
+        # Specify the output folder
+        fc = FileChooser(start_path)
+        fc.title = f"Choose location of {folder_type}"
+        display(fc)
+        return fc
 
 
 #

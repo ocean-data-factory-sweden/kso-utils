@@ -12,8 +12,8 @@ from base64 import b64encode
 # module imports
 import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
-from kso_utils.spyfish_utils import process_clips_spyfish
-import kso_utils.tutorials_utils as tutorials_utils
+
+# from kso_utils.spyfish_utils import process_clips_spyfish
 import kso_utils.project_utils as project_utils
 import kso_utils.zooniverse_utils as zoo_utils
 

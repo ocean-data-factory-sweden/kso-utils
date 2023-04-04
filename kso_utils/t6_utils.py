@@ -20,9 +20,12 @@ import ipywidgets as widgets
 from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
-import yolov5_tracker.track as track
-from yolov5.utils import torch_utils
-import yolov5.detect as detect
+try:
+    import yolov5_tracker.track as track
+    from yolov5.utils import torch_utils
+    import yolov5.detect as detect
+except ModuleNotFoundError:
+    logging.error("Modules yolov5 and yolov5_tracker are required.")
 
 # Logging
 logging.basicConfig()
