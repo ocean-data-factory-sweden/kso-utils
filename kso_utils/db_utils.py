@@ -12,6 +12,7 @@ import kso_utils.db_starter.schema as schema
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
 # Utility functions for common database operations
 def init_db(db_path: str):
     """Initiate a new database for the project

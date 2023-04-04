@@ -24,6 +24,7 @@ from kso_utils.db_utils import create_connection
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
 # Function to prevent issues with Swedish characters
 # Converting the Swedish characters ä and ö to utf-8.
 def unswedify(string: str):
