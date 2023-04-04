@@ -1868,7 +1868,6 @@ def choose_new_videos_to_upload():
         with output_add:
             if sel.value is not None:
                 for movie in sel.value:
-
                     if Path(movie).suffix in [".mp4", ".mov"]:
                         movie_list.append([Path(fc.selected, movie), movie])
                         logging.info(Path(fc.selected, movie))
