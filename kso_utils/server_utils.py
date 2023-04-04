@@ -3,7 +3,6 @@ import os
 import io
 import requests
 import pandas as pd
-import numpy as np
 import getpass
 import gdown
 import zipfile
@@ -13,17 +12,12 @@ import logging
 import sys
 import ftfy
 import urllib
-import shutil
 from tqdm import tqdm
 from pathlib import Path
 from paramiko import SFTPClient, SSHClient
 
 # util imports
-import kso_utils.spyfish_utils as spyfish_utils
-import kso_utils.project_utils as project_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.koster_utils as koster_utils
-import kso_utils.db_utils as db_utils
+from kso_utils.project_utils import Project, find_project
 
 # Logging
 logging.basicConfig()
@@ -37,7 +31,7 @@ snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 # #####################################
 
 
-def connect_to_server(project: project_utils.Project):
+def connect_to_server(project: Project):
     """
     > This function connects to the server specified in the project object and returns a dictionary with
     the client and sftp client
@@ -74,14 +68,14 @@ def connect_to_server(project: project_utils.Project):
     return server_dict
 
 
-def get_ml_data(project: project_utils.Project):
+def get_ml_data(project: Project):
     """
     It downloads the training data from Google Drive.
     Currently only applies to the Template Project as other projects do not have prepared
     training data.
 
     :param project: The project object that contains all the information about the project
-    :type project: project_utils.Project
+    :type project: Project
     """
     if project.ml_folder is not None and not os.path.exists(project.ml_folder):
         # Download the folder containing the training data
@@ -98,149 +92,8 @@ def get_ml_data(project: project_utils.Project):
         logging.info("No prepared data to be downloaded.")
 
 
-def get_db_init_info(project: project_utils.Project, server_dict: dict) -> dict:
-    """
-    This function downloads the csv files from the server and returns a dictionary with the paths to the
-    csv files
-
-    :param project: the project object
-    :param server_dict: a dictionary containing the server information
-    :type server_dict: dict
-    :return: A dictionary with the paths to the csv files with the initial info to build the db.
-    """
-
-    # Define the path to the csv files with initial info to build the db
-    db_csv_info = project.csv_folder
-
-    # Get project-specific server info
-    server = project.server
-    project_name = project.Project_name
-
-    # Create the folder to store the csv files if not exist
-    if not os.path.exists(db_csv_info):
-        Path(db_csv_info).mkdir(parents=True, exist_ok=True)
-        # Recursively add permissions to folders created
-        [os.chmod(root, 0o777) for root, dirs, files in os.walk(db_csv_info)]
-
-    if server == "AWS":
-        # Download csv files from AWS
-        db_initial_info = download_csv_aws(project_name, server_dict, db_csv_info)
-
-        if project_name == "Spyfish_Aotearoa":
-            db_initial_info = spyfish_utils.get_spyfish_choices(
-                server_dict, db_initial_info, db_csv_info
-            )
-
-    elif server in ["LOCAL", "SNIC"]:
-        csv_folder = db_csv_info
-
-        # Define the path to the csv files with initial info to build the db
-        if not os.path.exists(csv_folder):
-            logging.error(
-                "Invalid csv folder specified, please provide the path to the species, sites and movies (optional)"
-            )
-
-        for file in Path(csv_folder).rglob("*.csv"):
-            if "sites" in file.name:
-                sites_csv = file
-            if "movies" in file.name:
-                movies_csv = file
-            if "photos" in file.name:
-                photos_csv = file
-            if "survey" in file.name:
-                surveys_csv = file
-            if "species" in file.name:
-                species_csv = file
-
-        if (
-            "movies_csv" not in vars()
-            and "photos_csv" not in vars()
-            and os.path.exists(csv_folder)
-        ):
-            logging.info(
-                "No movies or photos found, an empty movies file will be created."
-            )
-            with open(str(Path(f"{csv_folder}", "movies.csv")), "w") as fp:
-                fp.close()
-
-        db_initial_info = {}
-
-        if "sites_csv" in vars():
-            db_initial_info["local_sites_csv"] = sites_csv
-
-        if "species_csv" in vars():
-            db_initial_info["local_species_csv"] = species_csv
-
-        if "movies_csv" in vars():
-            db_initial_info["local_movies_csv"] = movies_csv
-
-        if "photos_csv" in vars():
-            db_initial_info["local_photos_csv"] = photos_csv
-
-        if "surveys_csv" in vars():
-            db_initial_info["local_surveys_csv"] = surveys_csv
-
-        if len(db_initial_info) == 0:
-            logging.error(
-                "Insufficient information to build the database. Please fix the path to csv files."
-            )
-
-    elif server == "TEMPLATE":
-        # Specify the id of the folder with csv files of the template project
-        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-
-        # Download template csv files from Gdrive
-        db_initial_info = download_gdrive(gdrive_id, db_csv_info)
-
-        for file in Path(db_csv_info).rglob("*.csv"):
-            if "sites" in file.name:
-                sites_csv = file
-            if "movies" in file.name:
-                movies_csv = file
-            if "photos" in file.name:
-                photos_csv = file
-            if "survey" in file.name:
-                surveys_csv = file
-            if "species" in file.name:
-                species_csv = file
-
-        db_initial_info = {}
-
-        if "sites_csv" in vars():
-            db_initial_info["local_sites_csv"] = sites_csv
-
-        if "species_csv" in vars():
-            db_initial_info["local_species_csv"] = species_csv
-
-        if "movies_csv" in vars():
-            db_initial_info["local_movies_csv"] = movies_csv
-
-        if "photos_csv" in vars():
-            db_initial_info["local_photos_csv"] = photos_csv
-
-        if "surveys_csv" in vars():
-            db_initial_info["local_surveys_csv"] = surveys_csv
-
-        if len(db_initial_info) == 0:
-            logging.error(
-                "Insufficient information to build the database. Please fix the path to csv files."
-            )
-
-    else:
-        raise ValueError(
-            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
-        )
-
-    # Add project-specific db_path
-    db_initial_info["db_path"] = project.db_path
-    if "client" in server_dict:
-        db_initial_info["client"] = server_dict["client"]
-
-    return db_initial_info
-
-
 def update_csv_server(
-    project: project_utils.Project, db_info_dict: dict, orig_csv: str, updated_csv: str
+    project: Project, db_info_dict: dict, orig_csv: str, updated_csv: str
 ):
     """
     > This function updates the original csv file with the updated csv file in the server
@@ -296,7 +149,7 @@ def update_csv_server(
 
 
 def upload_movie_server(
-    movie_path: str, f_path: str, db_info_dict: dict, project: project_utils.Project
+    movie_path: str, f_path: str, db_info_dict: dict, project: Project
 ):
     """
     Takes the file path of a movie file and uploads it to the server.
@@ -335,128 +188,7 @@ def upload_movie_server(
         raise ValueError("Specify the server of the project in the project_list.csv.")
 
 
-def retrieve_movie_info_from_server(project: project_utils.Project, db_info_dict: dict):
-    """
-    This function uses the project information and the database information, and returns a dataframe with the
-    movie information
-
-    :param project: the project object
-    :param db_info_dict: a dictionary containing the path to the database and the client to the server
-    :type db_info_dict: dict
-    :return: A dataframe with the following columns:
-    - index
-    - movie_id
-    - fpath
-    - spath
-    - exists
-    - filename_ext
-    """
-
-    server = project.server
-    bucket_i = project.bucket
-    movie_folder = project.movie_folder
-
-    if server == "AWS":
-        logging.info("Retrieving movies from AWS server")
-        # Retrieve info from the bucket
-        server_df = get_matching_s3_keys(
-            client=db_info_dict["client"],
-            bucket=bucket_i,
-            suffix=movie_utils.get_movie_extensions(),
-        )
-        # Get the fpath(html) from the key
-        server_df["spath"] = server_df["Key"].apply(
-            lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
-            + urllib.parse.quote(x, safe="://").replace("\\", "/")
-        )
-
-    elif server == "SNIC":
-        if "client" in db_info_dict:
-            server_df = get_snic_files(
-                client=db_info_dict["client"], folder=movie_folder
-            )
-        else:
-            logging.error("No database connection could be established.")
-            return pd.DataFrame(columns=["filename"])
-
-    elif server == "LOCAL":
-        if [movie_folder, bucket_i] == ["None", "None"]:
-            logging.info(
-                "No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead."
-            )
-            return pd.DataFrame(columns=["filename"])
-        else:
-            server_files = os.listdir(movie_folder)
-            server_df = pd.Series(server_files, name="spath").to_frame()
-    elif server == "TEMPLATE":
-        # Combine wildlife.ai storage and filenames of the movie examples
-        server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
-
-        # Get the fpath(html) from the key
-        server_df = server_df.rename(columns={"filename": "fpath"})
-
-        server_df["spath"] = server_df["fpath"].apply(
-            lambda x: "https://www.wildlife.ai/wp-content/uploads/2022/06/" + str(x), 1
-        )
-
-        # Remove fpath values
-        server_df.drop(columns=["fpath"], axis=1, inplace=True)
-
-    else:
-        raise ValueError("The server type you selected is not currently supported.")
-
-    # Create connection to db
-    conn = db_utils.create_connection(db_info_dict["db_path"])
-
-    # Query info about the movie of interest
-    movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
-    movies_df = movies_df.rename(columns={"id": "movie_id"})
-
-    # Find closest matching filename (may differ due to Swedish character encoding)
-    movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: urllib.parse.quote(
-            koster_utils.reswedify(x).replace("\\", "/"), safe="://"
-        )
-        if urllib.parse.quote(koster_utils.reswedify(x).replace("\\", "/"), safe="://")
-        in server_df["spath"].unique()
-        else koster_utils.unswedify(x)
-    )
-
-    # Merge the server path to the filepath
-    movies_df = movies_df.merge(
-        server_df,
-        left_on=["fpath"],
-        right_on=["spath"],
-        how="left",
-        indicator=True,
-    )
-
-    # Check that movies can be mapped
-    movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
-
-    # Drop _merge columns to match sql schema
-    movies_df = movies_df.drop("_merge", axis=1)
-
-    # Select only those that can be mapped
-    available_movies_df = movies_df[movies_df["exists"]].copy()
-
-    # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["spath"].apply(
-        lambda x: x.split("/")[-1], 1
-    )
-
-    # Add movie folder for SNIC
-    if server == "SNIC":
-        available_movies_df["spath"] = movie_folder + available_movies_df["spath"]
-
-    logging.info(
-        f"{available_movies_df.shape[0]} out of {len(movies_df)} movies are mapped from the server"
-    )
-
-    return available_movies_df
-
-
-def get_movie_url(project: project_utils.Project, server_dict: dict, f_path: str):
+def get_movie_url(project: Project, server_dict: dict, f_path: str):
     """
     Function to get the url of the movie
     """
@@ -591,7 +323,7 @@ def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
     local_surveys_csv, server_sites_csv, server_movies_csv, server_species_csv, server_surveys_csv
     """
     # Provide bucket and key
-    project = project_utils.find_project(project_name=project_name)
+    project = find_project(project_name=project_name)
     bucket = project.bucket
     key = project.key
 

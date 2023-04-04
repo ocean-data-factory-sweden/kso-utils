@@ -4,29 +4,13 @@ import pandas as pd
 import logging
 import subprocess
 from urllib.parse import urlparse
-from urllib.request import pathname2url
 
 # widget imports
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import HTML, display
-from ipywidgets import interactive, Layout
+from ipywidgets import interactive
 import asyncio
-
-# temporary work around issue #133
-try:
-    from panoptes_client import Project
-except:
-    from panoptes_client import Project
-
-# util imports
-import kso_utils.server_utils as server_utils
-import kso_utils.db_utils as db_utils
-import kso_utils.zooniverse_utils as zooniverse_utils
-import kso_utils.project_utils as project_utils
-import kso_utils.movie_utils as movie_utils
-import kso_utils.tutorials_utils as t_utils
-
 
 # Logging
 logging.basicConfig()
@@ -60,39 +44,6 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     fc.title = f"Choose location of {folder_type}"
     display(fc)
     return fc
-
-
-def choose_footage(
-    project: project_utils.Project, start_path: str = ".", folder_type: str = ""
-):
-    if project.server == "AWS":
-        db_info_dict = t_utils.initiate_db(project)
-        available_movies_df = server_utils.retrieve_movie_info_from_server(
-            project=project, db_info_dict=db_info_dict
-        )
-        movie_dict = {
-            name: movie_utils.get_movie_path(f_path, db_info_dict, project)
-            for name, f_path in available_movies_df[["filename", "fpath"]].values
-        }
-
-        movie_widget = widgets.SelectMultiple(
-            options=[(name, movie) for name, movie in movie_dict.items()],
-            description="Select movie(s):",
-            ensure_option=False,
-            disabled=False,
-            layout=Layout(width="50%"),
-            style={"description_width": "initial"},
-        )
-
-        display(movie_widget)
-        return movie_widget
-
-    else:
-        # Specify the output folder
-        fc = FileChooser(start_path)
-        fc.title = f"Choose location of {folder_type}"
-        display(fc)
-        return fc
 
 
 def write_urls_to_file(movie_list: list, filepath: str = "/tmp/temp.txt"):
@@ -179,93 +130,6 @@ def choose_project(projects_csv: str = "../kso_utils/db_starter/projects_list.cs
     return choose_project
 
 
-def get_project_details(project: project_utils.Project):
-    """
-    > This function connects to the server (or folder) hosting the csv files, and gets the initial info
-    from the database
-
-    :param project: the project object
-    """
-
-    # Connect to the server (or folder) hosting the csv files
-    server_i_dict = server_utils.connect_to_server(project)
-
-    # Get the initial info
-    db_initial_info = server_utils.get_db_init_info(project, server_i_dict)
-
-    return server_i_dict, db_initial_info
-
-
-def initiate_db(project: project_utils.Project):
-    """
-    This function takes a project name as input and returns a dictionary with all the information needed
-    to connect to the project's database
-
-    :param project: The name of the project. This is used to get the project-specific info from the
-    config file
-    :return: A dictionary with the following keys:
-        - db_path
-        - project_name
-        - server_i_dict
-        - db_initial_info
-    """
-
-    # Check if template project
-    if project.Project_name == "model-registry":
-        return {}
-
-    # Get project specific info
-    server_i_dict, db_initial_info = get_project_details(project)
-
-    # Check if server and db info
-    if len(server_i_dict) == 0 and len(db_initial_info) == 0:
-        return {}
-
-    # Initiate the sql db
-    db_utils.init_db(db_initial_info["db_path"])
-
-    # List the csv files of interest
-    list_of_init_csv = [
-        "local_sites_csv",
-        "local_movies_csv",
-        "local_photos_csv",
-        "local_species_csv",
-    ]
-
-    # Populate the sites, movies, photos, info
-    for local_i_csv in list_of_init_csv:
-        if local_i_csv in db_initial_info.keys():
-            db_utils.populate_db(
-                db_initial_info=db_initial_info, project=project, local_csv=local_i_csv
-            )
-
-    # Combine server/project info in a dictionary
-    db_info_dict = {**db_initial_info, **server_i_dict}
-
-    return db_info_dict
-
-
-def connect_zoo_project(project: project_utils.Project):
-    """
-    It takes a project name as input, and returns a Zooniverse project object
-
-    :param project: the project you want to connect to
-    :return: A Zooniverse project object.
-    """
-    # Save your Zooniverse user name and password.
-    zoo_user, zoo_pass = zooniverse_utils.zoo_credentials()
-
-    # Get the project-specific zooniverse number
-    project_n = project.Zooniverse_number
-
-    # Connect to the Zooniverse project
-    project = zooniverse_utils.auth_session(zoo_user, zoo_pass, project_n)
-
-    logging.info("Connected to Zooniverse")
-
-    return project
-
-
 def select_retrieve_info():
     """
     Display a widget that allows to select whether to retrieve the last available information,
@@ -308,46 +172,6 @@ def select_retrieve_info():
     )
 
     return latest_info
-
-
-def retrieve__populate_zoo_info(
-    project: project_utils.Project,
-    db_info_dict: dict,
-    zoo_project: Project,
-    zoo_info: list,
-    generate_export: bool = False,
-):
-    """
-    It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database
-    with the information
-
-    :param project: the project you want to retrieve information for
-    :param db_info_dict: a dictionary containing the path to the database and the name of the database
-    :param zoo_project: The name of the Zooniverse project you created
-    :param zoo_info: a list containing the information of the Zooniverse project you would like to retrieve
-    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
-
-    :return: The zoo_info_dict is being returned.
-    """
-
-    if zoo_project is None:
-        logging.error(
-            "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
-        )
-    else:
-        # Retrieve and store the information of subjects uploaded to zooniverse
-        zoo_info_dict = zooniverse_utils.retrieve_zoo_info(
-            project, zoo_project, zoo_info, generate_export
-        )
-
-        # Populate the sql with subjects uploaded to Zooniverse
-        if "db_path" in db_info_dict:
-            zooniverse_utils.populate_subjects(
-                zoo_info_dict["subjects"], project, db_info_dict["db_path"]
-            )
-        else:
-            logging.info("No database path found. Subjects have not been added to db")
-        return zoo_info_dict
 
 
 def choose_single_workflow(workflows_df: pd.DataFrame):
@@ -406,71 +230,6 @@ def select_movie(available_movies_df: pd.DataFrame):
 
     display(select_movie_widget)
     return select_movie_widget
-
-
-# Function to preview underwater movies
-def preview_movie(
-    project: project_utils.Project,
-    db_info_dict: dict,
-    available_movies_df: pd.DataFrame,
-    movie_i: str,
-):
-    """
-    It takes a movie filename and returns a HTML object that can be displayed in the notebook
-
-    :param project: the project object
-    :param db_info_dict: a dictionary containing the database information
-    :param available_movies_df: a dataframe with all the movies in the database
-    :param movie_i: the filename of the movie you want to preview
-    :return: A tuple of two elements:
-        1. HTML object
-        2. Movie path
-    """
-
-    # Select the movie of interest
-    movie_selected = available_movies_df[
-        available_movies_df["filename"] == movie_i
-    ].reset_index(drop=True)
-    movie_selected_view = movie_selected.T
-    movie_selected_view.columns = ["Movie summary"]
-
-    # Make sure only one movie is selected
-    if len(movie_selected.index) > 1:
-        logging.info(
-            "There are several movies with the same filename. This should be fixed!"
-        )
-        return None
-
-    else:
-        # Generate temporary path to the movie select
-        if project.server == "SNIC":
-            movie_path = movie_utils.get_movie_path(
-                project=project,
-                db_info_dict=db_info_dict,
-                f_path=movie_selected["spath"].values[0],
-            )
-            url = (
-                "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
-                + pathname2url(movie_path)
-            )
-        else:
-            url = movie_utils.get_movie_path(
-                f_path=movie_selected["fpath"].values[0],
-                db_info_dict=db_info_dict,
-                project=project,
-            )
-            movie_path = url
-        html_code = f"""<html>
-                <div style="display: flex; justify-content: space-around; align-items: center">
-                <div>
-                  <video width=500 controls>
-                  <source src={url}>
-                  </video>
-                </div>
-                <div>{movie_selected_view.to_html()}</div>
-                </div>
-                </html>"""
-        return HTML(html_code), movie_path
 
 
 # Function to update widget based on user interaction (eg. click)

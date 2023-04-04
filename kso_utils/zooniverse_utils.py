@@ -16,9 +16,11 @@ from kso_utils.koster_utils import (
     clean_duplicated_subjects,
     combine_annot_from_duplicates,
 )
-from kso_utils.spyfish_utils import process_spyfish_subjects
-import kso_utils.db_utils as db_utils
+
+# from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.project_utils as project_utils
+import kso_utils.db_utils as db_utils
+
 
 # Logging
 logging.basicConfig()
@@ -33,6 +35,27 @@ def zoo_credentials():
 
 class AuthenticationError(Exception):
     pass
+
+
+def connect_zoo_project(project: project_utils.Project):
+    """
+    It takes a project name as input, and returns a Zooniverse project object
+
+    :param project: the project you want to connect to
+    :return: A Zooniverse project object.
+    """
+    # Save your Zooniverse user name and password.
+    zoo_user, zoo_pass = zoo_credentials()
+
+    # Get the project-specific zooniverse number
+    project_n = project.Zooniverse_number
+
+    # Connect to the Zooniverse project
+    project = auth_session(zoo_user, zoo_pass, project_n)
+
+    logging.info("Connected to Zooniverse")
+
+    return project
 
 
 # Function to authenticate to Zooniverse
@@ -476,3 +499,43 @@ def process_clips_template(annotations, row_class_id, rows_list: list):
                 rows_list.append(choice_i)
 
     return rows_list
+
+
+def retrieve__populate_zoo_info(
+    project: project_utils.Project,
+    db_info_dict: dict,
+    zoo_project: Project,
+    zoo_info: list,
+    generate_export: bool = False,
+):
+    """
+    It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database
+    with the information
+
+    :param project: the project you want to retrieve information for
+    :param db_info_dict: a dictionary containing the path to the database and the name of the database
+    :param zoo_project: The name of the Zooniverse project you created
+    :param zoo_info: a list containing the information of the Zooniverse project you would like to retrieve
+    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
+
+    :return: The zoo_info_dict is being returned.
+    """
+
+    if zoo_project is None:
+        logging.error(
+            "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
+        )
+    else:
+        # Retrieve and store the information of subjects uploaded to zooniverse
+        zoo_info_dict = retrieve_zoo_info(
+            project, zoo_project, zoo_info, generate_export
+        )
+
+        # Populate the sql with subjects uploaded to Zooniverse
+        if "db_path" in db_info_dict:
+            populate_subjects(
+                zoo_info_dict["subjects"], project, db_info_dict["db_path"]
+            )
+        else:
+            logging.info("No database path found. Subjects have not been added to db")
+        return zoo_info_dict
