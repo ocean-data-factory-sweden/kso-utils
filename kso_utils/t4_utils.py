@@ -25,9 +25,8 @@ from panoptes_client import (
 # util imports
 from kso_utils.zooniverse_utils import populate_agg_annotations
 import kso_utils.db_utils as db_utils
-import kso_utils.server_utils as s_utils
 
-# import kso_utils.spyfish_utils as spyfish_utils
+import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.project_utils as project_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.t8_utils as t8
