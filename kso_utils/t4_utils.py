@@ -125,8 +125,12 @@ def get_species_frames(
         conn,
     )
 
-    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].copy().astype(int)
-    subjects_df["id"] = subjects_df["id"].copy().astype(int)
+    agg_clips_df["subject_ids"] = pd.to_numeric(
+        agg_clips_df["subject_ids"], errors="coerce"
+    ).astype("Int64")
+    subjects_df["id"] = pd.to_numeric(subjects_df["id"], errors="coerce").astype(
+        "Int64"
+    )
 
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
@@ -141,7 +145,7 @@ def get_species_frames(
     server = project.server
 
     if server in ["SNIC", "TEMPLATE"]:
-        movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
+        movies_df = movie_utils.retrieve_movie_info_from_server(project, server_dict)
 
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")

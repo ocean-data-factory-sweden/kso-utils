@@ -374,7 +374,7 @@ def check_movies_csv(
     df = pd.read_csv(db_info_dict["local_movies_csv"])
 
     # Get project-specific column names
-    col_names = project_utils.get_col_names(project, "local_movies_csv")
+    col_names = get_col_names(project, "local_movies_csv")
 
     # Set project-specific column names of interest
     col_fps = col_names["fps"]

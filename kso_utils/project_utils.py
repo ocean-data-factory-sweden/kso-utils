@@ -9,6 +9,7 @@ from dataclass_csv import DataclassReader, DataclassWriter, exceptions
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
+
 @dataclass
 class Project:
     Project_name: str

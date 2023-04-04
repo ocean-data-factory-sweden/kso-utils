@@ -18,6 +18,7 @@ import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
+import kso_utils.zooniverse_utils as zu_utils
 from IPython.display import display, HTML
 
 
@@ -184,8 +185,8 @@ class ProjectProcessor:
         :return: The zoo_info is being returned.
         """
         if self.project.Zooniverse_number is not None:
-            self.zoo_project = t_utils.connect_zoo_project(self.project)
-            self.zoo_info = t_utils.retrieve__populate_zoo_info(
+            self.zoo_project = zu_utils.connect_zoo_project(self.project)
+            self.zoo_info = zu_utils.retrieve__populate_zoo_info(
                 self.project,
                 self.db_info,
                 self.zoo_project,
@@ -329,7 +330,7 @@ class ProjectProcessor:
 
         async def f(project, db_info, server_movies_csv):
             x = await t_utils.single_wait_for_change(movie_selected, "value")
-            html, movie_path = t_utils.preview_movie(
+            html, movie_path = movie_utils.preview_movie(
                 project, db_info, server_movies_csv, x
             )
             display(html)

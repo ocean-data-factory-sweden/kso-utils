@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from urllib.request import pathname2url
+from IPython.display import HTML
 
 # util imports
 from kso_utils.server_utils import (
