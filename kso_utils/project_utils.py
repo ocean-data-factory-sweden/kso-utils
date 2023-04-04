@@ -56,6 +56,7 @@ def find_project(project_name: str = ""):
                 f"This project {project_name} does not contain any csv information. Please select another."
             )
     os.chdir(tut_path)
+    return
 
 
 def add_project(project_info: dict = {}):
