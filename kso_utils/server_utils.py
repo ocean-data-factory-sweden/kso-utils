@@ -23,8 +23,6 @@ from kso_utils.project_utils import Project, find_project
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 ######################################
 # ###### Common server functions ######
@@ -126,6 +124,8 @@ def update_csv_server(
         )
 
     elif server == "SNIC":
+        # Specify volume allocated by SNIC
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         # TODO: orig_csv and updated_csv as filenames, create full path for upload_object_to_snic with project.csv_folder.
         # Use below definition for production, commented not for development
         # local_fpath = project.csv_folder + updated_csv
@@ -483,10 +483,6 @@ def connect_snic(snic_user: str, snic_pass: str):
         hostname="129.16.125.130", port=22, username=snic_user, password=snic_pass
     )
     return client
-
-
-# def mount_snic(snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):
-#    self.
 
 
 def create_snic_transport(snic_user: str, snic_pass: str):

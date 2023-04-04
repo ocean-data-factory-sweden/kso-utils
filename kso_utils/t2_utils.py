@@ -27,8 +27,6 @@ import kso_utils.project_utils as p_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 ####################################################
 ############### SURVEY FUNCTIONS ###################
@@ -1761,6 +1759,8 @@ def upload_new_movies(project: p_utils.Project, db_info_dict: dict, movie_list: 
         return
     for index, movie in enumerate(movie_list):
         if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             remote_fpath = Path(f"{snic_path}/tmp_dir/", movie[1])
         else:
             remote_fpath = Path(f"{movie_folder}", movie[1])

@@ -33,9 +33,6 @@ from kso_utils.zooniverse_utils import populate_agg_annotations
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
-
 
 #### Set up ####
 def choose_agg_parameters(subject_type: str = "clip", full_description: bool = True):
@@ -944,6 +941,8 @@ def view_subject(subject_id: int, class_df: pd.DataFrame, subject_type: str):
         if os.access(".", os.W_OK):
             temp_image_path = "temp.jpg"
         else:
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             temp_image_path = f"{snic_path}/tmp_dir/temp.jpg"
 
         if os.path.exists(temp_image_path):

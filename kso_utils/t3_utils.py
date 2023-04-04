@@ -32,10 +32,6 @@ import kso_utils.project_utils as project_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
-
-
 ############################################################
 ######## Create some clip examples #########################
 ############################################################
@@ -226,6 +222,8 @@ def create_example_clips(
     # Specify the temp folder to host the clips
     output_clip_folder = movie_i + "_clips"
     if server == "SNIC":
+        # Specify volume allocated by SNIC
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         clips_folder = Path(snic_path, "tmp_dir", output_clip_folder)
     else:
         clips_folder = output_clip_folder
@@ -492,6 +490,7 @@ def create_modified_clips(
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
     if server == "SNIC":
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
     else:
         mod_clips_folder = mod_clip_folder
@@ -898,6 +897,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     temp_clip_folder = movie_i + "_zooniverseclips"
     if server == "SNIC":
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         clips_folder = Path(snic_path, "tmp_dir", temp_clip_folder)
     else:
         clips_folder = temp_clip_folder

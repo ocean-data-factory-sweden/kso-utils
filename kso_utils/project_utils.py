@@ -9,10 +9,6 @@ from dataclass_csv import DataclassReader, DataclassWriter, exceptions
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-
-
 @dataclass
 class Project:
     Project_name: str
@@ -69,7 +65,10 @@ def add_project(project_info: dict = {}):
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
     os.chdir(dname)
+    # Specify standard project list location
     project_path = "db_starter/projects_list.csv"
+    # Specify volume allocated by SNIC
+    snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
     if not os.path.exists(project_path) and os.path.exists(snic_path):
         project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
