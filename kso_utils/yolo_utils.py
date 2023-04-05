@@ -12,20 +12,18 @@ import yaml
 import pandas as pd
 import logging
 import datetime
-import PIL
 import requests
 
 from functools import partial
 from tqdm import tqdm
-from PIL import Image
 from pathlib import Path
 from collections.abc import Callable
 
 # util imports
 from kso_utils.db_utils import create_connection
-from kso_utils.koster_utils import unswedify
-from kso_utils.server_utils import retrieve_movie_info_from_server, get_movie_url
-import kso_utils.project_utils as project_utils
+from kso_utils.movie_utils import retrieve_movie_info_from_server, unswedify
+from kso_utils.server_utils import get_movie_url
+from kso_utils.project_utils import Project
 
 # Logging
 logging.basicConfig()
@@ -290,7 +288,7 @@ def split_frames(data_path: str, perc_test: float):
 
 
 def frame_aggregation(
-    project: project_utils.Project,
+    project: Project,
     db_info_dict: dict,
     out_path: str,
     perc_test: float,
@@ -337,6 +335,7 @@ def frame_aggregation(
         logging.error(
             "No species were selected. Please select at least one species before continuing."
         )
+        return
 
     # Select the aggregated classifications from the species of interest
     train_rows = agg_df
@@ -355,6 +354,7 @@ def frame_aggregation(
     # Check if any frames are left after removing null values
     if len(train_rows) == 0:
         logging.error("No frames left. Please adjust aggregation parameters.")
+        return
 
     # Create output folder
     if os.path.isdir(out_path):

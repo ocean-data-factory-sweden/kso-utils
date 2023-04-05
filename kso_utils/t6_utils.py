@@ -20,8 +20,12 @@ import ipywidgets as widgets
 from jupyter_bbox_widget import BBoxWidget
 import imagesize
 
-import yolov5_tracker.track as track
-from yolov5.utils import torch_utils
+try:
+    import yolov5_tracker.track as track
+    from yolov5.utils import torch_utils
+    import yolov5.detect as detect
+except ModuleNotFoundError:
+    logging.error("Modules yolov5 and yolov5_tracker are required.")
 
 # Logging
 logging.basicConfig()
@@ -299,6 +303,190 @@ def encode_image(filepath):
     return "data:image/jpg;base64," + encoded
 
 
+def get_annotator(image_path: str, species_list: list, autolabel_model: str = None):
+    """
+    It takes a path to a folder containing images and annotations, and a list of species names, and
+    returns a widget that allows you to view the images and their annotations, and to edit the
+    annotations
+
+    :param data_path: the path to the image folder
+    :type data_path: str
+    :param species_list: a list of species names
+    :type species_list: list
+    :return: A VBox widget containing a progress bar and a BBoxWidget.
+    """
+    images = sorted(
+        [
+            f
+            for f in os.listdir(image_path)
+            if os.path.isfile(os.path.join(image_path, f)) and f.endswith(".jpg")
+        ]
+    )
+
+    annot_path = os.path.join(Path(image_path).parent, "labels")
+
+    # a progress bar to show how far we got
+    w_progress = widgets.IntProgress(value=0, max=len(images), description="Progress")
+    w_status = widgets.Label(value="")
+
+    def get_bboxes(image, bboxes, labels, predict: bool = False):
+        logging.getLogger("yolov5").setLevel(logging.WARNING)
+        if predict:
+            detect.run(
+                weights=autolabel_model,
+                source=image,
+                conf_thres=0.5,
+                nosave=True,
+                name="labels",
+            )
+        label_file = [
+            f
+            for f in os.listdir(annot_path)
+            if os.path.isfile(os.path.join(annot_path, f))
+            and f.endswith(".txt")
+            and Path(f).stem == Path(image).stem
+        ]
+        if len(label_file) == 1:
+            label_file = label_file[0]
+            with open(os.path.join(annot_path, label_file), "r") as f:
+                for line in f:
+                    s = line.split(" ")
+                    labels.append(s[0])
+
+                    left = (float(s[1]) - (float(s[3]) / 2)) * width
+                    top = (float(s[2]) - (float(s[4]) / 2)) * height
+
+                    bboxes.append(
+                        {
+                            "x": left,
+                            "y": top,
+                            "width": float(s[3]) * width,
+                            "height": float(s[4]) * height,
+                            "label": species_list[int(s[0])],
+                        }
+                    )
+            w_status.value = "Annotations loaded"
+        else:
+            w_status.value = "No annotations found"
+        return bboxes, labels
+
+    # the bbox widget
+    image = os.path.join(image_path, images[0])
+    width, height = imagesize.get(image)
+    bboxes, labels = [], []
+    if autolabel_model is not None:
+        w_status.value = "Loading annotations..."
+        bboxes, labels = get_bboxes(image, bboxes, labels, predict=True)
+    else:
+        w_status.value = "No predictions, using existing labels if available"
+        bboxes, labels = get_bboxes(image, bboxes, labels)
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
+
+    # here we assign an empty list to bboxes but
+    # we could also run a detection model on the file
+    # and use its output for creating initial bboxes
+    w_bbox.bboxes = bboxes
+
+    # combine widgets into a container
+    w_container = widgets.VBox(
+        [
+            w_status,
+            w_progress,
+            w_bbox,
+        ]
+    )
+
+    def on_button_clicked(b):
+        w_progress.value = 0
+        image = os.path.join(image_path, images[0])
+        width, height = imagesize.get(image)
+        bboxes, labels = [], []
+        if autolabel_model is not None:
+            w_status.value = "Loading annotations..."
+            bboxes, labels = get_bboxes(image, bboxes, labels, predict=True)
+        else:
+            w_status.value = "No annotations found"
+            bboxes, labels = get_bboxes(image, bboxes, labels)
+        w_bbox.image = encode_image(image)
+
+        # here we assign an empty list to bboxes but
+        # we could also run a detection model on the file
+        # and use its output for creating inital bboxes
+        w_bbox.bboxes = bboxes
+        w_container.children = tuple(list(w_container.children[1:]))
+        b.close()
+
+    # when Skip button is pressed we move on to the next file
+    def on_skip():
+        w_progress.value += 1
+        if w_progress.value == len(images):
+            button = widgets.Button(
+                description="Click to restart.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+            if isinstance(w_container.children[0], widgets.Button):
+                w_container.children = tuple(list(w_container.children[1:]))
+            w_container.children = tuple([button] + list(w_container.children))
+            button.on_click(on_button_clicked)
+
+        # open new image in the widget
+        else:
+            image_file = images[w_progress.value]
+            image_p = os.path.join(image_path, image_file)
+            width, height = imagesize.get(image_p)
+            w_bbox.image = encode_image(image_p)
+            bboxes, labels = [], []
+            if autolabel_model is not None:
+                w_status.value = "Loading annotations..."
+                bboxes, labels = get_bboxes(image_p, bboxes, labels, predict=True)
+            else:
+                w_status.value = "No annotations found"
+                bboxes, labels = get_bboxes(image_p, bboxes, labels)
+
+            # here we assign an empty list to bboxes but
+            # we could also run a detection model on the file
+            # and use its output for creating initial bboxes
+            w_bbox.bboxes = bboxes
+
+    w_bbox.on_skip(on_skip)
+
+    # when Submit button is pressed we save current annotations
+    # and then move on to the next file
+    def on_submit():
+        image_file = images[w_progress.value]
+        width, height = imagesize.get(os.path.join(image_path, image_file))
+        # save annotations for current image
+        label_file = Path(image_file).name.replace(".jpg", ".txt")
+        # if the label_file needs to be created
+        if not os.path.exists(annot_path):
+            Path(annot_path).mkdir(parents=True, exist_ok=True)
+        open(os.path.join(annot_path, label_file), "w").write(
+            "\n".join(
+                [
+                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                        species_list.index(
+                            i["label"]
+                        ),  # single class vs multiple classes
+                        min((i["x"] + i["width"] / 2) / width, 1.0),
+                        min((i["y"] + i["height"] / 2) / height, 1.0),
+                        min(i["width"] / width, 1.0),
+                        min(i["height"] / height, 1.0),
+                    )
+                    for i in w_bbox.bboxes
+                ]
+            )
+        )
+        # move on to the next file
+        on_skip()
+
+    w_bbox.on_submit(on_submit)
+
+    return w_container
+
+
 def get_annotations_viewer(data_path: str, species_list: list):
     """
     It takes a path to a folder containing images and annotations, and a list of species names, and
@@ -548,7 +736,11 @@ def get_dataset(project_name: str, model: str, team_name: str = "koster"):
     api = wandb.Api()
     if "_" in model:
         run_id = model.split("_")[1]
-        run = api.run(f"{team_name}/{project_name.lower()}/runs/{run_id}")
+        try:
+            run = api.run(f"{team_name}/{project_name.lower()}/runs/{run_id}")
+        except wandb.CommError:
+            logging.error("Run data not found")
+            return "empty_string", "empty_string"
         datasets = [
             artifact for artifact in run.used_artifacts() if artifact.type == "dataset"
         ]

@@ -24,10 +24,8 @@ from panoptes_client import (
 
 # util imports
 from kso_utils.zooniverse_utils import populate_agg_annotations
-import kso_utils.tutorials_utils as t_utils
 import kso_utils.db_utils as db_utils
-import kso_utils.server_utils as s_utils
-import kso_utils.koster_utils as k_utils
+
 import kso_utils.spyfish_utils as spyfish_utils
 import kso_utils.project_utils as project_utils
 import kso_utils.movie_utils as movie_utils
@@ -37,8 +35,6 @@ import kso_utils.t8_utils as t8
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 def choose_species(db_info_dict: dict):
     """
@@ -127,8 +123,12 @@ def get_species_frames(
         conn,
     )
 
-    agg_clips_df["subject_ids"] = agg_clips_df["subject_ids"].astype(int)
-    subjects_df["id"] = subjects_df["id"].astype(int)
+    agg_clips_df["subject_ids"] = pd.to_numeric(
+        agg_clips_df["subject_ids"], errors="coerce"
+    ).astype("Int64")
+    subjects_df["id"] = pd.to_numeric(subjects_df["id"], errors="coerce").astype(
+        "Int64"
+    )
 
     # Combine the aggregated clips and subjects dataframes
     frames_df = pd.merge(
@@ -142,12 +142,12 @@ def get_species_frames(
 
     server = project.server
 
-    movies_df = s_utils.retrieve_movie_info_from_server(project, server_dict)
-    movie_folder = project.movie_folder
+    if server in ["SNIC", "TEMPLATE"]:
+        movies_df = movie_utils.retrieve_movie_info_from_server(project, server_dict)
 
-    # Include movies' filepath and fps to the df
-    frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="id")
-    frames_df["fpath"] = frames_df["spath"]
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
+        frames_df["fpath"] = frames_df["spath"]
 
     if len(frames_df[~frames_df.exists]) > 0:
         logging.error(
@@ -176,9 +176,7 @@ def get_species_frames(
     species_df["label"] = species_df["label"].apply(clean_label)
 
     # Combine the aggregated clips and subjects dataframes
-    frames_df = pd.merge(frames_df, species_df, how="left", on="label").drop(
-        columns=["id"]
-    )
+    frames_df = pd.merge(frames_df, species_df, how="left", on="label")
 
     # Identify the ordinal number of the frames expected to be extracted
     if len(frames_df) == 0:
@@ -378,6 +376,8 @@ def get_frames(
     if project.movie_folder is None:
         # Extract frames of interest from a folder with frames
         if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
@@ -409,6 +409,8 @@ def get_frames(
 
         # Select the temp location to store frames before uploading them to Zooniverse
         if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
         else:
             df = FileChooser(".")
@@ -426,7 +428,7 @@ def get_frames(
                 project,
             )
 
-            agg_clips_df, raw_clips_df = t8.aggregrate_classifications(
+            agg_clips_df, raw_clips_df = t8.aggregate_classifications(
                 clips_df, "clip", project, agg_params=agg_params
             )
 
@@ -613,6 +615,8 @@ def modify_frames(
 
     # Specify the folder to host the modified frames
     if server == "SNIC":
+        # Specify volume allocated by SNIC
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
         mod_frames_folder = Path(
             folder_name, "modified_" + "_".join(species_i) + "_frames/"

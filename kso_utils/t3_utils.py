@@ -32,10 +32,6 @@ import kso_utils.project_utils as project_utils
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2022-22-1210"
-
-
 ############################################################
 ######## Create some clip examples #########################
 ############################################################
@@ -226,6 +222,8 @@ def create_example_clips(
     # Specify the temp folder to host the clips
     output_clip_folder = movie_i + "_clips"
     if server == "SNIC":
+        # Specify volume allocated by SNIC
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         clips_folder = Path(snic_path, "tmp_dir", output_clip_folder)
     else:
         clips_folder = output_clip_folder
@@ -492,6 +490,7 @@ def create_modified_clips(
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
     if server == "SNIC":
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
     else:
         mod_clips_folder = mod_clip_folder
@@ -797,7 +796,8 @@ def extract_clips(
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
         full_prompt = init_prompt
         mod_prompt = ""
-        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+        output_prompt = ""
+        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
 
         # Set up modification
         for transform in modification_details.values():
@@ -808,13 +808,13 @@ def extract_clips(
                 # Unnest the modification detail dict
                 df = pd.json_normalize(modification_details, sep="_")
                 crf = df.filter(regex="crf$", axis=1).values[0][0]
-                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
+                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
 
         # Run the modification
         try:
             if len(mod_prompt) > 0:
                 full_prompt += mod_prompt
-            if output_prompt:
+            if len(output_prompt) > 0:
                 full_prompt += output_prompt
             else:
                 full_prompt += def_output_prompt
@@ -863,19 +863,22 @@ def create_clips(
     # Calculate the max number of clips available
     clip_length = clip_selection.kwargs["clip_length"]
     clip_numbers = clip_selection.result
-    start_trim = clip_selection.kwargs["clips_range"][0]
-    end_trim = clip_selection.kwargs["clips_range"][1]
+    if "clips_range" in clip_selection.kwargs:
+        start_trim = clip_selection.kwargs["clips_range"][0]
+        end_trim = clip_selection.kwargs["clips_range"][1]
 
-    # Calculate all the seconds for the new clips to start
-    movie_i_df["seconds"] = [
-        list(
-            range(
-                start_trim,
-                int(math.floor(end_trim / clip_length) * clip_length),
-                clip_length,
+        # Calculate all the seconds for the new clips to start
+        movie_i_df["seconds"] = [
+            list(
+                range(
+                    start_trim,
+                    int(math.floor(end_trim / clip_length) * clip_length),
+                    clip_length,
+                )
             )
-        )
-    ]
+        ]
+    else:
+        movie_i_df["seconds"] = [[0]]
 
     # Reshape the dataframe with the seconds for the new clips to start on the rows
     potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
@@ -894,6 +897,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     temp_clip_folder = movie_i + "_zooniverseclips"
     if server == "SNIC":
+        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
         clips_folder = Path(snic_path, "tmp_dir", temp_clip_folder)
     else:
         clips_folder = temp_clip_folder
@@ -922,31 +926,18 @@ def create_clips(
 
     logging.info("Extracting clips")
 
-    for i in range(0, potential_start_df.shape[0], pool_size):
-        logging.info(
-            f"Modifying {i} to {i+pool_size} out of {potential_start_df.shape[0]}"
+    processlist = []
+    # Read each movie and extract the clips
+    for index, row in potential_start_df.iterrows():
+        # Extract the videos and store them in the folder
+        extract_clips(
+            movie_path,
+            clip_length,
+            row["upl_seconds"],
+            row["clip_path"],
+            modification_details,
+            gpu_available,
         )
-
-        processlist = []
-        # Read each movie and extract the clips
-        for index, row in potential_start_df.iloc[i : i + pool_size].iterrows():
-            # Extract the videos and store them in the folder
-            p = mp.Process(
-                target=extract_clips,
-                args=(
-                    movie_path,
-                    clip_length,
-                    row["upl_seconds"],
-                    row["clip_path"],
-                    modification_details,
-                    gpu_available,
-                ),
-            )
-            processlist.append(p)
-            p.start()
-
-        for pr in processlist:
-            pr.join()
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(modification_details)

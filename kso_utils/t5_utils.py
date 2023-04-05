@@ -53,6 +53,7 @@ def setup_paths(output_folder: str, model_type: str):
             logging.error(
                 f"{e}, Either data.yaml or hyps.yaml was not found in your folder. Ensure they are located in the selected directory."
             )
+            return None, None
         return data_path, hyps_path
     elif model_type == 2:
         logging.info("Paths do not need to be changed for this model type.")
@@ -108,7 +109,7 @@ def choose_model_type():
     :return: The dropdown box widget.
     """
     model_type = widgets.Dropdown(
-        value=1,
+        value=None,
         description="Required model type:",
         options=[
             (
@@ -250,7 +251,7 @@ def choose_classes(db_path: str = "koster_lab.db"):
     return w
 
 
-def choose_train_params():
+def choose_train_params(model_type: str):
     """
     It creates two sliders, one for batch size, one for epochs
     :return: the values of the sliders.
@@ -279,9 +280,32 @@ def choose_train_params():
         readout_format="d",
     )
 
-    box = widgets.HBox([v, z])
-    display(box)
-    return v, z
+    h = widgets.IntText(description="Height:")
+    w = widgets.IntText(description="Width:")
+    s = widgets.IntText(description="Image size:")
+
+    def on_value_change(change):
+        height = h.value
+        width = w.value
+        return [height, width]
+
+    h.observe(on_value_change, names="value")
+    w.observe(on_value_change, names="value")
+    s.observe(on_value_change, names="value")
+
+    if model_type == 1:
+        box = widgets.HBox([v, z, h, w])
+        display(box)
+        return v, z, h, w
+    elif model_type == 2:
+        box = widgets.HBox([v, z, s])
+        display(box)
+        return v, z, s, None
+    else:
+        logging.warning("Model in experimental stage.")
+        box = widgets.HBox([v, z])
+        display(box)
+        return v, z, None, None
 
 
 def choose_eval_params():

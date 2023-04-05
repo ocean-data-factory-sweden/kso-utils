@@ -9,35 +9,12 @@ from pathlib import Path
 from collections import Counter
 
 # util imports
-import kso_utils.db_utils as db_utils
-import kso_utils.project_utils as project_utils
+from kso_utils.project_utils import Project
+from kso_utils.db_utils import get_movies_id
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
-
-
-# Function to prevent issues with Swedish characters
-# Converting the Swedish characters ä and ö to utf-8.
-def unswedify(string: str):
-    """Convert ä and ö to utf-8"""
-    return (
-        string.encode("utf-8")
-        .replace(b"\xc3\xa4", b"a\xcc\x88")
-        .replace(b"\xc3\xb6", b"o\xcc\x88")
-        .decode("utf-8")
-    )
-
-
-# Function to prevent issues with Swedish characters
-def reswedify(string: str):
-    """Convert ä and ö to utf-8"""
-    return (
-        string.encode("utf-8")
-        .replace(b"a\xcc\x88", b"\xc3\xa4")
-        .replace(b"o\xcc\x88", b"\xc3\xb6")
-        .decode("utf-8")
-    )
 
 
 # Function to extract metadata from subjects
@@ -100,36 +77,6 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
     return man_clips_df
 
 
-# Function to get the movie_ids based on movie filenames
-def get_movies_id(df: pd.DataFrame, db_path: str):
-    # Create connection to db
-    conn = db_utils.create_connection(db_path)
-
-    # Query id and filenames from the movies table
-    movies_df = pd.read_sql_query("SELECT id, filename FROM movies", conn)
-    movies_df = movies_df.rename(
-        columns={"id": "movie_id", "filename": "movie_filename"}
-    )
-
-    # Check all the movies have a unique ID
-    df_unique = df.movie_filename.unique()
-    movies_df_unique = movies_df.movie_filename.unique()
-    diff_filenames = set(df_unique).difference(movies_df_unique)
-
-    if diff_filenames:
-        raise ValueError(
-            f"There are clip subjects that don't have movie_id. The movie filenames are {diff_filenames}"
-        )
-
-    # Reference the manually uploaded subjects with the movies table
-    df = pd.merge(df, movies_df, how="left", on="movie_filename")
-
-    # Drop the movie_filename column
-    df = df.drop(columns=["movie_filename"])
-
-    return df
-
-
 # Function to process the metadata of clips that were uploaded manually
 def process_manual_clips(meta_df: pd.DataFrame):
     # Select the filename of the clips and remove extension type
@@ -162,7 +109,7 @@ def process_manual_clips(meta_df: pd.DataFrame):
 
 
 # Function to get the list of duplicated subjects
-def get_duplicatesdf(project: project_utils.Project):
+def get_duplicatesdf(project: Project):
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder
 
@@ -178,7 +125,7 @@ def get_duplicatesdf(project: project_utils.Project):
 
 
 # Function to select the first subject of those that are duplicated
-def clean_duplicated_subjects(subjects: pd.DataFrame, project: project_utils.Project):
+def clean_duplicated_subjects(subjects: pd.DataFrame, project: Project):
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 
@@ -245,9 +192,7 @@ def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
 
 
 # Function to combine classifications received on duplicated subjects
-def combine_annot_from_duplicates(
-    annot_df: pd.DataFrame, project: project_utils.Project
-):
+def combine_annot_from_duplicates(annot_df: pd.DataFrame, project: Project):
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 

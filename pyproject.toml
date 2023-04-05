@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "kso_utils"
+version = "0.1.0"
+description = "A package containing utility scripts for use with KSO analysis notebooks."
+authors = ["Jurie Germishuys <jurie.germishuys@combine.se>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "kso_utils"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "2.28.2"
+pandas = "1.5.3"
+boto3 = "1.15.18"
+dataclass-csv = "1.4.0"
+ffmpeg = "1.4"
+ffmpeg-python = "0.2.0"
+folium = "0.12.1"
+ftfy = "6.1.1"
+gdown = "4.6.4"
+imagesize = "1.4.1"
+ipyfilechooser = "0.4.4"
+ipysheet = "0.4.4"
+ipython = "8.11.0"
+ipywidgets = "7.7.2"
+jupyter-bbox-widget = "0.5.0"
+natsort = "8.1.0"
+opencv-python = "4.5.4.60"
+panoptes-client = "1.6.0"
+paramiko = "2.11.0"
+pillow = "9.4.0"
+pims = "0.6.1"
+pyyaml = "6.0"
+scikit-learn = "1.2.2"
+scp = "0.14.1"
+split-folders = "0.5.1"
+torch = "1.8.0"
+tqdm = "4.64.1"
+wandb = "0.13.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

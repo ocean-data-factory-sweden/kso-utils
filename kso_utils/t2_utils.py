@@ -5,6 +5,7 @@ import subprocess
 import datetime
 import logging
 import ffmpeg
+import shutil
 from pathlib import Path
 
 # widget imports
@@ -19,18 +20,21 @@ from ipyfilechooser import FileChooser
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.tutorials_utils as t_utils
+import kso_utils.project_utils as p_utils
 
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-# Specify volume allocated by SNIC
-snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
 ####################################################
 ############### SURVEY FUNCTIONS ###################
 ####################################################
+
+
+def progress_handler(progress_info):
+    print("{:.2f}".format(progress_info["percentage"]))
 
 
 def select_survey(db_info_dict: dict):
@@ -1731,7 +1735,7 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
         print("Movies csv file succesfully updated in the server.")
 
 
-def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
+def upload_new_movies(project: p_utils.Project, db_info_dict: dict, movie_list: list):
     """
     It uploads the new movies to the SNIC server and creates new rows to be updated
     with movie metadata and saved into movies.csv
@@ -1740,6 +1744,7 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
     :param movie_list: list of new movies that are to be added to movies.csv
     """
     # Get number of new movies to be added
+    movie_folder = project.movie_folder
     number_of_movies = len(movie_list)
     # Get current movies
     movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
@@ -1749,8 +1754,16 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         columns=movies_df.shape[1],
         column_headers=movies_df.columns.tolist(),
     )
+    if len(movie_list) == 0:
+        logging.error("No valid movie found to upload.")
+        return
     for index, movie in enumerate(movie_list):
-        remote_fpath = Path(snic_path, "tmp_dir", movie[1])
+        if project.server == "SNIC":
+            # Specify volume allocated by SNIC
+            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
+            remote_fpath = Path(f"{snic_path}/tmp_dir/", movie[1])
+        else:
+            remote_fpath = Path(f"{movie_folder}", movie[1])
         if os.path.exists(remote_fpath):
             logging.info(
                 "Filename "
@@ -1764,23 +1777,24 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
             p = Path(movie[0])
             processed_video_path = p.with_name(f"{p.stem}_{stem}{p.suffix}").name
             logging.info("Movie to be uploaded: " + processed_video_path)
-            stream = ffmpeg.input(p)
-            stream = ffmpeg.output(
-                stream,
+            arg_dict = {"loglevel": "quiet", "stats": None}
+            ffmpeg.input(p).output(
                 processed_video_path,
                 crf=22,
                 pix_fmt="yuv420p",
                 vcodec="libx264",
-            )
-            ffmpeg.run(
-                stream, capture_stdout=True, capture_stderr=True, overwrite_output=True
-            )
+                threads=4,
+            ).run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
 
-            server_utils.upload_object_to_snic(
-                db_info_dict["sftp_client"],
-                str(processed_video_path),
-                str(remote_fpath),
-            )
+            if project.server == "SNIC":
+                server_utils.upload_object_to_snic(
+                    db_info_dict["sftp_client"],
+                    str(processed_video_path),
+                    str(remote_fpath),
+                )
+            elif project.server in ["LOCAL", "TEMPLATE"]:
+                print(processed_video_path, remote_fpath)
+                shutil.copy2(str(processed_video_path), str(remote_fpath))
             logging.info("movie uploaded\n")
         # Fetch movie metadata that can be calculated from movie file
         fps, duration = movie_utils.get_fps_duration(movie[0])
@@ -1799,7 +1813,6 @@ def upload_new_movies_to_snic(db_info_dict: dict, movie_list: list):
         "Complete this sheet by filling the missing info on the movie you just uploaded"
     )
     display(new_movie_rows_sheet)
-
     return new_movie_rows_sheet
 
 
@@ -1818,14 +1831,29 @@ def choose_new_videos_to_upload():
     """
     Simple widget for uploading videos from a file browser.
     returns the list of movies to be added.
-    TODO: Support multi-select file uploads
+    Supports multi-select file uploads
     """
 
     movie_list = []
 
     fc = FileChooser()
+    fc.title = "First choose your directory of interest"
+    " and then the movies you would like to upload"
     logging.info("Choose the file that you want to upload: ")
+
+    def change_dir(chooser):
+        sel.options = os.listdir(chooser.selected)
+        fc.children[1].children[2].layout.display = "none"
+        sel.layout.visibility = "visible"
+
+    fc.register_callback(change_dir)
+
+    sel = widgets.SelectMultiple(options=os.listdir(fc.selected))
+
     display(fc)
+    display(sel)
+
+    sel.layout.visibility = "hidden"
 
     button_add = widgets.Button(description="Add selected file")
     output_add = widgets.Output()
@@ -1838,10 +1866,14 @@ def choose_new_videos_to_upload():
 
     def on_button_add_clicked(b):
         with output_add:
-            if fc.selected is not None:
-                movie_list.append([fc.selected, fc.selected_filename])
-                logging.info(fc.selected)
-                fc.reset()
+            if sel.value is not None:
+                for movie in sel.value:
+                    if Path(movie).suffix in [".mp4", ".mov"]:
+                        movie_list.append([Path(fc.selected, movie), movie])
+                        logging.info(Path(fc.selected, movie))
+                    else:
+                        logging.error("Invalid file extension")
+                    fc.reset()
 
     button_add.on_click(on_button_add_clicked)
     return movie_list
