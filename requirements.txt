@@ -21,7 +21,6 @@ panoptes_client==1.6.0
 paramiko==2.11.0
 PIMS==0.6.1
 PyYAML==6.0
-requests==2.28.2
 scikit_learn==1.2.2
 scp==0.14.1
 setuptools==67.6.1
