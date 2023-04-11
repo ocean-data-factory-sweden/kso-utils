@@ -5,7 +5,6 @@ import asyncio
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-import fiftyone as fo
 import ipywidgets as widgets
 from itertools import chain
 from pathlib import Path
@@ -1152,6 +1151,9 @@ class Annotator:
         self.potential_labels = potential_labels
         self.bboxes = {}
         self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
+        self.modules.update(
+            import_modules(["fiftyone"], utils=False)
+        )
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -1159,17 +1161,17 @@ class Annotator:
     def fiftyone_annotate(self):
         # Create a new dataset
         try:
-            dataset = fo.load_dataset(self.dataset_name)
+            dataset = self.modules["fiftyone"].load_dataset(self.dataset_name)
             dataset.delete()
         except ValueError:
             pass
-        dataset = fo.Dataset(self.dataset_name)
+        dataset = self.modules["fiftyone"].Dataset(self.dataset_name)
 
         # Add all the images in the directory to the dataset
         for filename in os.listdir(self.images_path):
             if filename.endswith(".jpg") or filename.endswith(".png"):
                 image_path = os.path.join(self.images_path, filename)
-                sample = fo.Sample(filepath=image_path)
+                sample = self.modules["fiftyone"].Sample(filepath=image_path)
                 dataset.add_sample(sample)
 
         # Add the potential labels to the dataset
@@ -1177,7 +1179,7 @@ class Annotator:
         if self.potential_labels is not None:
             label_field = "my_label"
             dataset.add_sample_field(
-                label_field, fo.core.fields.StringField, classes=self.potential_labels
+                label_field, self.modules["fiftyone"].core.fields.StringField, classes=self.potential_labels
             )
 
         # Create a view with the desired labels
@@ -1191,7 +1193,7 @@ class Annotator:
         )
         # Open the dataset in the FiftyOne App
         # Connect to FiftyOne session
-        # session = fo.launch_app(dataset, view=view)
+        # session = self.modules["fiftyone"].launch_app(dataset, view=view)
 
         # Start annotating
         # session.wait()
