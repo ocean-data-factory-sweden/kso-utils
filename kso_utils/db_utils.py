@@ -3,7 +3,6 @@ import os
 import sqlite3
 import logging
 import pandas as pd
-from pathlib import Path
 
 # util imports
 import kso_utils.db_starter.schema as schema
@@ -16,7 +15,9 @@ logging.getLogger().setLevel(logging.INFO)
 # Utility functions for common database operations
 def init_db(db_path: str):
     """Initiate a new database for the project
+
     :param db_path: path of the database file
+    :return:
     """
 
     # Delete previous database versions if exists
@@ -40,6 +41,7 @@ def init_db(db_path: str):
 def create_connection(db_file: str):
     """create a database connection to the SQLite database
         specified by db_file
+
     :param db_file: database file
     :return: Connection object or None
     """
@@ -57,6 +59,7 @@ def create_connection(db_file: str):
 def insert_many(conn: sqlite3.Connection, data: list, table: str, count: int):
     """
     Insert multiple rows into table
+
     :param conn: the Connection object
     :param data: data to be inserted into table
     :param table: table of interest
@@ -74,6 +77,7 @@ def insert_many(conn: sqlite3.Connection, data: list, table: str, count: int):
 def retrieve_query(conn: sqlite3.Connection, query: str):
     """
     Execute SQL query and returns output
+
     :param conn: the Connection object
     :param query: a SQL query
     :return:
@@ -91,6 +95,7 @@ def retrieve_query(conn: sqlite3.Connection, query: str):
 
 def execute_sql(conn: sqlite3.Connection, sql: str):
     """Execute multiple SQL statements without return
+
     :param conn: Connection object
     :param sql: a string of SQL statements
     :return:

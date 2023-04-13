@@ -60,8 +60,7 @@ def select_deployment(missing_from_csv: pd.DataFrame):
     > This function takes a dataframe of missing files and returns a widget that allows the user to
     select the deployment of interest
 
-    :param missing_from_csv: a dataframe of the files that are in the data folder but not in the csv
-    file
+    :param missing_from_csv: a dataframe of the files that are in the data folder but not in the csv file
     :return: A widget object
     """
     if missing_from_csv.shape[0] > 0:

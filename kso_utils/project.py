@@ -4,7 +4,6 @@ import logging
 import asyncio
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
 import ipywidgets as widgets
 from itertools import chain
 from pathlib import Path
@@ -98,7 +97,7 @@ class ProjectProcessor:
         It mounts the remote directory to the local machine
 
         :param snic_path: The path to the SNIC directory on the remote server, defaults to
-        /mimer/NOBACKUP/groups/snic2021-6-9/
+               /mimer/NOBACKUP/groups/snic2021-6-9/
         :type snic_path: str (optional)
         :return: The return value is the exit status of the command.
         """
@@ -219,9 +218,8 @@ class ProjectProcessor:
     def init_meta(self, init_keys=["movies", "species", "sites"]):
         """
         This function creates a new attribute for the class, which is a pandas dataframe.
-
-        The attribute name is a concatenation of the string "local_" and the value of the variable
-        meta_name, and the string "_csv".
+        The attribute name is a concatenation of the string 'local_' and the value of the variable
+        meta_name, and the string '_csv'.
 
         The value of the attribute is a pandas dataframe.
 
@@ -230,8 +228,8 @@ class ProjectProcessor:
         The function loops through the list of strings, and for each string, it creates a new attribute
         for the class.
 
-        :param init_keys: a list of strings that are the names of the metadata files you want to
-        initialize
+        :param init_keys: a list of strings that are the names of the metadata files you want to 
+               initialize
         """
         for meta_name in init_keys:
             setattr(self, "local_" + meta_name + "_csv", pd.DataFrame())
@@ -362,7 +360,7 @@ class ProjectProcessor:
         `check_movies_meta` checks the metadata of the movies in the database
 
         :param review_method: This is the method used to review the movies. The options are: Basic, Advanced, defaults to
-        Basic
+               Basic
         :type review_method: str (optional)
         :param gpu: bool = False, defaults to False
         :type gpu: bool (optional)
@@ -452,11 +450,11 @@ class ProjectProcessor:
         :type folder_path: str
         :param annotation_classes: list of strings
         :type annotation_classes: list
-        :return: A list of dictionaries, each dictionary containing the following keys:
-            - 'image_path': the path to the image
-            - 'annotations': a list of dictionaries, each dictionary containing the following keys:
-                - 'class': the class of the annotation
-                - 'bbox': the bounding box of the annotation
+        :return: A list of dictionaries, each dictionary containing the following keys
+                 - 'image_path': the path to the image
+                 - 'annotations': a list of dictionaries, each dictionary containing the following keys:
+                 - 'class': the class of the annotation
+                 - 'bbox': the bounding box of the annotation
         """
         return self.modules["t8_utils"].get_annotations_viewer(
             folder_path, species_list=annotation_classes
@@ -481,7 +479,7 @@ class ProjectProcessor:
         :param pool_size: number of threads to use for clip extraction, defaults to 4
         :type pool_size: int (optional)
         :param is_example: If True, the clips will be selected randomly. If False, the clips will be
-        selected based on the number of clips and the length of each clip, defaults to False
+               selected based on the number of clips and the length of each clip, defaults to False
         :type is_example: bool (optional)
         """
         # t3_utils.create_clips
@@ -606,7 +604,7 @@ class ProjectProcessor:
         :param n_frames_subject: number of frames to fetch per subject, defaults to 3
         :type n_frames_subject: int (optional)
         :param subsample_up_to: If you have a lot of frames for a given species, you can subsample them.
-        This parameter controls how many frames you want to subsample to, defaults to 3
+               This parameter controls how many frames you want to subsample to, defaults to 3
         :type subsample_up_to: int (optional)
         """
 
@@ -696,12 +694,12 @@ class ProjectProcessor:
 
         :param classifications_data: the dataframe of classifications from the Zooniverse API
         :param subject_type: This is the type of subject you want to retrieve classifications for. This
-        can be either "clip" or "frame"
+               can be either "clip" or "frame"
         :type subject_type: str
         :param agg_params: list
         :type agg_params: list
         :param summary: If True, the output will be a summary of the classifications, with the number of
-        classifications per label, defaults to False
+               classifications per label, defaults to False
         :type summary: bool (optional)
         """
 
@@ -975,7 +973,7 @@ class MLProjectProcessor(ProjectProcessor):
                 name=str(exp_name) + "_val",
             )
         except Exception as e:
-            logging.errro("Encountered {e}, terminating run...")
+            logging.errro(f"Encountered {e}, terminating run...")
             self.modules["wandb"].finish()
         logging.info("Run succeeded, finishing run...")
         self.modules["wandb"].finish()

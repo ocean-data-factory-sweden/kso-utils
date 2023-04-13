@@ -24,7 +24,8 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
     :param df: the dataframe containing the bounding box coordinates
     :param movie_dir: The directory where the movies are stored
     :param out_path: The path to the directory where you want to save the images with the bounding boxes
-    drawn on them
+           drawn on them
+    :return:
     """
     df["movie_path"] = df["filename"].apply(
         lambda x: str(

@@ -237,8 +237,7 @@ def track_objects(
     :param artifact_dir: The directory where the model is saved
     :param tracker_folder: The folder where tracker runs will be stored
     :param conf_thres: The confidence threshold for the YOLOv5 model
-    :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720
-    (optional)
+    :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720 (optional)
     :return: The latest tracker folder
     """
     # Check that tracker folder specified exists
@@ -673,8 +672,7 @@ def get_data_viewer(data_path: str):
 
     :param data_path: the path to the data folder
     :type data_path: str
-    :return: A function that takes in a parameter k and a scale parameter and returns a widget that displays the image at
-    index k in the list of images with the specified scale.
+    :return: A function that takes in a parameter k and a scale parameter and returns a widget that displays the image at index k in the list of images with the specified scale.
     """
     if "empty_string" in data_path:
         logging.info("No files.")
@@ -730,8 +728,7 @@ def get_dataset(project_name: str, model: str, team_name: str = "koster"):
     :type project_name: str
     :param model: The model you want to use
     :type model: str
-    :return: The return value is a list of two directories, one for the training data and one for the
-    validation data.
+    :return: The return value is a list of two directories, one for the training data and one for the validation data.
     """
     api = wandb.Api()
     if "_" in model:

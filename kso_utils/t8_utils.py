@@ -13,7 +13,7 @@ from base64 import b64encode
 import kso_utils.db_utils as db_utils
 from kso_utils.koster_utils import filter_bboxes, process_clips_koster
 
-# from kso_utils.spyfish_utils import process_clips_spyfish
+from kso_utils.spyfish_utils import process_clips_spyfish
 import kso_utils.project_utils as project_utils
 import kso_utils.zooniverse_utils as zoo_utils
 
@@ -332,8 +332,8 @@ def get_classifications(
     dataframe of classifications
 
     :param workflow_dict: a dictionary of the workflows you want to retrieve classifications for. The
-    keys are the workflow names, and the values are the workflow IDs, workflow versions, and the minimum
-    number of classifications per subject
+           keys are the workflow names, and the values are the workflow IDs, workflow versions, and the minimum
+           number of classifications per subject
     :type workflow_dict: dict
     :param workflows_df: the dataframe of workflows from the Zooniverse project
     :type workflows_df: pd.DataFrame
@@ -425,9 +425,9 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
 
     :param raw_class_df: the dataframe of all the classifications
     :param agg_users: the proportion of users that must agree on a classification for it to be included
-    in the final dataset
+           in the final dataset
     :param min_users: The minimum number of users that must have classified a subject for it to be
-    included in the final dataset
+           included in the final dataset
     :return: a dataframe with the aggregated labels.
     """
     # Calculate the number of users that classified each subject
@@ -682,7 +682,7 @@ def process_clips(df: pd.DataFrame, project: project_utils.Project):
     :type df: pd.DataFrame
     :param project: the name of the project you want to download data from
     :return: A dataframe with the classification_id, label, how_many, first_seen, https_location,
-    subject_type, and subject_ids.
+             subject_type, and subject_ids.
     """
 
     # Create an empty list
@@ -771,8 +771,8 @@ def process_frames(df: pd.DataFrame, project_name: str):
     :type df: pd.DataFrame
     :param project_name: The name of the project you want to download data from
     :return: A dataframe with the following columns:
-        classification_id, x, y, w, h, label, https_location, filename, subject_type, subject_ids,
-    frame_number, user_name, movie_id
+             classification_id, x, y, w, h, label, https_location, filename, subject_type, subject_ids,
+             frame_number, user_name, movie_id
     """
 
     # Create an empty list

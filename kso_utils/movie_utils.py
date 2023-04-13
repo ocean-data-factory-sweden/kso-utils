@@ -49,13 +49,12 @@ def reswedify(string: str):
 
 
 def get_fps_duration(movie_path: str):
-    '''
+    """
     This function takes the path (or url) of a movie and returns its fps and duration information
 
     :param movie_path: a string containing the path (or url) where the movie of interest can be access from
     :return: Two integers, the fps and duration of the movie
     """
-    '''
     cap = cv2.VideoCapture(movie_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -231,13 +230,8 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     :param project: the project object
     :param db_info_dict: a dictionary containing the path to the database and the client to the server
     :type db_info_dict: dict
-    :return: A dataframe with the following columns:
-    - index
-    - movie_id
-    - fpath
-    - spath
-    - exists
-    - filename_ext
+    :return: A dataframe with the following columns (index, movie_id, fpath, spath, exists, filename_ext)
+
     """
 
     server = project.server

@@ -396,8 +396,7 @@ def process_clips_spyfish(annotations, row_class_id, rows_list: list):
     :param annotations: the list of annotations for a given subject
     :param row_class_id: the classification id
     :param rows_list: a list of dictionaries, each dictionary is a row in the output dataframe
-    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
-    first seen time and the number of individuals.
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the first seen time and the number of individuals.
     """
 
     for ann_i in annotations:

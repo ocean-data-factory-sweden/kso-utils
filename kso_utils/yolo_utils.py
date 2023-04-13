@@ -9,6 +9,7 @@ import re
 import pims
 import shutil
 import yaml
+import PIL
 import pandas as pd
 import logging
 import datetime
@@ -113,8 +114,7 @@ def ProcFrames(proc_frame_func: Callable, frames_path: str):
     :type proc_frame_func: Callable
     :param frames_path: The path to the directory containing the frames
     :type frames_path: str
-    :return: The time it took to process all the frames in the folder, and the number of frames
-    processed.
+    :return: The time it took to process all the frames in the folder, and the number of frames processed.
     """
     start = time.time()
     files = os.listdir(frames_path)
@@ -321,8 +321,7 @@ def frame_aggregation(
     :type out_format: str (optional)
     :param remove_nulls: Remove null annotations from the dataset, defaults to True
     :type remove_nulls: bool (optional)
-    :param track_frames: If True, the script will track the bounding boxes for n_tracked_frames frames
-    after the object is detected, defaults to True
+    :param track_frames: If True, the script will track the bounding boxes for n_tracked_frames frames after the object is detected, defaults to True
     :type track_frames: bool (optional)
     :param n_tracked_frames: number of frames to track after an object is detected, defaults to 10
     :type n_tracked_frames: int (optional)
@@ -431,7 +430,7 @@ def frame_aggregation(
     species_df["clean_label"] = species_df.label.apply(clean_species_name)
 
     # Add species_id to train_rows
-    if not "species_id" in train_rows.columns:
+    if "species_id" not in train_rows.columns:
         train_rows["species_id"] = train_rows["label"].apply(
             lambda x: species_df[species_df.label == x].id.values[0], 1
         )
@@ -627,10 +626,10 @@ def frame_aggregation(
                     (
                         grouped_fields[-1],  # species_id
                         filename,
-                        Image.open(requests.get(filename, stream=True).raw).size[0]
+                        PIL.Image.open(requests.get(filename, stream=True).raw).size[0]
                         if link_bool
                         else PIL.Image.open(filename).size[0],
-                        Image.open(requests.get(filename, stream=True).raw).size[1]
+                        PIL.Image.open(requests.get(filename, stream=True).raw).size[1]
                         if link_bool
                         else PIL.Image.open(filename).size[1],
                     )
@@ -729,15 +728,15 @@ def frame_aggregation(
         if movie_bool:
             save_name = name[1] if name[1] in video_dict else unswedify(name[1])
             if save_name in video_dict:
-                Image.fromarray(video_dict[save_name][name[0]][:, :, [2, 1, 0]]).save(
+                PIL.Image.fromarray(video_dict[save_name][name[0]][:, :, [2, 1, 0]]).save(
                     img_out
                 )
         else:
             if link_bool:
-                image_output = Image.open(requests.get(name, stream=True).raw)
+                image_output = PIL.Image.open(requests.get(name, stream=True).raw)
             else:
                 image_output = np.asarray(PIL.Image.open(name))
-            Image.fromarray(np.asarray(image_output)).save(img_out)
+            PIL.Image.fromarray(np.asarray(image_output)).save(img_out)
 
     logging.info("Frames extracted successfully")
 
@@ -800,8 +799,7 @@ def track_objects(
     :param bboxes: the bounding boxes of the objects to be tracked
     :param start_frame: the frame number to start tracking from
     :param last_frame: the last frame of the video to be processed
-    :return: A list of tuples, where each tuple contains the frame number, x, y, width, and height of
-    the bounding box.
+    :return: A list of tuples, where each tuple contains the frame number, x, y, width, and height of the bounding box.
     """
 
     # Set video to load

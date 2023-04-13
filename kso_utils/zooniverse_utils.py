@@ -18,7 +18,7 @@ from kso_utils.koster_utils import (
     combine_annot_from_duplicates,
 )
 
-# from kso_utils.spyfish_utils import process_spyfish_subjects
+from kso_utils.spyfish_utils import process_spyfish_subjects
 import kso_utils.project_utils as project_utils
 import kso_utils.db_utils as db_utils
 
@@ -471,8 +471,8 @@ def process_clips_template(annotations, row_class_id, rows_list: list):
     :param annotations: the list of annotations for a given subject
     :param row_class_id: the classification id
     :param rows_list: a list of dictionaries, each dictionary is a row in the output dataframe
-    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
-    first seen time and the number of individuals.
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the first seen time and the number of individuals.
+
     """
 
     for ann_i in annotations:

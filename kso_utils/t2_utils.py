@@ -213,8 +213,7 @@ def select_OfficeName(OfficeName_options: list):
     > This function creates a dropdown widget that allows the user to select the name of the DOC Office
     responsible for the survey
 
-    :param OfficeName_options: a list of the names of the DOC offices that are responsible for the
-    survey
+    :param OfficeName_options: a list of the names of the DOC offices that are responsible for the survey
     :return: The widget is being returned.
     """
     # Widget to record the name of the linked DOC Office
@@ -302,8 +301,7 @@ def select_LinkToMarineReserve(reserves_available: list):
     > This function creates a dropdown widget that allows the user to select the name of the Marine
     Reserve that the survey is linked to
 
-    :param reserves_available: a list of the names of the Marine Reserves that are available to be
-    linked to the survey
+    :param reserves_available: a list of the names of the Marine Reserves that are available to be linked to the survey
     :return: The name of the Marine Reserve linked to the survey
     """
     # Widget to record the name of the linked Marine Reserve
@@ -1265,8 +1263,7 @@ def select_RecordedBy(existing_recorders: list):
     an existing recorder or enter a new one
 
     :param existing_recorders: a list of existing recorders
-    :return: A widget with a dropdown menu that allows the user to select between two options:
-    'Existing' and 'New author'.
+    :return: A widget with a dropdown menu that allows the user to select between two options, 'Existing' and 'New author'.
     """
 
     def f(Existing_or_new):
@@ -1673,8 +1670,7 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
     information
 
     :param db_info_dict: a dictionary with the following keys:
-    :param new_deployment_row: new deployment dataframe with the information of the new
-    deployment
+    :param new_deployment_row: new deployment dataframe with the information of the new deployment
     """
 
     # Save to new deployment row df
@@ -1777,7 +1773,6 @@ def upload_new_movies(project: p_utils.Project, db_info_dict: dict, movie_list: 
             p = Path(movie[0])
             processed_video_path = p.with_name(f"{p.stem}_{stem}{p.suffix}").name
             logging.info("Movie to be uploaded: " + processed_video_path)
-            arg_dict = {"loglevel": "quiet", "stats": None}
             ffmpeg.input(p).output(
                 processed_video_path,
                 crf=22,

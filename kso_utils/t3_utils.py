@@ -12,7 +12,6 @@ import logging
 import random
 from pathlib import Path
 from multiprocessing.pool import ThreadPool as Pool
-import multiprocessing as mp
 
 # widget imports
 from tqdm import tqdm
@@ -44,8 +43,7 @@ def check_movie_uploaded(movie_i: str, db_info_dict: dict):
 
     :param movie_i: the name of the movie you want to check
     :type movie_i: str
-    :param db_info_dict: a dictionary containing the path to the database and the path to the folder
-    containing the videos
+    :param db_info_dict: a dictionary containing the path to the database and the path to the folder containing the videos
     :type db_info_dict: dict
     """
 
@@ -474,8 +472,7 @@ def create_modified_clips(
 
     :param clips_list: a list of the paths to the clips you want to modify
     :param movie_i: the path to the movie you want to extract clips from
-    :param modification_details: a dictionary with the modifications to be applied to the clips. The
-    keys are the names of the modifications and the values are the parameters of the modifications
+    :param modification_details: a dictionary with the modifications to be applied to the clips. The keys are the names of the modifications and the values are the parameters of the modifications
     :param project: the project object
     :param gpu_available: True if you have a GPU available, False if you don't
     :param pool_size: the number of parallel processes to run, defaults to 4 (optional)
@@ -728,9 +725,8 @@ def extract_clips(
     :param upl_second_i: The second in the video to start the clip
     :param output_clip_path: The path to the output clip
     :param modification_details: a dictionary of dictionaries, where each dictionary contains the
-    details of a modification to be made to the video. The keys of the dictionary are the names of the
-    modifications, and the values are dictionaries containing the details of the modification. The
-    details of the modification are:
+           details of a modification to be made to the video. The keys of the dictionary are the names of the
+           modifications, and the values are dictionaries containing the details of the modification.
     :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
     """
     if not modification_details and gpu_available:
@@ -851,8 +847,7 @@ def create_clips(
     :param modification_details: a dictionary with the following keys:
     :param gpu_available: True or False, depending on whether you have a GPU available to use
     :param pool_size: the number of threads to use to extract the clips, defaults to 4 (optional)
-    :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and
-    clip_modification_details
+    :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and clip_modification_details
     """
 
     # Filter the df for the movie of interest
@@ -926,7 +921,6 @@ def create_clips(
 
     logging.info("Extracting clips")
 
-    processlist = []
     # Read each movie and extract the clips
     for index, row in potential_start_df.iterrows():
         # Extract the videos and store them in the folder

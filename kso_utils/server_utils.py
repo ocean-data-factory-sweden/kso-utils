@@ -319,8 +319,7 @@ def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
     :type server_dict: dict
     :param db_csv_info: the path to the folder where the csv files will be downloaded
     :type db_csv_info: dict
-    :return: A dict with the bucket, key, local_sites_csv, local_movies_csv, local_species_csv,
-    local_surveys_csv, server_sites_csv, server_movies_csv, server_species_csv, server_surveys_csv
+    :return: A dict with the bucket, key, local_sites_csv, local_movies_csv, local_species_csv, local_surveys_csv, server_sites_csv, server_movies_csv, server_species_csv, server_surveys_csv
     """
     # Provide bucket and key
     project = find_project(project_name=project_name)

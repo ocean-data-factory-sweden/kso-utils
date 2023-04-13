@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 # widget imports
-from IPython.display import HTML, display
+from IPython.display import display
 from ipywidgets import Layout, HBox
 import ipywidgets as widgets
 from folium.plugins import MiniMap
@@ -123,11 +123,9 @@ def open_csv(
     if not len(df_range_columns.label) == 0:
         column_start = str(df_range_columns.label[0])
         column_end = str(df_range_columns.label[-1])
-        col_list = list(df_range_columns.label)
     else:
         column_start = df.columns[0]
         column_end = df.columns[-1]
-        col_list = df.columns
 
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
@@ -730,7 +728,8 @@ def process_test_csv(
     :param db_info_dict: The dictionary containing the database information
     :param project: The project object
     :param local_csv: a string of the names of the local csv to populate from
-    :return a string of the category of interest and the processed dataframe
+    :return: a string of the category of interest and the processed dataframe
+
     """
     # Load the csv with the information of interest
     df = pd.read_csv(db_info_dict[local_csv])
@@ -1126,13 +1125,9 @@ def initiate_db(project: project_utils.Project):
     This function takes a project name as input and returns a dictionary with all the information needed
     to connect to the project's database
 
-    :param project: The name of the project. This is used to get the project-specific info from the
-    config file
-    :return: A dictionary with the following keys:
-        - db_path
-        - project_name
-        - server_i_dict
-        - db_initial_info
+    :param project: The name of the project. This is used to get the project-specific info from the config file
+    :return: A dictionary with the following keys (db_path, project_name, server_i_dict, db_initial_info)
+
     """
 
     # Check if template project

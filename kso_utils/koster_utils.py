@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import Counter
 
 # util imports
+from kso_utils.koster_utils import unswedify
 from kso_utils.project_utils import Project
 from kso_utils.db_utils import get_movies_id
 
@@ -224,8 +225,7 @@ def process_clips_koster(annotations, row_class_id: str, rows_list: list):
     :param row_class_id: the classification id of the row
     :param rows_list: list
     :type rows_list: list
-    :return: A list of dictionaries, each dictionary containing the classification id, the label, the
-    first time seen and how many individuals were seen.
+    :return: A list of dictionaries, each dictionary containing the classification id, the label, the first time seen and how many individuals were seen.
     """
 
     nothing_values = [
@@ -364,10 +364,8 @@ def filter_bboxes(
     :param total_users: total number of users who saw this frame
     :param users: list of user ids
     :param bboxes: list of bounding boxes
-    :param obj: the minimum fraction of users who must have seen an object in order for it to be
-    considered
-    :param eps: The maximum distance between two samples for them to be considered as in the same
-    neighborhood
+    :param obj: the minimum fraction of users who must have seen an object in order for it to be considered
+    :param eps: The maximum distance between two samples for them to be considered as in the same neighborhood
     :param iua: the minimum percentage of users who must agree on a bounding box for it to be accepted
     """
 
