@@ -9,7 +9,7 @@ from pathlib import Path
 from collections import Counter
 
 # util imports
-from kso_utils.koster_utils import unswedify
+from kso_utils.movie_utils import unswedify
 from kso_utils.project_utils import Project
 from kso_utils.db_utils import get_movies_id
 
