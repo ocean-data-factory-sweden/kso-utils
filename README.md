@@ -15,6 +15,7 @@ The Koster Seafloor Observatory is an open-source, citizen science and machine l
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
+[![Documentation Status](https://readthedocs.org/projects/kso-utils/badge/?version=latest)](https://kso-utils.readthedocs.io/en/latest/?badge=latest)
 
 ![high-level][high-level-overview]
 
