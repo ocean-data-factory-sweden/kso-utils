@@ -228,7 +228,7 @@ class ProjectProcessor:
         The function loops through the list of strings, and for each string, it creates a new attribute
         for the class.
 
-        :param init_keys: a list of strings that are the names of the metadata files you want to 
+        :param init_keys: a list of strings that are the names of the metadata files you want to
                initialize
         """
         for meta_name in init_keys:
@@ -1149,9 +1149,7 @@ class Annotator:
         self.potential_labels = potential_labels
         self.bboxes = {}
         self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
-        self.modules.update(
-            import_modules(["fiftyone"], utils=False)
-        )
+        self.modules.update(import_modules(["fiftyone"], utils=False))
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -1177,7 +1175,9 @@ class Annotator:
         if self.potential_labels is not None:
             label_field = "my_label"
             dataset.add_sample_field(
-                label_field, self.modules["fiftyone"].core.fields.StringField, classes=self.potential_labels
+                label_field,
+                self.modules["fiftyone"].core.fields.StringField,
+                classes=self.potential_labels,
             )
 
         # Create a view with the desired labels

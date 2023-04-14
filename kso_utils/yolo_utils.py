@@ -728,9 +728,9 @@ def frame_aggregation(
         if movie_bool:
             save_name = name[1] if name[1] in video_dict else unswedify(name[1])
             if save_name in video_dict:
-                PIL.Image.fromarray(video_dict[save_name][name[0]][:, :, [2, 1, 0]]).save(
-                    img_out
-                )
+                PIL.Image.fromarray(
+                    video_dict[save_name][name[0]][:, :, [2, 1, 0]]
+                ).save(img_out)
         else:
             if link_bool:
                 image_output = PIL.Image.open(requests.get(name, stream=True).raw)
