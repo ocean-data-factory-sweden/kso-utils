@@ -15,7 +15,7 @@ The Koster Seafloor Observatory is an open-source, citizen science and machine l
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
-[![Documentation Status](https://readthedocs.org/projects/kso-utils/badge/?version=latest)](https://kso-utils.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status][documentation-shield]][documentation-url]
 
 ![high-level][high-level-overview]
 
@@ -37,6 +37,8 @@ We are always excited to collaborate and help other marine scientists. Please fe
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[documentation-shield]: https://readthedocs.org/projects/kso-utils/badge/?version=latest&style=for-the-badge
+[documentation-url]: https://kso-utils.readthedocs.io/en/latest/?badge=latest
 [contributors-shield]: https://img.shields.io/github/contributors/ocean-data-factory-sweden/kso_utils.svg?style=for-the-badge
 [contributors-url]: https://https://github.com/ocean-data-factory-sweden/kso_utils/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/ocean-data-factory-sweden/kso_utils.svg?style=for-the-badge
