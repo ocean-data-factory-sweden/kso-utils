@@ -37,6 +37,7 @@ split-folders = "0.5.1"
 torch = "1.8.0"
 tqdm = "4.64.1"
 wandb = "0.13.2"
+csv-diff = "^1.1"
 
 [build-system]
 requires = ["poetry-core"]

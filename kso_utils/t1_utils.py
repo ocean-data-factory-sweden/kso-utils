@@ -1,12 +1,14 @@
 # base imports
 import os
+import json
 import subprocess
 import pandas as pd
 import numpy as np
-import datetime
+import time
 import logging
 from tqdm import tqdm
 from pathlib import Path
+from csv_diff import compare, load_csv
 
 # widget imports
 from IPython.display import display
@@ -239,22 +241,32 @@ def update_csv(
         ):  # <--- use if statement to trigger different events for the two buttons
             logging.info("Checking if changes can be incorporated to the database")
 
-            # Retieve the column name of the id of interest (Sites, movies,..)
+            # Retrieve the column name of the id of interest (Sites, movies,..)
             id_col = [col for col in df.columns if "_id" in col][0]
 
             # Replace the different values based on id
-            df.set_index(id_col, inplace=True)
-            sheet_df.set_index(id_col, inplace=True)
-            df.update(sheet_df)
-            df.reset_index(drop=False, inplace=True)
+            df_orig = df.copy()
+            df_new = sheet_df.copy()
+            df_orig.set_index(id_col, inplace=True)
+            df_new.set_index(id_col, inplace=True)
+            df_orig.update(df_new)
+            df_orig.reset_index(drop=False, inplace=True)
 
             # Process the csv of interest and tests for compatibility with sql table
             csv_i, df_to_db = process_test_csv(
                 db_info_dict=db_info_dict, project=project, local_csv=local_csv
             )
 
+            # Log changes locally
+            log_meta_changes(
+                project,
+                db_info_dict=db_info_dict,
+                meta_key=local_csv,
+                new_sheet_df=sheet_df,
+            )
+
             # Save the updated df locally
-            df.to_csv(db_info_dict[local_csv], index=False)
+            df_orig.to_csv(db_info_dict[local_csv], index=False)
             logging.info("The local csv file has been updated")
 
             if project.server == "AWS":
@@ -270,6 +282,48 @@ def update_csv(
     print("Are the changes above correct?")
     display(HBox([confirm_button, deny_button]))  # <----Display both buttons in an HBox
     asyncio.create_task(f(sheet_df, df, local_csv, serv_csv))
+
+
+def log_meta_changes(
+    project: project_utils.Project,
+    db_info_dict: dict,
+    meta_key: str,
+    new_sheet_df: pd.DataFrame,
+):
+    """Records changes to csv files in log file (json format)"""
+
+    diff = {
+        "timestamp": int(time.time()),
+        "change_info": compare(
+            {
+                int(k): v
+                for k, v in pd.read_csv(db_info_dict[meta_key]).to_dict("index").items()
+            },
+            {int(k): v for k, v in new_sheet_df.to_dict("index").items()},
+        ),
+    }
+
+    if len(diff) == 0:
+        logging.info("No changes were logged")
+        return
+
+    else:
+        try:
+            with open(Path(project.csv_folder, "change_log.json"), "r+") as f:
+                try:
+                    existing_data = json.load(f)
+                except json.decoder.JSONDecodeError:
+                    existing_data = []
+                existing_data.append(diff)
+                f.seek(0)
+                json.dump(existing_data, f)
+        except FileNotFoundError:
+            with open(Path(project.csv_folder, "change_log.json"), "w") as f:
+                json.dump([diff], f)
+        logging.info(
+            f"Changelog updated at: {Path(project.csv_folder, 'change_log.json')}"
+        )
+        return
 
 
 ####################################################
