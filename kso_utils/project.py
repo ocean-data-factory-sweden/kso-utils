@@ -1,5 +1,6 @@
 # base imports
 import os
+import glob
 import logging
 import asyncio
 import numpy as np
@@ -8,6 +9,7 @@ import ipywidgets as widgets
 from itertools import chain
 from pathlib import Path
 import imagesize
+import multiprocessing
 
 # util imports
 import kso_utils.tutorials_utils as t_utils
@@ -53,6 +55,12 @@ def import_modules(module_names, utils: bool = True, models: bool = False):
         except ModuleNotFoundError:
             logging.error(f"Module {module_name} could not be imported.")
     return modules
+
+
+def parallel_map(func, iterable, args=()):
+    with multiprocessing.Pool() as pool:
+        results = pool.starmap(func, zip(iterable, *args))
+    return results
 
 
 class ProjectProcessor:
@@ -529,6 +537,47 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(clip_modification)
         display(button)
+
+    def generate_custom_frames(
+        self,
+        input_dir: str,
+        output_dir: str,
+        num_frames: int = None,
+        frames_skip: int = None,
+    ):
+        """
+        This function generates custom frames from input movie files and saves them in an output directory.
+
+        :param input_dir: The directory path where the input movie files are located
+        :type input_dir: str
+        :param output_dir: The directory where the extracted frames will be saved
+        :type output_dir: str
+        :param num_frames: The number of frames to extract from each video file. If not specified, all
+        frames will be extracted
+        :type num_frames: int
+        :param frames_skip: The `frames_skip` parameter is an optional integer that specifies the number of
+        frames to skip between each extracted frame. For example, if `frames_skip` is set to 2, every other
+        frame will be extracted. If `frames_skip` is not specified, all frames will be extracted
+        :type frames_skip: int
+        :return: the results of calling the `parallel_map` function with the `extract_frames` function from
+        the `t4_utils` module, passing in the `movie_files` list as the input and the `args` tuple
+        containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
+        function that applies the given function to each element of a list of movie_files.
+        """
+        movie_files = sorted(
+            [
+                f
+                for f in glob.glob(f"{input_dir}/*")
+                if os.path.isfile(f)
+                and os.path.splitext(f)[1].lower() in [".mov", ".mp4", ".avi", ".mkv"]
+            ]
+        )
+        results = parallel_map(
+            self.modules["t4_utils"].extract_frames,
+            movie_files,
+            args=(output_dir, num_frames, frames_skip),
+        )
+        return results
 
     def check_movies_uploaded(self, movie_name: str):
         """

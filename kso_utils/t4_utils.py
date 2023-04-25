@@ -9,6 +9,7 @@ import numpy as np
 import shutil
 import logging
 import cv2
+import random
 
 # widget imports
 from tqdm import tqdm
@@ -478,6 +479,56 @@ def get_frames(
         display(df)
 
     return df
+
+
+def extract_frames(input_path, output_dir, num_frames=None, frame_skip=None):
+    """
+    This function extracts frames from a video file and saves them as JPEG images.
+
+    :param input_path: The file path of the input movie file that needs to be processed
+    :param output_dir: The directory where the extracted frames will be saved as JPEG files
+    :param num_frames: The number of frames to extract from the input video. If this parameter is
+    provided, the function will randomly select num_frames frames to extract from the video
+    :param frame_skip: frame_skip is an optional parameter that determines how many frames to skip
+    between extracted frames. For example, if frame_skip is set to 10, then every 10th frame will be
+    extracted. If frame_skip is not provided, then all frames will be extracted
+    """
+    # Open the input movie file
+    cap = cv2.VideoCapture(input_path)
+
+    # Get base filename
+    input_stem = Path(input_path).stem
+
+    # Get the total number of frames in the movie
+    num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Determine which frames to extract based on the input parameters
+    if num_frames is not None:
+        frames_to_extract = random.sample(range(num_frames_total), num_frames)
+    elif frame_skip is not None:
+        frames_to_extract = range(0, num_frames_total, frame_skip)
+    else:
+        frames_to_extract = range(num_frames_total)
+
+    # Loop through the frames and extract the selected ones
+    for frame_idx in frames_to_extract:
+        # Set the frame index for the next frame to read
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+
+        # Read the next frame
+        ret, frame = cap.read()
+
+        if ret:
+            # Construct the output filename for this frame
+            output_filename = os.path.join(
+                output_dir, f"{input_stem}_frame_{frame_idx}.jpg"
+            )
+
+            # Write the frame to a JPEG file
+            cv2.imwrite(output_filename, frame)
+
+    # Release the video capture object
+    cap.release()
 
 
 # Function to specify the frame modification
