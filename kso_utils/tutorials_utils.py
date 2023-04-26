@@ -107,7 +107,7 @@ def choose_project(projects_csv: str = "../kso_utils/db_starter/projects_list.cs
 
     # If list of projects doesn't exist retrieve it from github
     if not os.path.exists(projects_csv):
-        projects_csv = "https://github.com/ocean-data-factory-sweden/kso_utils/blob/main/db_starter/projects_list.csv?raw=true"
+        projects_csv = "https://github.com/ocean-data-factory-sweden/kso_utils/blob/main/kso_utils/db_starter/projects_list.csv?raw=true"
 
     projects_df = pd.read_csv(projects_csv)
 
