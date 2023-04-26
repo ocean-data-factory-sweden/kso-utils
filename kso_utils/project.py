@@ -116,8 +116,8 @@ class ProjectProcessor:
         )
         stdin, stdout, stderr = self.server_info["client"].exec_command(cmd)
         # Print output and errors (if any)
-        print("Output:", stdout.read().decode("utf-8"))
-        print("Errors:", stderr.read().decode("utf-8"))
+        logging.info("Output:", stdout.read().decode("utf-8"))
+        logging.error("Errors:", stderr.read().decode("utf-8"))
         # Verify that the remote directory is mounted
         if os.path.ismount(snic_path):
             logging.info("Remote directory mounted successfully!")
@@ -538,47 +538,6 @@ class ProjectProcessor:
         display(clip_modification)
         display(button)
 
-    def generate_custom_frames(
-        self,
-        input_dir: str,
-        output_dir: str,
-        num_frames: int = None,
-        frames_skip: int = None,
-    ):
-        """
-        This function generates custom frames from input movie files and saves them in an output directory.
-
-        :param input_dir: The directory path where the input movie files are located
-        :type input_dir: str
-        :param output_dir: The directory where the extracted frames will be saved
-        :type output_dir: str
-        :param num_frames: The number of frames to extract from each video file. If not specified, all
-        frames will be extracted
-        :type num_frames: int
-        :param frames_skip: The `frames_skip` parameter is an optional integer that specifies the number of
-        frames to skip between each extracted frame. For example, if `frames_skip` is set to 2, every other
-        frame will be extracted. If `frames_skip` is not specified, all frames will be extracted
-        :type frames_skip: int
-        :return: the results of calling the `parallel_map` function with the `extract_frames` function from
-        the `t4_utils` module, passing in the `movie_files` list as the input and the `args` tuple
-        containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
-        function that applies the given function to each element of a list of movie_files.
-        """
-        movie_files = sorted(
-            [
-                f
-                for f in glob.glob(f"{input_dir}/*")
-                if os.path.isfile(f)
-                and os.path.splitext(f)[1].lower() in [".mov", ".mp4", ".avi", ".mkv"]
-            ]
-        )
-        results = parallel_map(
-            self.modules["t4_utils"].extract_frames,
-            movie_files,
-            args=(output_dir, num_frames, frames_skip),
-        )
-        return results
-
     def check_movies_uploaded(self, movie_name: str):
         """
         This function checks if a movie has been uploaded to Zooniverse
@@ -637,6 +596,75 @@ class ProjectProcessor:
             self.generated_frames = self.modules["t4_utils"].modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.df.reset_index(drop=True),
                 species_i=self.species_of_interest,
+                modification_details=frame_modification.checks,
+                project=self.project,
+            )
+
+        button.on_click(on_button_clicked)
+        display(frame_modification)
+        display(button)
+
+    def generate_custom_frames(
+        self,
+        input_path: str,
+        output_path: str,
+        num_frames: int = None,
+        frames_skip: int = None,
+    ):
+        """
+        This function generates custom frames from input movie files and saves them in an output directory.
+
+        :param input_path: The directory path where the input movie files are located
+        :type input_path: str
+        :param output_path: The directory where the extracted frames will be saved
+        :type output_path: str
+        :param num_frames: The number of frames to extract from each video file. If not specified, all
+        frames will be extracted
+        :type num_frames: int
+        :param frames_skip: The `frames_skip` parameter is an optional integer that specifies the number of
+        frames to skip between each extracted frame. For example, if `frames_skip` is set to 2, every other
+        frame will be extracted. If `frames_skip` is not specified, all frames will be extracted
+        :type frames_skip: int
+        :return: the results of calling the `parallel_map` function with the `extract_custom_frames` function from
+        the `t4_utils` module, passing in the `movie_files` list as the input and the `args` tuple
+        containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
+        function that applies the given function to each element of a list of movie_files.
+        """
+        frame_modification = self.modules["t3_utils"].clip_modification_widget()
+        species_list = self.modules["t4_utils"].choose_species(self.db_info)
+
+        button = widgets.Button(
+            description="Click to modify frames",
+            disabled=False,
+            display="flex",
+            flex_flow="column",
+            align_items="stretch",
+        )
+
+        def on_button_clicked(b):
+            movie_files = sorted(
+                [
+                    f
+                    for f in glob.glob(f"{input_path}/*")
+                    if os.path.isfile(f)
+                    and os.path.splitext(f)[1].lower()
+                    in [".mov", ".mp4", ".avi", ".mkv"]
+                ]
+            )
+            results = parallel_map(
+                self.modules["t4_utils"].extract_custom_frames,
+                movie_files,
+                args=(
+                    [output_path] * len(movie_files),
+                    [num_frames] * len(movie_files),
+                    [frames_skip] * len(movie_files),
+                ),
+            )
+            self.frames_to_upload_df = pd.concat(results)
+            self.project.output_path = output_path
+            self.generated_frames = self.modules["t4_utils"].modify_frames(
+                frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
+                species_i=species_list.value,
                 modification_details=frame_modification.checks,
                 project=self.project,
             )
@@ -1005,7 +1033,7 @@ class MLProjectProcessor(ProjectProcessor):
                 workers=1,
             )
         else:
-            print("Segmentation model training not yet supported.")
+            logging.error("Segmentation model training not yet supported.")
 
     def eval_yolov5(self, exp_name: str, model_folder: str, conf_thres: float):
         # Find trained model weights
@@ -1022,7 +1050,7 @@ class MLProjectProcessor(ProjectProcessor):
                 name=str(exp_name) + "_val",
             )
         except Exception as e:
-            logging.errro(f"Encountered {e}, terminating run...")
+            logging.error(f"Encountered {e}, terminating run...")
             self.modules["wandb"].finish()
         logging.info("Run succeeded, finishing run...")
         self.modules["wandb"].finish()

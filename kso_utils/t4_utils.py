@@ -481,7 +481,7 @@ def get_frames(
     return df
 
 
-def extract_frames(input_path, output_dir, num_frames=None, frame_skip=None):
+def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=None):
     """
     This function extracts frames from a video file and saves them as JPEG images.
 
@@ -510,6 +510,8 @@ def extract_frames(input_path, output_dir, num_frames=None, frame_skip=None):
     else:
         frames_to_extract = range(num_frames_total)
 
+    output_files = []
+
     # Loop through the frames and extract the selected ones
     for frame_idx in frames_to_extract:
         # Set the frame index for the next frame to read
@@ -527,8 +529,13 @@ def extract_frames(input_path, output_dir, num_frames=None, frame_skip=None):
             # Write the frame to a JPEG file
             cv2.imwrite(output_filename, frame)
 
+            # Add output filename to list of files
+            output_files.append(output_filename)
+
     # Release the video capture object
     cap.release()
+
+    return pd.DataFrame(output_files, columns=["frame_path"])
 
 
 # Function to specify the frame modification
@@ -664,6 +671,9 @@ def modify_frames(
 ):
     server = project.server
 
+    if len(species_i) == 0:
+        species_i = ["custom_species"]
+
     # Specify the folder to host the modified frames
     if server == "SNIC":
         # Specify volume allocated by SNIC
@@ -674,6 +684,8 @@ def modify_frames(
         )
     else:
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
+        if project.output_path is not None:
+            mod_frames_folder = project.output_path + mod_frames_folder
 
     # Specify the path of the modified frames
     frames_to_upload_df["modif_frame_path"] = (
