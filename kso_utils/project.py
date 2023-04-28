@@ -81,10 +81,10 @@ class ProjectProcessor:
         )
         # Create empty meta tables
         self.init_meta()
-        # Get server details
-        self.get_server_info()
         # Setup initial db
         self.setup_db()
+        # Get server details from the db_info
+        self.server_info = {x:self.db_info[x] for x in ['client', 'sftp_client'] if x in self.db_info.keys()}
         if self.project.movie_folder is not None:
             # Check movies on server
             self.get_movie_info()
@@ -172,17 +172,6 @@ class ProjectProcessor:
             display(HTML(html))
         else:
             return df
-
-    def get_server_info(self):
-        """
-        It connects to the server and returns the server info
-        :return: The server_info is added to the ProjectProcessor class.
-        """
-        try:
-            self.server_info = server_utils.connect_to_server(self.project)
-        except BaseException as e:
-            logging.error(f"Server connection could not be established. Details {e}")
-            return
 
     def get_zoo_info(self, generate_export: bool = False):
         """
