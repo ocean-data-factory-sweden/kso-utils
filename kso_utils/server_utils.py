@@ -509,7 +509,7 @@ def get_snic_files(client: SSHClient, folder: str):
 
     :param client: SSH client (paramiko)
     """
-    stdin, stdout, stderr = client.exec_command(f"ls {folder}")
+    stdin, stdout, stderr = client.exec_command(f"find {folder} -type f")
     snic_df = pd.DataFrame(stdout.read().decode("utf-8").split("\n"), columns=["spath"])
     return snic_df
 
