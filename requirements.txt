@@ -27,4 +27,4 @@ setuptools==67.6.1
 split-folders==0.5.1
 tqdm==4.64.1
 wandb==0.13.2
-csv_diff==1.1
+csv-diff==1.1
