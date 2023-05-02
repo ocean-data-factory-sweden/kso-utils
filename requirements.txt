@@ -1,4 +1,4 @@
-boto3==1.15.18
+boto3==1.26.64
 dataclass_csv==1.4.0
 ffmpeg==1.4
 ffmpeg_python==0.2.0
@@ -15,8 +15,8 @@ ipywidgets==7.7.2
 jupyter_bbox_widget==0.5.0
 natsort==8.1.0
 numpy>=1.22.0,<1.24.2
-opencv_python==4.5.4.60
-pandas==1.1.4
+opencv_python==4.6.0.66
+pandas==1.4.0
 panoptes_client==1.6.0
 paramiko==2.11.0
 PIMS==0.6.1
@@ -25,7 +25,6 @@ scikit_learn==1.2.2
 scp==0.14.1
 setuptools==67.6.1
 split-folders==0.5.1
-torch==1.8.0
 tqdm==4.64.1
 wandb==0.13.2
 csv_diff==1.1
