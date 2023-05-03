@@ -4,6 +4,7 @@ import cv2
 import logging
 import subprocess
 import urllib
+import difflib
 import pandas as pd
 import numpy as np
 from pathlib import Path
