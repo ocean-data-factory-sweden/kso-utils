@@ -50,6 +50,7 @@ def find_project(project_name: str = ""):
             for row in reader:
                 if row.Project_name == project_name:
                     logging.info(f"{project_name} loaded succesfully")
+                    os.chdir(tut_path)
                     return row
         except exceptions.CsvValueError:
             logging.error(
