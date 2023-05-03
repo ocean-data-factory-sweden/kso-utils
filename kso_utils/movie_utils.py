@@ -294,15 +294,16 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
     movies_df = movies_df.rename(columns={"id": "movie_id"})
-    
+
     # If full path is provided, separate into filename and full path
     server_df["spath_full"] = server_df["spath"]
     server_df["spath"] = server_df["spath"].apply(lambda x: Path(x).name, 1)
 
     # Find closest matching filename (may differ due to Swedish character encoding)
-    movies_df["fpath"] = movies_df["fpath"].apply(lambda x: difflib.get_close_matches(
-        x, server_df["spath"].unique())[0], 1)
-                                                  
+    movies_df["fpath"] = movies_df["fpath"].apply(
+        lambda x: difflib.get_close_matches(x, server_df["spath"].unique())[0], 1
+    )
+
     # Merge the server path to the filepath
     movies_df = movies_df.merge(
         server_df,
@@ -314,7 +315,7 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
 
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
-    
+
     print(movies_df[movies_df.exists == False])
 
     # Drop _merge columns to match sql schema
