@@ -316,8 +316,6 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
 
-    print(movies_df[movies_df.exists == False])
-
     # Drop _merge columns to match sql schema
     movies_df = movies_df.drop("_merge", axis=1)
 
