@@ -300,18 +300,36 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     server_df["spath"] = server_df["spath"].apply(lambda x: Path(x).name, 1)
 
     # Find closest matching filename (may differ due to Swedish character encoding)
-    movies_df["fpath"] = movies_df["fpath"].apply(
-        lambda x: difflib.get_close_matches(x, server_df["spath"].unique())[0], 1
-    )
+    parsed_url = urllib.parse.urlparse(movies_df["fpath"].iloc[0])
 
-    # Merge the server path to the filepath
-    movies_df = movies_df.merge(
-        server_df,
-        left_on=["fpath"],
-        right_on=["spath"],
-        how="left",
-        indicator=True,
-    )
+    # If there is a url or filepath directly, use the full path instead of the filename
+    if os.path.isdir(movies_df["fpath"].iloc[0]) or (
+        parsed_url.scheme and parsed_url.netloc
+    ):
+        movies_df["fpath"] = movies_df["fpath"].apply(
+            lambda x: difflib.get_close_matches(x, server_df["spath_full"].unique())[0],
+            1,
+        )
+        # Merge the server path to the filepath
+        movies_df = movies_df.merge(
+            server_df,
+            left_on=["fpath"],
+            right_on=["spath_full"],
+            how="left",
+            indicator=True,
+        )
+    else:
+        movies_df["fpath"] = movies_df["fpath"].apply(
+            lambda x: difflib.get_close_matches(x, server_df["spath"].unique())[0], 1
+        )
+        # Merge the server path to the filepath
+        movies_df = movies_df.merge(
+            server_df,
+            left_on=["fpath"],
+            right_on=["spath"],
+            how="left",
+            indicator=True,
+        )
 
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
