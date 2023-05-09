@@ -30,9 +30,6 @@ from collections.abc import Callable
 from natsort import index_natsorted
 
 # util imports
-from kso_utils.db_utils import create_connection
-from kso_utils.movie_utils import retrieve_movie_info_from_server, unswedify
-from kso_utils.server_utils import get_movie_url
 from kso_utils.project_utils import Project
 
 try:
@@ -40,7 +37,9 @@ try:
     from yolov5.utils import torch_utils
     import yolov5.detect as detect
 except ModuleNotFoundError:
-    logging.error("Modules yolov5 and yolov5_tracker are required.")
+    logging.error(
+        "Modules yolov5 and yolov5_tracker are required for ML functionality."
+    )
 
 # Logging
 logging.basicConfig()
@@ -140,6 +139,8 @@ def ProcFrames(proc_frame_func: Callable, frames_path: str):
                 new_frame = proc_frame_func(cv.imread(str(Path(frames_path, f))))
                 cv.imwrite(str(Path(frames_path, f)), new_frame)
             else:
+                from kso_utils.movie_utils import unswedify
+
                 new_frame = proc_frame_func(
                     cv.imread(unswedify(str(Path(frames_path, f))))
                 )
@@ -343,6 +344,8 @@ def frame_aggregation(
     :type n_tracked_frames: int (optional)
     """
     # Establish connection to database
+    from kso_utils.db_utils import create_connection
+
     conn = create_connection(db_info_dict["db_path"])
 
     # Select the id/s of species of interest
@@ -458,6 +461,8 @@ def frame_aggregation(
     }
 
     # Get movie info from server
+    from kso_utils.movie_utils import retrieve_movie_info_from_server
+
     movie_df = retrieve_movie_info_from_server(
         project=project, db_info_dict=db_info_dict
     )
@@ -496,6 +501,8 @@ def frame_aggregation(
             movie_df, left_on="movie_id", right_on="id", how="left"
         )["spath"]
 
+        from kso_utils.server_utils import get_movie_url
+
         train_rows["movie_path"] = train_rows["movie_path"].apply(
             lambda x: get_movie_url(project, db_info_dict, x)
         )
@@ -507,6 +514,8 @@ def frame_aggregation(
                 video_dict[i] = pims.MoviePyReader(i)
             except FileNotFoundError:
                 try:
+                    from kso_utils.movie_utils import unswedify
+
                     video_dict[unswedify(str(i))] = pims.Video(unswedify(str(i)))
                 except KeyError:
                     logging.warning("Missing file" + f"{i}")
@@ -582,6 +591,8 @@ def frame_aggregation(
             named_tuple = tuple([rev_fields])
 
         if movie_bool:
+            from kso_utils.movie_utils import unswedify
+
             final_name = name[0] if name[0] in video_dict else unswedify(name[0])
 
             if grouped_fields[1] > len(video_dict[final_name]):
@@ -742,6 +753,8 @@ def frame_aggregation(
 
         # Save frames to image files
         if movie_bool:
+            from kso_utils.movie_utils import unswedify
+
             save_name = name[1] if name[1] in video_dict else unswedify(name[1])
             if save_name in video_dict:
                 PIL.Image.fromarray(

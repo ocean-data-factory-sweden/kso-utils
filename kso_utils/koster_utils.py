@@ -9,9 +9,7 @@ from pathlib import Path
 from collections import Counter
 
 # util imports
-from kso_utils.movie_utils import unswedify
 from kso_utils.project_utils import Project
-from kso_utils.db_utils import get_movies_id
 
 # Logging
 logging.basicConfig()
@@ -165,6 +163,7 @@ def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
     """
 
     ## Set the date when the metadata of subjects uploaded matches/doesn't match schema.py requirements
+    from kso_utils.db_utils import get_movies_id
 
     # Specify the date when the metadata of subjects uploaded matches schema.py
     auto_date = "2020-05-29 00:00:00 UTC"
@@ -291,6 +290,8 @@ def process_koster_movies_csv(movies_df: pd.DataFrame):
     movies_df["filename"] = movies_df["filename"].str.normalize("NFD")
 
     # Unswedify the filename
+    from kso_utils.movie_utils import unswedify
+
     movies_df["filename"] = movies_df["filename"].apply(lambda x: unswedify(x))
 
     # TO DO Include server's path to the movie files

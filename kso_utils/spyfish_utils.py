@@ -8,13 +8,11 @@ import subprocess
 from pathlib import Path
 
 # util imports
-from kso_utils.movie_utils import get_movie_extensions
 from kso_utils.server_utils import (
     get_matching_s3_keys,
     download_object_from_s3,
     upload_file_to_s3,
 )
-from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -97,6 +95,8 @@ def check_spyfish_movies(movies_df: pd.DataFrame, db_info_dict: dict):
     #     movies_df["deployment_folder"] = movies_df["ShortFolder"] + "-buv-" + movies_df["survey_year"] + "/"
 
     # Get a dataframe of all movies from AWS
+    from kso_utils.movie_utils import get_movie_extensions
+
     movies_s3_pd = get_matching_s3_keys(
         db_info_dict["client"],
         db_info_dict["bucket"],
@@ -353,6 +353,8 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
 
     # Create connection to db
+    from kso_utils.db_utils import create_connection
+
     conn = create_connection(db_path)
 
     ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"

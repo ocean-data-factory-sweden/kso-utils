@@ -8,18 +8,12 @@ import difflib
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from urllib.request import pathname2url
 from IPython.display import HTML
 
 # util imports
-from kso_utils.server_utils import (
-    upload_movie_server,
-    get_snic_files,
-    get_matching_s3_keys,
-)
 from kso_utils.project_utils import Project
-from kso_utils.tutorials_utils import is_url
-from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -104,11 +98,6 @@ def get_movie_path(f_path: str, db_info_dict: dict, project: Project):
         return f_path
 
 
-def get_movie_extensions():
-    # Specify the formats of the movies to select
-    return tuple(["wmv", "mpg", "mov", "avi", "mp4", "MOV", "MP4"])
-
-
 def standarise_movie_format(
     movie_path: str,
     movie_filename: str,
@@ -132,6 +121,9 @@ def standarise_movie_format(
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
     """
+
+    from kso_utils.tutorials_utils import is_url
+    from kso_utils.server_utils import upload_movie_server
 
     ##### Check movie format ######
     ext = Path(movie_filename).suffix
@@ -235,6 +227,8 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
 
     """
 
+    from kso_utils.server_utils import get_snic_files, get_matching_s3_keys
+
     server = project.server
     bucket_i = project.bucket
     movie_folder = project.movie_folder
@@ -289,6 +283,8 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
         raise ValueError("The server type you selected is not currently supported.")
 
     # Create connection to db
+    from kso_utils.db_utils import create_connection
+
     conn = create_connection(db_info_dict["db_path"])
 
     # Query info about the movie of interest
@@ -376,6 +372,8 @@ def convert_video(
     :type compression: bool
     :return: The path to the converted video file.
     """
+    from kso_utils.tutorials_utils import is_url
+
     movie_filename = Path(movie_path).name
     conv_filename = "conv_" + movie_filename
 
@@ -524,3 +522,259 @@ def preview_movie(
                 </div>
                 </html>"""
         return HTML(html_code), movie_path
+
+
+def check_movies_from_server(project: Project):
+    """
+    It takes in a dataframe of movies and a dictionary of database information, and returns two
+    dataframes: one of movies missing from the server, and one of movies missing from the csv
+
+    :param db_info_dict: a dictionary with the following keys:
+    :param project: the project object
+    """
+
+    from kso_utils.spyfish_utils import check_spyfish_movies
+
+    # Load the csv with movies information
+    movies_df = pd.read_csv(project.db_info["local_movies_csv"])
+
+    # Check if the project is the Spyfish Aotearoa
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Retrieve movies that are missing info in the movies.csv
+        missing_info = check_spyfish_movies(movies_df, project.db_info)
+
+    # Find out files missing from the Server
+    missing_from_server = missing_info[missing_info["_merge"] == "left_only"]
+
+    logging.info(f"There are {len(missing_from_server.index)} movies missing")
+
+    # Find out files missing from the csv
+    missing_from_csv = missing_info[missing_info["_merge"] == "right_only"].reset_index(
+        drop=True
+    )
+
+    logging.info(
+        f"There are {len(missing_from_csv.index)} movies missing from movies.csv. Their filenames are:{missing_from_csv.filename.unique()}"
+    )
+
+    return missing_from_server, missing_from_csv
+
+
+def check_movie_uploaded(db_info_dict, movie_i: str):
+    """
+    This function takes in a movie name and a dictionary containing the path to the database and returns
+    a boolean value indicating whether the movie has already been uploaded to Zooniverse
+
+    :param movie_i: the name of the movie you want to check
+    :type movie_i: str
+    :param db_info_dict: a dictionary containing the path to the database and the path to the folder containing the videos
+    :type db_info_dict: dict
+    """
+
+    # Create connection to db
+    from kso_utils.db_utils import create_connection
+
+    conn = create_connection(db_info_dict["db_path"])
+
+    # Query info about the clip subjects uploaded to Zooniverse
+    subjects_df = pd.read_sql_query(
+        "SELECT id, subject_type, filename, clip_start_time,"
+        "clip_end_time, movie_id FROM subjects WHERE subject_type='clip'",
+        conn,
+    )
+
+    # Save the video filenames of the clips uploaded to Zooniverse
+    videos_uploaded = subjects_df.filename.dropna().unique()
+
+    # Check if selected movie has already been uploaded
+    already_uploaded = any(mv in movie_i for mv in videos_uploaded)
+
+    if already_uploaded:
+        clips_uploaded = subjects_df[subjects_df["filename"].str.contains(movie_i)]
+        logging.info(f"{movie_i} has clips already uploaded.")
+        logging.info(clips_uploaded.head())
+    else:
+        logging.info(f"{movie_i} has not been uploaded to Zooniverse yet")
+
+
+def get_species_frames(
+    project: Project,
+    agg_clips_df: pd.DataFrame,
+    species_ids: list,
+    n_frames_subject: int,
+):
+    """
+    # Function to identify up to n number of frames per classified clip
+    # that contains species of interest after the first time seen
+
+    # Find classified clips that contain the species of interest
+    """
+
+    from kso_utils.zooniverse_utils import clean_label
+
+    # Retrieve list of subjects
+    subjects_df = pd.read_sql_query(
+        "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
+        project.db_connection,
+    )
+
+    agg_clips_df["subject_ids"] = pd.to_numeric(
+        agg_clips_df["subject_ids"], errors="coerce"
+    ).astype("Int64")
+    subjects_df["id"] = pd.to_numeric(subjects_df["id"], errors="coerce").astype(
+        "Int64"
+    )
+
+    # Combine the aggregated clips and subjects dataframes
+    frames_df = pd.merge(
+        agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id"
+    ).drop(columns=["id"])
+
+    # Identify the second of the original movie when the species first appears
+    frames_df["first_seen_movie"] = (
+        frames_df["clip_start_time"] + frames_df["first_seen"]
+    )
+
+    server = project.server
+
+    if server in ["SNIC", "TEMPLATE"]:
+        movies_df = retrieve_movie_info_from_server(project, project.server_dict)
+
+        # Include movies' filepath and fps to the df
+        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
+        frames_df["fpath"] = frames_df["spath"]
+
+    if len(frames_df[~frames_df.exists]) > 0:
+        logging.error(
+            f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
+        )
+
+    # Select only frames from movies that can be found
+    frames_df = frames_df[frames_df.exists]
+    if len(frames_df) == 0:
+        logging.error(
+            "There are no frames for this species that meet your aggregation criteria."
+            "Please adjust your aggregation criteria / species choice and try again."
+        )
+
+    ##### Add species_id info ####
+    # Retrieve species info
+    species_df = pd.read_sql_query(
+        "SELECT id, label, scientificName FROM species",
+        project.db_connection,
+    )
+
+    # Retrieve species info
+    species_df = species_df.rename(columns={"id": "species_id"})
+
+    # Match format of species name to Zooniverse labels
+    species_df["label"] = species_df["label"].apply(clean_label)
+
+    # Combine the aggregated clips and subjects dataframes
+    frames_df = pd.merge(frames_df, species_df, how="left", on="label")
+
+    # Identify the ordinal number of the frames expected to be extracted
+    if len(frames_df) == 0:
+        raise ValueError("No frames. Workflow stopped.")
+
+    frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
+        lambda x: [
+            int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
+        ],
+        1,
+    )
+
+    # Reshape df to have each frame as rows
+    lst_col = "frame_number"
+
+    frames_df = pd.DataFrame(
+        {
+            col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
+            for col in frames_df.columns.difference([lst_col])
+        }
+    ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
+        frames_df.columns.tolist()
+    ]
+
+    # Drop unnecessary columns
+    frames_df.drop(["subject_ids"], inplace=True, axis=1)
+
+    return frames_df
+
+
+# Function to extract selected frames from videos
+def extract_frames(
+    project: Project,
+    df: pd.DataFrame,
+    frames_folder: str,
+):
+    """
+    Extract frames and save them in chosen folder.
+    """
+
+    # Set the filename of the frames
+    df["frame_path"] = (
+        frames_folder
+        + df["filename"].astype(str)
+        + "_frame_"
+        + df["frame_number"].astype(str)
+        + "_"
+        + df["label"].astype(str)
+        + ".jpg"
+    )
+
+    # Create the folder to store the frames if not exist
+    if not os.path.exists(frames_folder):
+        Path(frames_folder).mkdir(parents=True, exist_ok=True)
+        # Recursively add permissions to folders created
+        [os.chmod(root, 0o777) for root, dirs, files in os.walk(frames_folder)]
+
+    for movie in df["fpath"].unique():
+        url = get_movie_path(
+            project=project, db_info_dict=project.server_info, f_path=movie
+        )
+
+        if url is None:
+            logging.error(f"Movie {movie} couldn't be found in the server.")
+        else:
+            # Select the frames to download from the movie
+            key_movie_df = df[df["fpath"] == movie].reset_index()
+
+            # Read the movie on cv2 and prepare to extract frames
+            write_movie_frames(key_movie_df, url)
+
+        logging.info("Frames extracted successfully")
+
+    return df
+
+
+def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
+    """
+    Function to get a frame from a movie
+    """
+    # Read the movie on cv2 and prepare to extract frames
+    cap = cv2.VideoCapture(url)
+
+    if cap.isOpened():
+        # Get the frame numbers for each movie the fps and duration
+        for index, row in tqdm(key_movie_df.iterrows(), total=key_movie_df.shape[0]):
+            # Create the folder to store the frames if not exist
+            if not os.path.exists(row["frame_path"]):
+                cap.set(1, row["frame_number"])
+                ret, frame = cap.read()
+                if frame is not None:
+                    cv2.imwrite(row["frame_path"], frame)
+                    os.chmod(row["frame_path"], 0o777)
+                else:
+                    cv2.imwrite(row["frame_path"], np.zeros((100, 100, 3), np.uint8))
+                    os.chmod(row["frame_path"], 0o777)
+                    logging.info(
+                        f"No frame was extracted for {url} at frame {row['frame_number']}"
+                    )
+    else:
+        logging.info("Missing movie", url)
+
+
+def get_movie_extensions():
+    # Specify the formats of the movies to select
+    return tuple(["wmv", "mpg", "mov", "avi", "mp4", "MOV", "MP4"])

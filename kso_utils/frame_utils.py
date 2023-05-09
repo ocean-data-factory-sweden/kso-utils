@@ -6,7 +6,6 @@ import pims
 import cv2 as cv
 import pandas as pd
 from pathlib import Path
-from kso_utils.db_utils import create_connection
 from tqdm import tqdm
 
 # Logging
@@ -82,6 +81,8 @@ def main():
         required=True,
     )
     args = parser.parse_args()
+    from kso_utils.db_utils import create_connection
+
     conn = create_connection(args.db_path)
     df = pd.read_sql_query(
         "SELECT b.filename, b.frame_number, a.species_id, a.x_position, a.y_position, a.width, a.height FROM (agg_annotations_frame AS a LEFT JOIN subjects AS b ON a.subject_id=b.id",
