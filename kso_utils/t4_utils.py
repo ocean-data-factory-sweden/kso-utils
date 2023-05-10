@@ -481,7 +481,7 @@ def get_frames(
     return df
 
 
-def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=None):
+def extract_custom_frames(input_path, output_dir, start_skip=None, end_skip=None, num_frames=None, frame_skip=None):
     """
     This function extracts frames from a video file and saves them as JPEG images.
 
@@ -501,14 +501,20 @@ def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=No
 
     # Get the total number of frames in the movie
     num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    start_skip = int(start_skip * fps)
+    end_skip = int(end_skip * fps)
+
+    frame_start = 0 if start_skip is None else start_skip
+    frame_end = num_frames_total if end_skip is None else num_frames_total - end_skip
 
     # Determine which frames to extract based on the input parameters
     if num_frames is not None:
-        frames_to_extract = random.sample(range(num_frames_total), num_frames)
+        frames_to_extract = random.sample(range(frame_start, frame_end), num_frames)
     elif frame_skip is not None:
-        frames_to_extract = range(0, num_frames_total, frame_skip)
+        frames_to_extract = range(frame_start, frame_end, frame_skip)
     else:
-        frames_to_extract = range(num_frames_total)
+        frames_to_extract = range(frame_end)
 
     output_files = []
 
@@ -682,6 +688,7 @@ def modify_frames(
         mod_frames_folder = Path(
             folder_name, "modified_" + "_".join(species_i) + "_frames/"
         )
+        mod_frames_folder = mod_frames_folder.as_posix()
     else:
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
         if project.output_path is not None:
