@@ -554,7 +554,7 @@ def check_movies_from_server(project: Project):
     )
 
     logging.info(
-        f"There are {len(missing_from_csv.index)} movies missing from movies.csv. Their filenames are:{missing_from_csv.filename.unique()}"
+        f"There are {len(missing_from_csv.index)} movies missing from movies.csv. Their filenames are: {missing_from_csv.filename.unique()}"
     )
 
     return missing_from_server, missing_from_csv

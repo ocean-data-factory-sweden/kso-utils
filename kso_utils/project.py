@@ -38,7 +38,10 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
+
 class ProjectProcessor:
+    # The ProjectProcessor class initializes various attributes and methods for processing a project,
+    # including importing modules, setting up a database, and loading metadata.
     def __init__(self, project: project_utils.Project):
         self.project = project
         self.db_connection = None

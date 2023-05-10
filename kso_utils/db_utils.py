@@ -110,6 +110,22 @@ def execute_sql(conn: sqlite3.Connection, sql: str):
 
 
 def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
+    """
+    This function adds multiple rows of data to a specified table in a SQLite database.
+    
+    :param db_path: The path to the SQLite database file
+    :type db_path: str
+    :param table_name: The name of the table in the database where the values will be added
+    :type table_name: str
+    :param values: The `values` parameter is a list of tuples, where each tuple represents a row of data
+    to be inserted into the specified table. The number of values in each tuple should match the
+    `num_fields` parameter, which specifies the number of columns in the table
+    :type values: list
+    :param num_fields: The parameter `num_fields` is an integer that represents the number of fields or
+    columns in the table where the values will be inserted. This parameter is used to ensure that the
+    correct number of values are being inserted into the table
+    :type num_fields: int
+    """
     conn = create_connection(db_path)
 
     try:
@@ -128,6 +144,19 @@ def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
 
 
 def test_table(df: pd.DataFrame, table_name: str, keys: list = ["id"]):
+    """
+    The function checks if a given DataFrame has any NULL values in the specified key columns and logs
+    an error message if it does.
+    
+    :param df: A pandas DataFrame that represents a table in a database
+    :type df: pd.DataFrame
+    :param table_name: The name of the table being tested, which is a string
+    :type table_name: str
+    :param keys: The `keys` parameter is a list of column names that are used as keys to uniquely
+    identify each row in the DataFrame `df`. The function `test_table` checks that there are no NULL
+    values in these key columns, which would indicate that some rows were not properly matched
+    :type keys: list
+    """
     try:
         # check that there are no id columns with a NULL value, which means that they were not matched
         assert len(df[df[keys].isnull().any(axis=1)]) == 0
@@ -145,6 +174,27 @@ def get_id(
     conn: sqlite3.Connection,
     conditions: dict = {"a": "=b"},
 ):
+    """
+    This function retrieves an ID value from a specified table in a SQLite database based on specified
+    conditions.
+    
+    :param row: The row number of the data in the table
+    :type row: int
+    :param field_name: The name of the field/column from which we want to retrieve data
+    :type field_name: str
+    :param table_name: The name of the table in the database where the data is stored
+    :type table_name: str
+    :param conn: The `conn` parameter is a connection object to a SQLite database. It is used to execute
+    SQL queries and retrieve data from the database
+    :type conn: sqlite3.Connection
+    :param conditions: The `conditions` parameter is an optional dictionary that specifies the
+    conditions that need to be met in order to retrieve the `id_value` from the specified table. The
+    keys of the dictionary represent the column names in the table, and the values represent the
+    conditions that need to be met for that column
+    :type conditions: dict
+    :return: the value of the specified field (field_name) from the specified table (table_name) where
+    the specified conditions (conditions) are met. If no value is found, it returns None.
+    """
     # Get id from a table where a condition is met
 
     if isinstance(conditions, dict):
@@ -184,6 +234,15 @@ def get_column_names_db(db_info_dict: pd.DataFrame, table_i: str):
 
 
 def find_duplicated_clips(conn: sqlite3.Connection):
+    """
+    This function finds duplicated clips in a database and returns a count of how many times each clip
+    has been uploaded.
+    
+    :param conn: The parameter `conn` is a connection object to a SQLite database
+    :type conn: sqlite3.Connection
+    :return: a Pandas Series object that contains the count of how many times each duplicated clip has
+    been uploaded. The count is grouped by the number of times a clip has been uploaded.
+    """
     # Retrieve the information of all the clips uploaded
     subjects_df = pd.read_sql_query(
         "SELECT id, movie_id, clip_start_time, clip_end_time FROM subjects WHERE subject_type='clip'",
@@ -207,8 +266,19 @@ def find_duplicated_clips(conn: sqlite3.Connection):
     return times_uploaded_df["times"].value_counts()
 
 
-# Function to get the movie_ids based on movie filenames
 def get_movies_id(df: pd.DataFrame, db_path: str):
+    """
+    This function retrieves movie IDs based on movie filenames from a database and merges them with a
+    given DataFrame.
+    
+    :param df: A pandas DataFrame containing information about movie filenames and clip subjects
+    :type df: pd.DataFrame
+    :param db_path: The path to the database file
+    :type db_path: str
+    :return: a pandas DataFrame with the movie_ids added to the input DataFrame based on matching movie
+    filenames with the movies table in a SQLite database. The function drops the movie_filename column
+    before returning the DataFrame.
+    """
     # Create connection to db
     conn = create_connection(db_path)
 

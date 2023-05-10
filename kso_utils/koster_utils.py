@@ -18,6 +18,18 @@ logging.getLogger().setLevel(logging.INFO)
 
 # Function to extract metadata from subjects
 def extract_metadata(subj_df: pd.DataFrame):
+    """
+    The function extracts metadata from a pandas DataFrame and returns two separate DataFrames, one with
+    the metadata flattened and one without the metadata.
+    
+    :param subj_df: A pandas DataFrame containing subject data, including metadata information in JSON
+    format
+    :type subj_df: pd.DataFrame
+    :return: The function `extract_metadata` returns two dataframes: `subj_df` and `meta_df`. `subj_df`
+    is the original input dataframe with the "metadata" and "index" columns dropped, and with the index
+    reset. `meta_df` is a new dataframe that contains the flattened metadata information extracted from
+    the "metadata" column of the input dataframe.
+    """
     # Reset index of df
     subj_df = subj_df.reset_index(drop=True).reset_index()
 
@@ -37,6 +49,20 @@ def extract_metadata(subj_df: pd.DataFrame):
 
 # Function to process subjects uploaded automatically
 def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
+    """
+    The function `auto_subjects` selects and extracts metadata from subjects that were automatically
+    uploaded after a specified date.
+    
+    :param subjects_df: `subjects_df` is a pandas DataFrame containing information about subjects, such
+    as their IDs, project IDs, and creation dates
+    :type subjects_df: pd.DataFrame
+    :param auto_date: auto_date is a string parameter that represents the date from which the function
+    should select automatically uploaded frames. The function will only select frames that were created
+    after this date
+    :type auto_date: str
+    :return: The function `auto_subjects` returns a pandas DataFrame containing metadata information
+    extracted from subjects that were automatically uploaded after a specified date.
+    """
     # Select automatically uploaded frames
     auto_subjects_df = subjects_df[(subjects_df["created_at"] > auto_date)]
 
@@ -51,6 +77,21 @@ def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
 
 # Function to process subjects uploaded manually
 def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str):
+    """
+    The function extracts metadata from manually uploaded clips and processes it to combine with the
+    subjects dataframe.
+    
+    :param subjects_df: A pandas DataFrame containing information about subjects, including metadata and
+    creation dates
+    :type subjects_df: pd.DataFrame
+    :param manual_date: The date from which to start selecting clips uploaded manually
+    :type manual_date: str
+    :param auto_date: It seems like the parameter auto_date is missing from the code snippet. Can you
+    provide more information on what this parameter represents?
+    :type auto_date: str
+    :return: a pandas DataFrame containing information about clips that were uploaded manually, along
+    with their metadata and processed information.
+    """
     # Select clips uploaded manually
     man_clips_df = (
         subjects_df[
@@ -78,6 +119,19 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
 
 # Function to process the metadata of clips that were uploaded manually
 def process_manual_clips(meta_df: pd.DataFrame):
+    """
+    The function processes metadata of manual clips by extracting relevant information such as clip
+    start and end times and the filename of the original movie.
+    
+    :param meta_df: The input parameter `meta_df` is a Pandas DataFrame containing metadata information
+    about video clips. It is assumed that the DataFrame has a column named "filename" which contains the
+    name of the video clip file in the format "original_movie_name_start_time.mp4". The function
+    processes this information to extract
+    :type meta_df: pd.DataFrame
+    :return: a pandas DataFrame containing the filename of the clips, the filename of the original
+    movie, the starting time of the clips in relation to the original movie, and the end time of the
+    clips in relation to the original movie.
+    """
     # Select the filename of the clips and remove extension type
     clip_filenames = meta_df["filename"].str.replace(".mp4", "", regex=True)
 
@@ -109,6 +163,16 @@ def process_manual_clips(meta_df: pd.DataFrame):
 
 # Function to get the list of duplicated subjects
 def get_duplicatesdf(project: Project):
+    """
+    This function reads a CSV file containing information about duplicated subjects and returns a pandas
+    dataframe.
+    
+    :param project: The "project" parameter is an object of the "Project" class, which likely contains
+    information about a specific project or dataset being worked on. The function is likely part of a
+    larger program or script that uses the "project" object to access relevant information or data
+    :type project: Project
+    :return: a pandas DataFrame containing information about duplicated subjects in a project.
+    """
     # Define the path to the csv files with initial info to build the db
     db_csv_info = project.csv_folder
 
@@ -125,6 +189,20 @@ def get_duplicatesdf(project: Project):
 
 # Function to select the first subject of those that are duplicated
 def clean_duplicated_subjects(subjects: pd.DataFrame, project: Project):
+    """
+    This function takes a dataframe of subjects and a project, identifies and removes duplicated
+    subjects, and returns a cleaned dataframe of unique subjects.
+    
+    :param subjects: A pandas DataFrame containing information about subjects in a project
+    :type subjects: pd.DataFrame
+    :param project: The `project` parameter is an instance of the `Project` class, which is not defined
+    in the code snippet provided. It is likely that this class is defined elsewhere in the codebase and
+    contains information about the project being worked on, such as project name, project ID, and
+    project data
+    :type project: Project
+    :return: a cleaned dataframe of subjects with duplicated subjects removed and replaced with the id
+    of the first subject.
+    """
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 
@@ -193,6 +271,20 @@ def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
 
 # Function to combine classifications received on duplicated subjects
 def combine_annot_from_duplicates(annot_df: pd.DataFrame, project: Project):
+    """
+    This function combines annotations from duplicate subjects in a DataFrame by replacing the IDs of
+    duplicated subjects with the ID of the first subject.
+    
+    :param annot_df: a pandas DataFrame containing annotations for subjects in a project
+    :type annot_df: pd.DataFrame
+    :param project: Unfortunately, the parameter "project" is not defined in the code snippet provided.
+    It is likely a custom object or variable specific to the project this code is being used for
+    :type project: Project
+    :return: a pandas DataFrame with the annotations from the input DataFrame `annot_df`, where the
+    subject IDs of duplicated subjects have been replaced with the ID of the first subject. The function
+    takes two arguments: `annot_df`, which is a pandas DataFrame with the annotations, and `project`,
+    which is an instance of a Project class.
+    """
     # Get the duplicates df
     duplicatesdf = get_duplicatesdf(project)
 
