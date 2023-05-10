@@ -302,12 +302,20 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     # Find closest matching filename (may differ due to Swedish character encoding)
     parsed_url = urllib.parse.urlparse(movies_df["fpath"].iloc[0])
 
+    def get_match(string, string_options):
+        normalized_string = unicodedata.normalize('NFC', string)
+        for s in string_options:
+            normalized_s = unicodedata.normalize('NFC', s)
+            if normalized_string == normalized_s:
+                return s
+        return None
+
     # If there is a url or filepath directly, use the full path instead of the filename
     if os.path.isdir(movies_df["fpath"].iloc[0]) or (
         parsed_url.scheme and parsed_url.netloc
     ):
         movies_df["fpath"] = movies_df["fpath"].apply(
-            lambda x: difflib.get_close_matches(x, server_df["spath_full"].unique())[0],
+            lambda x: get_match(x, server_df["spath_full"].unique()),
             1,
         )
         # Merge the server path to the filepath
@@ -320,7 +328,7 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
         )
     else:
         movies_df["fpath"] = movies_df["fpath"].apply(
-            lambda x: difflib.get_close_matches(x, server_df["spath"].unique())[0], 1
+            lambda x: get_match(x, server_df["spath"].unique()), 1
         )
         # Merge the server path to the filepath
         movies_df = movies_df.merge(
