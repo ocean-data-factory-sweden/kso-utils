@@ -43,17 +43,19 @@ def connect_to_server(project: Project):
     if project is None or not hasattr(project, "server"):
         logging.error("No server information found, edit projects_list.csv")
         return {}
-
-    server = project.server
-
+    
     # Create an empty dictionary to host the server connections
     server_dict = {}
 
-    if server == "AWS":
+    if project.server == "AWS":
         # Connect to AWS as a client
         client = get_aws_client()
+        
+        # Store the bucket and key information
+        server_dict["bucket"] = bucket
+        server_dict["key"] = key
 
-    elif server == "SNIC":
+    elif project.server == "SNIC":
         # Connect to SNIC as a client and get sftp
         client, sftp_client = get_snic_client()
     else:
@@ -67,7 +69,74 @@ def connect_to_server(project: Project):
 
     return server_dict
 
+def download_init_csv(project: Project, init_keys: list):
+    """
+    > This function connects to the server of the project and downloads the csv files of interest
 
+    :param project: the project object
+    :param init_keys: list of potential names of the csv files 
+    :return: A dictionary with the server paths of the csv files
+    """
+    
+    # Create empty dictionary to save the server paths of the csv files
+    db_initial_info = {}
+        
+    if project.server == "AWS":
+        for i in init_keys:
+            # Check if server path exists
+            server_i_csv = get_matching_s3_keys(
+                client=project.server_dict["client"], 
+                bucket=project.server_dict["bucket"], 
+                prefix=project.server_dict["key"] + "/" + i
+            )["Key"][0]      
+                            
+            if server_i_csv:
+                # Specify the local path for the csv
+                local_i_csv = str(Path(project.csv_folder, Path(server_i_csv).name))
+
+                # Download the csv
+                download_object_from_s3(
+                    client=project.server_dict["client"], 
+                    bucket=project.server_dict["bucket"], 
+                    key=server_i_csv, 
+                    filename=local_i_csv
+                )
+
+                # Save the server paths in the dict
+                db_initial_info[str("server_" + i + "_csv")] = server_i_csv
+      
+
+    elif server == "TEMPLATE":
+        # Specify the url of the folder with csv files of the template project
+        url_input = f"https://drive.google.com/uc?&confirm=s5vl&id=1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+        
+        # Specify the output of the file
+        zip_file = f"{project.csv_folder}.zip"
+
+        # Download the zip file
+        gdown.download(url_input, zip_file, quiet=False)
+
+        # Unzip the folder with the files
+        with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zip_ref.extractall(os.path.dirname(project.csv_folder))
+
+        # Remove the zipped file
+        os.remove(zip_file)
+
+        # Correct the file names by using correct encoding
+        fix_text_encoding(project.csv_folder)
+           
+    elif project.server in ["LOCAL", "SNIC"]:
+        logging.info("Running on SNIC or locally so no csv files were downloaded from the server.")
+        
+    else:
+        raise ValueError(
+            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
+        )
+        
+    return db_initial_info
+        
+            
 def get_ml_data(project: Project):
     """
     It downloads the training data from Google Drive.
@@ -311,50 +380,6 @@ def get_matching_s3_keys(
     return contents_s3_pd
 
 
-def download_csv_aws(project_name: str, server_dict: dict, db_csv_info: dict):
-    """
-    > The function downloads the csv files from the server and saves them in the local directory
-
-    :param project_name: str
-    :type project_name: str
-    :param server_dict: a dictionary containing the server information
-    :type server_dict: dict
-    :param db_csv_info: the path to the folder where the csv files will be downloaded
-    :type db_csv_info: dict
-    :return: A dict with the bucket, key, local_sites_csv, local_movies_csv, local_species_csv, local_surveys_csv, server_sites_csv, server_movies_csv, server_species_csv, server_surveys_csv
-    """
-    # Provide bucket and key
-    project = find_project(project_name=project_name)
-    bucket = project.bucket
-    key = project.key
-
-    # Create db_initial_info dict
-    db_initial_info = {"bucket": bucket, "key": key}
-
-    for i in ["sites", "movies", "species", "surveys"]:
-        # Get the server path of the csv
-        server_i_csv = get_matching_s3_keys(
-            server_dict["client"], bucket, prefix=key + "/" + i
-        )["Key"][0]
-
-        # Specify the local path for the csv
-        local_i_csv = str(Path(db_csv_info, Path(server_i_csv).name))
-
-        # Download the csv
-        download_object_from_s3(
-            server_dict["client"], bucket=bucket, key=server_i_csv, filename=local_i_csv
-        )
-
-        # Save the local and server paths in the dict
-        local_csv_str = str("local_" + i + "_csv")
-        server_csv_str = str("server_" + i + "_csv")
-
-        db_initial_info[local_csv_str] = Path(local_i_csv)
-        db_initial_info[server_csv_str] = server_i_csv
-
-    return db_initial_info
-
-
 def download_object_from_s3(
     client: boto3.client,
     *,
@@ -576,45 +601,6 @@ def mount_snic(
         logging.error("Failed to mount remote directory!")
         return 0
 
-
-###################################
-# #######Google Drive functions#####
-# ##################################
-
-
-def download_csv_from_google_drive(file_url: str):
-    # Download the csv files stored in Google Drive with initial information about
-    # the movies and the species
-
-    file_id = file_url.split("/")[-2]
-    dwn_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    url = requests.get(dwn_url).text.encode("ISO-8859-1").decode()
-    csv_raw = io.StringIO(url)
-    dfs = pd.read_csv(csv_raw)
-    return dfs
-
-
-def download_gdrive(gdrive_id: str, folder_name: str):
-    # Specify the url of the file to download
-    url_input = f"https://drive.google.com/uc?&confirm=s5vl&id={gdrive_id}"
-
-    logging.info(f"Retrieving the file from {url_input}")
-
-    # Specify the output of the file
-    zip_file = f"{folder_name}.zip"
-
-    # Download the zip file
-    gdown.download(url_input, zip_file, quiet=False)
-
-    # Unzip the folder with the files
-    with zipfile.ZipFile(zip_file, "r") as zip_ref:
-        zip_ref.extractall(os.path.dirname(folder_name))
-
-    # Remove the zipped file
-    os.remove(zip_file)
-
-    # Correct the file names by using correct encoding
-    fix_text_encoding(folder_name)
 
 
 def fix_text_encoding(folder_name):

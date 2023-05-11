@@ -441,38 +441,38 @@ def process_clips_spyfish(annotations, row_class_id, rows_list: list):
     return rows_list
 
 
-def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: str):
-    """
-    > This function downloads the csv with the sites and survey choices from the server and saves it
-    locally
+# def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: str):
+#     """
+#     > This function downloads the csv with the sites and survey choices from the server and saves it
+#     locally
 
-    :param server_dict: a dictionary containing the server information
-    :param db_initial_info: a dictionary with the following keys:
-    :param db_csv_info: the local path to the folder where the csv files will be downloaded
-    :return: The db_initial_info dictionary with the server and local paths of the choices csv
-    """
-    # Get the server path of the csv with sites and survey choices
-    server_choices_csv = get_matching_s3_keys(
-        server_dict["client"],
-        db_initial_info["bucket"],
-        prefix=db_initial_info["key"] + "/" + "choices",
-    )["Key"][0]
+#     :param server_dict: a dictionary containing the server information
+#     :param db_initial_info: a dictionary with the following keys:
+#     :param db_csv_info: the local path to the folder where the csv files will be downloaded
+#     :return: The db_initial_info dictionary with the server and local paths of the choices csv
+#     """
+#     # Get the server path of the csv with sites and survey choices
+#     server_choices_csv = get_matching_s3_keys(
+#         server_dict["client"],
+#         db_initial_info["bucket"],
+#         prefix=db_initial_info["key"] + "/" + "choices",
+#     )["Key"][0]
 
-    # Specify the local path for the csv
-    local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
+#     # Specify the local path for the csv
+#     local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
 
-    # Download the csv
-    download_object_from_s3(
-        server_dict["client"],
-        bucket=db_initial_info["bucket"],
-        key=server_choices_csv,
-        filename=local_choices_csv,
-    )
+#     # Download the csv
+#     download_object_from_s3(
+#         server_dict["client"],
+#         bucket=db_initial_info["bucket"],
+#         key=server_choices_csv,
+#         filename=local_choices_csv,
+#     )
 
-    db_initial_info["server_choices_csv"] = server_choices_csv
-    db_initial_info["local_choices_csv"] = Path(local_choices_csv)
+#     db_initial_info["server_choices_csv"] = server_choices_csv
+#     db_initial_info["local_choices_csv"] = Path(local_choices_csv)
 
-    return db_initial_info
+#     return db_initial_info
 
 
 def spyfish_subject_metadata(df: pd.DataFrame, db_info_dict: dict):
