@@ -303,9 +303,9 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     parsed_url = urllib.parse.urlparse(movies_df["fpath"].iloc[0])
 
     def get_match(string, string_options):
-        normalized_string = unicodedata.normalize('NFC', string)
+        normalized_string = unicodedata.normalize("NFC", string)
         for s in string_options:
-            normalized_s = unicodedata.normalize('NFC', s)
+            normalized_s = unicodedata.normalize("NFC", s)
             if normalized_string == normalized_s:
                 return s
         return None
