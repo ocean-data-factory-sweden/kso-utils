@@ -481,7 +481,7 @@ def get_frames(
     return df
 
 
-def extract_custom_frames(input_path, output_dir, start_skip=None, end_skip=None, num_frames=None, frame_skip=None):
+def extract_custom_frames(input_path, output_dir, skip_start=None, skip_end=None, num_frames=None, frame_skip=None):
     """
     This function extracts frames from a video file and saves them as JPEG images.
 
@@ -502,11 +502,11 @@ def extract_custom_frames(input_path, output_dir, start_skip=None, end_skip=None
     # Get the total number of frames in the movie
     num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    start_skip = int(start_skip * fps)
-    end_skip = int(end_skip * fps)
+    skip_start = int(skip_start * fps)
+    skip_end = int(skip_end * fps)
 
-    frame_start = 0 if start_skip is None else start_skip
-    frame_end = num_frames_total if end_skip is None else num_frames_total - end_skip
+    frame_start = 0 if skip_start is None else skip_start
+    frame_end = num_frames_total if skip_end is None else num_frames_total - skip_end
 
     # Determine which frames to extract based on the input parameters
     if num_frames is not None:

@@ -599,6 +599,8 @@ class ProjectProcessor:
 
     def generate_custom_frames(
         self,
+        skip_start: int,
+        skip_end: int,
         input_path: str,
         output_path: str,
         num_frames: int = None,
@@ -649,11 +651,17 @@ class ProjectProcessor:
                 movie_files,
                 args=(
                     [output_path] * len(movie_files),
+                    [skip_start] * len(movie_files),
+                    [skip_end] * len(movie_files),
                     [num_frames] * len(movie_files),
                     [frames_skip] * len(movie_files),
                 ),
             )
-            self.frames_to_upload_df = pd.concat(results)
+            if len(results) > 0:
+                self.frames_to_upload_df = pd.concat(results)
+            else:
+                logging.error("No results.")
+                self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
             self.generated_frames = self.modules["t4_utils"].modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
