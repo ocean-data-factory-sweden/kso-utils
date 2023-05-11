@@ -197,12 +197,16 @@ def retrieve_zoo_info(
 # Function to extract metadata from subjects
 def extract_metadata(subj_df: pd.DataFrame):
     """
-    > The function takes a dataframe with a column called `metadata` that contains a JSON string. It
-    then flattens the JSON string into a dataframe and returns the original dataframe with the
-    `metadata` column removed and the flattened dataframe
-
-    :param subj_df: The dataframe containing the subject data
-    :return: A tuple of two dataframes.
+    The function extracts metadata from a pandas DataFrame and returns two separate DataFrames, one with
+    the metadata flattened and one without the metadata.
+    
+    :param subj_df: A pandas DataFrame containing subject data, including metadata information in JSON
+    format
+    :type subj_df: pd.DataFrame
+    :return: The function `extract_metadata` returns two dataframes: `subj_df` and `meta_df`. `subj_df`
+    is the original input dataframe with the "metadata" and "index" columns dropped, and with the index
+    reset. `meta_df` is a new dataframe that contains the flattened metadata information extracted from
+    the "metadata" column of the input dataframe.
     """
 
     # Reset index of df
