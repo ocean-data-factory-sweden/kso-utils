@@ -57,6 +57,7 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
             [os.chmod(root, 0o777) for root, dirs, files in os.walk(out_path)]
         cv.imwrite(Path(out_path, Path(name[3]).name), frame)
 
+
 def bb_iou(boxA, boxB):
     """
     The function takes two bounding boxes, computes the area of intersection, and divides it by the area
@@ -141,5 +142,3 @@ def filter_bboxes(
 
     else:
         return [], bboxes
-    
-   

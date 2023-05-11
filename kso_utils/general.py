@@ -10,7 +10,7 @@ logging.getLogger().setLevel(logging.INFO)
 def import_model_modules(module_names):
     """
     This function imports specified modules and returns them as a dictionary.
-    
+
     :param module_names: A list of strings representing the names of the modules to be imported. The
     order of the names in the list should correspond to the order of the modules in the returned
     dictionary. In this case, the expected order is ["train", "detect", "val"]
@@ -31,7 +31,7 @@ def import_model_modules(module_names):
 def import_modules(module_names, utils: bool = True, models: bool = False):
     """
     The function imports specified modules and returns them as a dictionary.
-    
+
     :param module_names: A list of strings representing the names of the modules to be imported
     :param utils: A boolean parameter that specifies whether the module names provided are for utility
     modules located in the "kso_utils" package or not. If True, the function will prepend "kso_utils."
@@ -67,7 +67,7 @@ def parallel_map(func, iterable, args=()):
     """
     The function `parallel_map` uses multiprocessing to apply a given function to each element of an
     iterable in parallel.
-    
+
     :param func: The function to be applied to each element of the iterable
     :param iterable: The iterable is a sequence of elements that can be iterated over, such as a list,
     tuple, or range object. The function `func` will be applied to each element of the iterable in

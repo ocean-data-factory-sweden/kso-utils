@@ -38,7 +38,6 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-
 class ProjectProcessor:
     # The ProjectProcessor class initializes various attributes and methods for processing a project,
     # including importing modules, setting up a database, and loading metadata.
@@ -55,47 +54,46 @@ class ProjectProcessor:
 
         # Import modules
         self.modules = g_utils.import_modules([])
-        
+
         # Get server details and connect to server
         self.get_server_info()
-                
+
         # Store the potential names of the csv files
         self.init_keys = ["movies", "species", "photos", "surveys", "sites"]
-        
+
         # Map initial csv files
         self.map_init_csv()
-        
+
         # Create empty db and populate with local csv files data
         self.setup_db()
-        
+
         ############ TO REVIEW #############
-        # Check if template project        
+        # Check if template project
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):
                 logging.error("Not running on SNIC server, attempting to mount...")
                 status = self.mount_snic()
                 if status == 0:
-                    return     
-       
-        
-#         # Create empty meta tables
-#         self.init_meta()
-#         # Setup initial db
-#         self.setup_db()
-#         # Get server details from the db_info
-#         self.server_info = {
-#             x: self.db_info[x]
-#             for x in ["client", "sftp_client"]
-#             if x in self.db_info.keys()
-#         }
-#         if self.project.movie_folder is not None:
-#             # Check movies on server
-#             self.get_movie_info()
-#         # Reads csv files
-#         self.load_meta()
+                    return
 
-        ############# Finish Review ###################
-        
+    #         # Create empty meta tables
+    #         self.init_meta()
+    #         # Setup initial db
+    #         self.setup_db()
+    #         # Get server details from the db_info
+    #         self.server_info = {
+    #             x: self.db_info[x]
+    #             for x in ["client", "sftp_client"]
+    #             if x in self.db_info.keys()
+    #         }
+    #         if self.project.movie_folder is not None:
+    #             # Check movies on server
+    #             self.get_movie_info()
+    #         # Reads csv files
+    #         self.load_meta()
+
+    ############# Finish Review ###################
+
     def __repr__(self):
         return repr(self.__dict__)
 
@@ -115,54 +113,56 @@ class ProjectProcessor:
         except BaseException as e:
             logging.error(f"Server connection could not be established. Details {e}")
             return
-        
+
     def map_init_csv(self):
         """
-        This function maps the csv files, download them from the server (if needed) and 
+        This function maps the csv files, download them from the server (if needed) and
         stores the server/local paths of the csv files
-        """       
-       
+        """
+
         # Create the folder to store the csv files if not exist
         if not os.path.exists(self.project.csv_folder):
             Path(self.project.csv_folder).mkdir(parents=True, exist_ok=True)
             # Recursively add permissions to folders created
-            [os.chmod(root, 0o777) for root, dirs, files in os.walk(self.project.csv_folder)]        
-        
+            [
+                os.chmod(root, 0o777)
+                for root, dirs, files in os.walk(self.project.csv_folder)
+            ]
+
         # Download csv files from the server if needed and store their server path
         server_utils.download_init_csv(self.project, init_keys)
-        
+
         # Store the paths of the local csv files
-        self.load_meta(self, base_keys=self.init_keys)            
-        
-        
+        self.load_meta(self, base_keys=self.init_keys)
+
     def setup_db(self):
         """
-        The function creates a database and populates it with the data from the csv files. 
+        The function creates a database and populates it with the data from the csv files.
         It also return the db connection
         :return: The database connection object.
-        """    
+        """
         # Create a new database for the project
         db_utils.create_db(self.project.db_path)
-        
+
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
-        
+
         # Get a list of all the files in the csv file directory.
         files = os.listdir(self.project.csv_folder)
 
         # Specify the csvs to populate the db
         csv_interest = ["movies", "species", "sites"]
-        
+
         # Filter the list of files to only include those of interest.
         filtered_files = [
-          file for file in files if any(substring in file for csv_i in csv_interest)
+            file for file in files if any(csv_i in file for csv_i in csv_interest)
         ]
-        
-        # Populate the sites, movies and species tables of the db        
-        db_utils.populate_db(self.project, i) for i in filtered_files         
-        
 
-    # General functions to interact with in jupyter notebooks 
+        # Populate the sites, movies and species tables of the db
+        for i in filtered_files:
+            db_utils.populate_db(self.project, i)
+
+    # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
         """
         It takes a table name as an argument, connects to the database, gets the column names, gets the
@@ -233,7 +233,7 @@ class ProjectProcessor:
         """
         return movie_utils.get_movie_path(filepath, self.db_info, self.project)
 
-    # t1   
+    # t1
     def load_meta(self, base_keys=["movies", "species", "sites"]):
         """
         It loads the metadata from the local csv files into the `db_info` dictionary

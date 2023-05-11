@@ -21,7 +21,7 @@ def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
     """
     The function `auto_subjects` selects and extracts metadata from subjects that were automatically
     uploaded after a specified date.
-    
+
     :param subjects_df: `subjects_df` is a pandas DataFrame containing information about subjects, such
     as their IDs, project IDs, and creation dates
     :type subjects_df: pd.DataFrame
@@ -49,7 +49,7 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
     """
     The function extracts metadata from manually uploaded clips and processes it to combine with the
     subjects dataframe.
-    
+
     :param subjects_df: A pandas DataFrame containing information about subjects, including metadata and
     creation dates
     :type subjects_df: pd.DataFrame
@@ -91,7 +91,7 @@ def process_manual_clips(meta_df: pd.DataFrame):
     """
     The function processes metadata of manual clips by extracting relevant information such as clip
     start and end times and the filename of the original movie.
-    
+
     :param meta_df: The input parameter `meta_df` is a Pandas DataFrame containing metadata information
     about video clips. It is assumed that the DataFrame has a column named "filename" which contains the
     name of the video clip file in the format "original_movie_name_start_time.mp4". The function
@@ -135,7 +135,7 @@ def get_duplicatesdf(project: Project):
     """
     This function reads a CSV file containing information about duplicated subjects and returns a pandas
     dataframe.
-    
+
     :param project: The "project" parameter is an object of the "Project" class, which likely contains
     information about a specific project or dataset being worked on. The function is likely part of a
     larger program or script that uses the "project" object to access relevant information or data
@@ -161,7 +161,7 @@ def clean_duplicated_subjects(subjects: pd.DataFrame, project: Project):
     """
     This function takes a dataframe of subjects and a project, identifies and removes duplicated
     subjects, and returns a cleaned dataframe of unique subjects.
-    
+
     :param subjects: A pandas DataFrame containing information about subjects in a project
     :type subjects: pd.DataFrame
     :param project: The `project` parameter is an instance of the `Project` class, which is not defined
@@ -243,7 +243,7 @@ def combine_annot_from_duplicates(annot_df: pd.DataFrame, project: Project):
     """
     This function combines annotations from duplicate subjects in a DataFrame by replacing the IDs of
     duplicated subjects with the ID of the first subject.
-    
+
     :param annot_df: a pandas DataFrame containing annotations for subjects in a project
     :type annot_df: pd.DataFrame
     :param project: Unfortunately, the parameter "project" is not defined in the code snippet provided.
@@ -367,4 +367,3 @@ def process_koster_movies_csv(movies_df: pd.DataFrame):
     )
 
     return movies_df
-

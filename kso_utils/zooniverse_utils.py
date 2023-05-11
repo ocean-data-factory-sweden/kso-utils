@@ -199,7 +199,7 @@ def extract_metadata(subj_df: pd.DataFrame):
     """
     The function extracts metadata from a pandas DataFrame and returns two separate DataFrames, one with
     the metadata flattened and one without the metadata.
-    
+
     :param subj_df: A pandas DataFrame containing subject data, including metadata information in JSON
     format
     :type subj_df: pd.DataFrame

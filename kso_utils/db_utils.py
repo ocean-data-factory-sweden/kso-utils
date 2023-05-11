@@ -87,7 +87,7 @@ def execute_sql(conn: sqlite3.Connection, sql: str):
 def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
     """
     This function adds multiple rows of data to a specified table in a SQLite database.
-    
+
     :param db_path: The path to the SQLite database file
     :type db_path: str
     :param table_name: The name of the table in the database where the values will be added
@@ -122,7 +122,7 @@ def test_table(df: pd.DataFrame, table_name: str, keys: list = ["id"]):
     """
     The function checks if a given DataFrame has any NULL values in the specified key columns and logs
     an error message if it does.
-    
+
     :param df: A pandas DataFrame that represents a table in a database
     :type df: pd.DataFrame
     :param table_name: The name of the table being tested, which is a string
@@ -152,7 +152,7 @@ def get_id(
     """
     This function retrieves an ID value from a specified table in a SQLite database based on specified
     conditions.
-    
+
     :param row: The row number of the data in the table
     :type row: int
     :param field_name: The name of the field/column from which we want to retrieve data
@@ -222,7 +222,7 @@ def create_db(db_path: str):
 
     # Get sql command for db setup
     sql_setup = schema.sql
-    
+
     # create a database connection
     conn = create_connection(r"{:s}".format(db_path))
 
@@ -244,9 +244,7 @@ def populate_db(project: project_utils.Project, local_csv: str):
     """
 
     # Process the csv of interest and tests for compatibility with sql table
-    csv_i, df = process_test_csv(
-        project=project, local_csv=local_csv
-    )
+    csv_i, df = process_test_csv(project=project, local_csv=local_csv)
 
     # Add values of the processed csv to the sql table of interest
     add_to_table(
@@ -257,9 +255,7 @@ def populate_db(project: project_utils.Project, local_csv: str):
     )
 
 
-def process_test_csv(
-    project: project_utils.Project, local_csv: str
-):
+def process_test_csv(project: project_utils.Project, local_csv: str):
     """
     > This function process a csv of interest and tests for compatibility with the respective sql table of interest
     :param project: The project object
@@ -402,12 +398,11 @@ def process_species_df(df: pd.DataFrame, project: Project):
 #### Rarely used functions
 
 
-
 def find_duplicated_clips(conn: sqlite3.Connection):
     """
     This function finds duplicated clips in a database and returns a count of how many times each clip
     has been uploaded.
-    
+
     :param conn: The parameter `conn` is a connection object to a SQLite database
     :type conn: sqlite3.Connection
     :return: a Pandas Series object that contains the count of how many times each duplicated clip has
@@ -440,7 +435,7 @@ def get_movies_id(df: pd.DataFrame, db_path: str):
     """
     This function retrieves movie IDs based on movie filenames from a database and merges them with a
     given DataFrame.
-    
+
     :param df: A pandas DataFrame containing information about movie filenames and clip subjects
     :type df: pd.DataFrame
     :param db_path: The path to the database file

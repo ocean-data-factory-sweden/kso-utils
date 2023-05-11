@@ -43,14 +43,14 @@ def connect_to_server(project: Project):
     if project is None or not hasattr(project, "server"):
         logging.error("No server information found, edit projects_list.csv")
         return {}
-    
+
     # Create an empty dictionary to host the server connections
     server_dict = {}
 
     if project.server == "AWS":
         # Connect to AWS as a client
         client = get_aws_client()
-        
+
         # Store the bucket and key information
         server_dict["bucket"] = bucket
         server_dict["key"] = key
@@ -69,47 +69,47 @@ def connect_to_server(project: Project):
 
     return server_dict
 
+
 def download_init_csv(project: Project, init_keys: list):
     """
     > This function connects to the server of the project and downloads the csv files of interest
 
     :param project: the project object
-    :param init_keys: list of potential names of the csv files 
+    :param init_keys: list of potential names of the csv files
     :return: A dictionary with the server paths of the csv files
     """
-    
+
     # Create empty dictionary to save the server paths of the csv files
     db_initial_info = {}
-        
+
     if project.server == "AWS":
         for i in init_keys:
             # Check if server path exists
             server_i_csv = get_matching_s3_keys(
-                client=project.server_dict["client"], 
-                bucket=project.server_dict["bucket"], 
-                prefix=project.server_dict["key"] + "/" + i
-            )["Key"][0]      
-                            
+                client=project.server_dict["client"],
+                bucket=project.server_dict["bucket"],
+                prefix=project.server_dict["key"] + "/" + i,
+            )["Key"][0]
+
             if server_i_csv:
                 # Specify the local path for the csv
                 local_i_csv = str(Path(project.csv_folder, Path(server_i_csv).name))
 
                 # Download the csv
                 download_object_from_s3(
-                    client=project.server_dict["client"], 
-                    bucket=project.server_dict["bucket"], 
-                    key=server_i_csv, 
-                    filename=local_i_csv
+                    client=project.server_dict["client"],
+                    bucket=project.server_dict["bucket"],
+                    key=server_i_csv,
+                    filename=local_i_csv,
                 )
 
                 # Save the server paths in the dict
                 db_initial_info[str("server_" + i + "_csv")] = server_i_csv
-      
 
     elif server == "TEMPLATE":
         # Specify the url of the folder with csv files of the template project
         url_input = f"https://drive.google.com/uc?&confirm=s5vl&id=1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-        
+
         # Specify the output of the file
         zip_file = f"{project.csv_folder}.zip"
 
@@ -125,18 +125,20 @@ def download_init_csv(project: Project, init_keys: list):
 
         # Correct the file names by using correct encoding
         fix_text_encoding(project.csv_folder)
-           
+
     elif project.server in ["LOCAL", "SNIC"]:
-        logging.info("Running on SNIC or locally so no csv files were downloaded from the server.")
-        
+        logging.info(
+            "Running on SNIC or locally so no csv files were downloaded from the server."
+        )
+
     else:
         raise ValueError(
             "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
         )
-        
+
     return db_initial_info
-        
-            
+
+
 def get_ml_data(project: Project):
     """
     It downloads the training data from Google Drive.
@@ -600,7 +602,6 @@ def mount_snic(
     else:
         logging.error("Failed to mount remote directory!")
         return 0
-
 
 
 def fix_text_encoding(folder_name):
