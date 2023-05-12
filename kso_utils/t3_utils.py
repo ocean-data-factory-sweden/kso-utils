@@ -852,7 +852,7 @@ def create_clips(
 
     # Store the desired length of the clips
     clip_length = clip_selection.kwargs["clip_length"]
-    
+
     # Store the starting seconds of the clips
     if isinstance(clip_selection.result, int):
         # Clipping video from a range of seconds (e.g. 10-180)
@@ -865,7 +865,8 @@ def create_clips(
             list(
                 range(
                     start_trim,
-                    start_trim + math.floor((end_trim-start_trim)/clip_length) * clip_length,
+                    start_trim
+                    + math.floor((end_trim - start_trim) / clip_length) * clip_length,
                     clip_length,
                 )
             )
@@ -875,26 +876,26 @@ def create_clips(
             logging.info(
                 f"There was an issue estimating the starting seconds for the clips"
             )
-    
+
     else:
         # Clipping specific sections of a video at random (e.g. starting at 10, 20, 180)
         # Store the starting seconds of the clips
-        list_clip_start = [clip_selection.result['clip_start_time']]
+        list_clip_start = [clip_selection.result["clip_start_time"]]
 
     # Filter the df for the movie of interest
     movie_i_df = available_movies_df[
         available_movies_df["filename"] == movie_i
     ].reset_index(drop=True)
-    
+
     # Add the list of starting seconds to the df
     movie_i_df["list_clip_start"] = list_clip_start
-    
+
     # Reshape the dataframe with the starting seconds for the new clips
     potential_start_df = expand_list(movie_i_df, "list_clip_start", "upl_seconds")
 
     # Add the length of the clips to df (to keep track of the length of each uploaded clip)
     potential_start_df["clip_length"] = clip_length
-    
+
     # Specify the temp folder to host the clips
     if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
@@ -925,9 +926,11 @@ def create_clips(
     [os.chmod(root, 0o777) for root, dirs, files in os.walk(clips_folder)]
 
     logging.info("Extracting clips")
-    
+
     # Read each movie and extract the clips
-    for index, row in tqdm(potential_start_df.iterrows(), total=potential_start_df.shape[0]):
+    for index, row in tqdm(
+        potential_start_df.iterrows(), total=potential_start_df.shape[0]
+    ):
         # Extract the videos and store them in the folder
         extract_clips(
             movie_path,

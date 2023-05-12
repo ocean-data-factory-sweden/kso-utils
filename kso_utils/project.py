@@ -554,9 +554,7 @@ class ProjectProcessor:
         """
         if subject_type == "clip":
             upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
-                db_info_dict=self.db_info, 
-                df=upload_data, 
-                project=self.project
+                db_info_dict=self.db_info, df=upload_data, project=self.project
             )
             self.modules["t3_utils"].upload_clips_to_zooniverse(
                 upload_df, sitename, created_on, self.project.Zooniverse_number
