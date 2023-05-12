@@ -2,7 +2,9 @@
 import os
 import logging
 import pandas as pd
-from dataclasses import dataclass
+from ast import literal_eval
+from typing import List
+from dataclasses import dataclass, field
 from dataclass_csv import DataclassReader, DataclassWriter, exceptions
 
 # Logging

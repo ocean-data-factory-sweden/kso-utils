@@ -91,7 +91,9 @@ def get_project_info(projects_csv: str, project_name: str, info_interest: str):
     return project_info
 
 
-def choose_project(projects_csv: str = "../kso_utils/db_starter/projects_list.csv"):
+def choose_project(
+    projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv",
+):
     """
     > This function takes a csv file with a list of projects and returns a dropdown menu with the
     projects listed
