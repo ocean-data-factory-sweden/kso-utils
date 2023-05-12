@@ -22,6 +22,7 @@ from pathlib import Path
 from PIL import Image as PILImage, ImageDraw
 
 # widget imports
+from tqdm import tqdm
 import ipysheet
 import ipywidgets as widgets
 from IPython.display import HTML, display, clear_output
@@ -1649,11 +1650,12 @@ def create_example_clips(
 
 
 def create_clips(
-    project: Project,
     available_movies_df: pd.DataFrame,
     movie_i: str,
     movie_path: str,
+    db_info_dict: dict,
     clip_selection,
+    project: project_utils.Project,
     modification_details: dict,
     gpu_available: bool,
     pool_size: int = 4,
@@ -1673,52 +1675,58 @@ def create_clips(
     :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and clip_modification_details
     """
 
+    # Store the desired length of the clips
+    clip_length = clip_selection.kwargs["clip_length"]
+
+    # Store the starting seconds of the clips
+    if isinstance(clip_selection.result, int):
+        # Clipping video from a range of seconds (e.g. 10-180)
+        # Store the starting and ending of the range
+        start_trim = clip_selection.kwargs["clips_range"][0]
+        end_trim = clip_selection.kwargs["clips_range"][1]
+
+        # Create a list with the starting seconds of the clips
+        list_clip_start = [
+            list(
+                range(
+                    start_trim,
+                    start_trim
+                    + math.floor((end_trim - start_trim) / clip_length) * clip_length,
+                    clip_length,
+                )
+            )
+        ]
+
+        if not clip_selection.result == len(list_clip_start[0]):
+            logging.info(
+                f"There was an issue estimating the starting seconds for the clips"
+            )
+
+    else:
+        # Clipping specific sections of a video at random (e.g. starting at 10, 20, 180)
+        # Store the starting seconds of the clips
+        list_clip_start = [clip_selection.result["clip_start_time"]]
+
     # Filter the df for the movie of interest
     movie_i_df = available_movies_df[
         available_movies_df["filename"] == movie_i
     ].reset_index(drop=True)
 
-    # Calculate the max number of clips available
-    clip_length = clip_selection.kwargs["clip_length"]
-    clip_numbers = clip_selection.result
-    if "clips_range" in clip_selection.kwargs:
-        start_trim = clip_selection.kwargs["clips_range"][0]
-        end_trim = clip_selection.kwargs["clips_range"][1]
+    # Add the list of starting seconds to the df
+    movie_i_df["list_clip_start"] = list_clip_start
 
-        # Calculate all the seconds for the new clips to start
-        movie_i_df["seconds"] = [
-            list(
-                range(
-                    start_trim,
-                    int(math.floor(end_trim / clip_length) * clip_length),
-                    clip_length,
-                )
-            )
-        ]
-    else:
-        movie_i_df["seconds"] = [[0]]
+    # Reshape the dataframe with the starting seconds for the new clips
+    potential_start_df = expand_list(movie_i_df, "list_clip_start", "upl_seconds")
 
-    # Reshape the dataframe with the seconds for the new clips to start on the rows
-    potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
-
-    # Specify the length of the clips
+    # Add the length of the clips to df (to keep track of the length of each uploaded clip)
     potential_start_df["clip_length"] = clip_length
 
-    if not clip_numbers == potential_start_df.shape[0]:
-        logging.info(
-            f"There was an issue estimating the starting seconds for the {clip_numbers} clips"
-        )
-
-    # Get project-specific server info
-    server = project.server
-
     # Specify the temp folder to host the clips
-    temp_clip_folder = movie_i + "_zooniverseclips"
-    if server == "SNIC":
+    if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", temp_clip_folder)
+        clips_folder = Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips")
     else:
-        clips_folder = temp_clip_folder
+        clips_folder = movie_i + "_zooniverseclips"
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = (
@@ -1745,7 +1753,9 @@ def create_clips(
     logging.info("Extracting clips")
 
     # Read each movie and extract the clips
-    for index, row in potential_start_df.iterrows():
+    for index, row in tqdm(
+        potential_start_df.iterrows(), total=potential_start_df.shape[0]
+    ):
         # Extract the videos and store them in the folder
         extract_clips(
             movie_path,
@@ -1758,6 +1768,7 @@ def create_clips(
 
     # Add information on the modification of the clips
     potential_start_df["clip_modification_details"] = str(modification_details)
+
     return potential_start_df
 
 

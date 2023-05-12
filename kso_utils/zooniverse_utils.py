@@ -1345,6 +1345,14 @@ def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
 def set_zoo_metadata(self, df, species_list: list):
+    """
+    It takes a dataframe of clips or frames, and adds metadata about the site and project to it
+
+    :param df: the dataframe with the media to upload
+    :param project: the project object
+    :param db_info_dict: a dictionary with information about the project
+    :return: upload_to_zoo, sitename, created_on
+    """
     project_name = self.project.Project_name
 
     if not isinstance(df, pd.DataFrame):
