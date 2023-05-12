@@ -481,7 +481,14 @@ def get_frames(
     return df
 
 
-def extract_custom_frames(input_path, output_dir, skip_start=None, skip_end=None, num_frames=None, frame_skip=None):
+def extract_custom_frames(
+    input_path,
+    output_dir,
+    skip_start=None,
+    skip_end=None,
+    num_frames=None,
+    frame_skip=None,
+):
     """
     This function extracts frames from a video file and saves them as JPEG images.
 
