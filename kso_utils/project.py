@@ -507,15 +507,15 @@ class ProjectProcessor:
 
         def on_button_clicked(b):
             self.generated_clips = self.modules["t3_utils"].create_clips(
-                self.server_movies_csv,
-                movie_name,
-                movie_path,
-                self.db_info,
-                clip_selection,
-                self.project,
-                {},
-                use_gpu,
-                pool_size,
+                available_movies_df=self.server_movies_csv,
+                movie_i=movie_name,
+                movie_path=movie_path,
+                db_info_dict=self.db_info,
+                clip_selection=clip_selection,
+                project=self.project,
+                modification_details={},
+                gpu_available=use_gpu,
+                pool_size=pool_size,
             )
             mod_clips = self.modules["t3_utils"].create_modified_clips(
                 self.generated_clips.clip_path,
@@ -554,7 +554,9 @@ class ProjectProcessor:
         """
         if subject_type == "clip":
             upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
-                self.db_info, upload_data, self.project
+                db_info_dict=self.db_info, 
+                df=upload_data, 
+                project=self.project
             )
             self.modules["t3_utils"].upload_clips_to_zooniverse(
                 upload_df, sitename, created_on, self.project.Zooniverse_number
@@ -892,13 +894,6 @@ class MLProjectProcessor(ProjectProcessor):
         self.best_model_path = None
         self.model_type = None
         self.train, self.run, self.test = (None,) * 3
-        
-        # Before t6_utils gets loaded in, the val.py file in yolov5_tracker repository needs to be removed
-        # to prevent the batch_size error, see issue kso-object-detection #187
-        path_to_val = os.path.join(sys.path[0],'yolov5_tracker/val.py')
-        if os.path.exists(path_to_val):
-            os.remove(path_to_val)
-        
         self.modules = import_modules(["t4_utils", "t5_utils", "t6_utils", "t7_utils"])
         self.modules.update(
             import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
