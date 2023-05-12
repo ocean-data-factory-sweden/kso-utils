@@ -850,52 +850,57 @@ def create_clips(
     :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and clip_modification_details
     """
 
-    # Filter the df for the movie of interest
-    movie_i_df = available_movies_df[
-        available_movies_df["filename"] == movie_i
-    ].reset_index(drop=True)
-
-    # Calculate the max number of clips available
+    # Store the desired length of the clips
     clip_length = clip_selection.kwargs["clip_length"]
-    clip_numbers = clip_selection.result
-    if "clips_range" in clip_selection.kwargs:
+    
+    # Store the starting seconds of the clips
+    if isinstance(clip_selection.result, int):
+        # Clipping video from a range of seconds (e.g. 10-180)
+        # Store the starting and ending of the range
         start_trim = clip_selection.kwargs["clips_range"][0]
         end_trim = clip_selection.kwargs["clips_range"][1]
 
-        # Calculate all the seconds for the new clips to start
-        movie_i_df["seconds"] = [
+        # Create a list with the starting seconds of the clips
+        list_clip_start = [
             list(
                 range(
                     start_trim,
-                    int(math.floor(end_trim / clip_length) * clip_length),
+                    start_trim + math.floor((end_trim-start_trim)/clip_length) * clip_length,
                     clip_length,
                 )
             )
         ]
+
+        if not clip_selection.result == len(list_clip_start[0]):
+            logging.info(
+                f"There was an issue estimating the starting seconds for the clips"
+            )
+    
     else:
-        movie_i_df["seconds"] = [[0]]
+        # Clipping specific sections of a video at random (e.g. starting at 10, 20, 180)
+        # Store the starting seconds of the clips
+        list_clip_start = [clip_selection.result['clip_start_time']]
 
-    # Reshape the dataframe with the seconds for the new clips to start on the rows
-    potential_start_df = expand_list(movie_i_df, "seconds", "upl_seconds")
+    # Filter the df for the movie of interest
+    movie_i_df = available_movies_df[
+        available_movies_df["filename"] == movie_i
+    ].reset_index(drop=True)
+    
+    # Add the list of starting seconds to the df
+    movie_i_df["list_clip_start"] = list_clip_start
+    
+    # Reshape the dataframe with the starting seconds for the new clips
+    potential_start_df = expand_list(movie_i_df, "list_clip_start", "upl_seconds")
 
-    # Specify the length of the clips
+    # Add the length of the clips to df (to keep track of the length of each uploaded clip)
     potential_start_df["clip_length"] = clip_length
-
-    if not clip_numbers == potential_start_df.shape[0]:
-        logging.info(
-            f"There was an issue estimating the starting seconds for the {clip_numbers} clips"
-        )
-
-    # Get project-specific server info
-    server = project.server
-
+    
     # Specify the temp folder to host the clips
-    temp_clip_folder = movie_i + "_zooniverseclips"
-    if server == "SNIC":
+    if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", temp_clip_folder)
+        clips_folder = Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips")
     else:
-        clips_folder = temp_clip_folder
+        clips_folder = movie_i + "_zooniverseclips"
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = (
@@ -920,9 +925,9 @@ def create_clips(
     [os.chmod(root, 0o777) for root, dirs, files in os.walk(clips_folder)]
 
     logging.info("Extracting clips")
-
+    
     # Read each movie and extract the clips
-    for index, row in potential_start_df.iterrows():
+    for index, row in tqdm(potential_start_df.iterrows(), total=potential_start_df.shape[0]):
         # Extract the videos and store them in the folder
         extract_clips(
             movie_path,
