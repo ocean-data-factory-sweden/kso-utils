@@ -523,7 +523,7 @@ def extract_custom_frames(
     else:
         frames_to_extract = range(frame_end)
 
-    output_files = []
+    output_files, input_movies = [], []
 
     # Loop through the frames and extract the selected ones
     for frame_idx in frames_to_extract:
@@ -545,10 +545,16 @@ def extract_custom_frames(
             # Add output filename to list of files
             output_files.append(output_filename)
 
+            # Add movie filename to list
+            input_movies.append(Path(input_path).name)
+
     # Release the video capture object
     cap.release()
 
-    return pd.DataFrame(output_files, columns=["frame_path"])
+    return pd.DataFrame(
+        np.column_stack([input_movies, output_files, frames_to_extract]),
+        columns=["movie_filename", "frame_path", "frame_number"],
+    )
 
 
 # Function to specify the frame modification

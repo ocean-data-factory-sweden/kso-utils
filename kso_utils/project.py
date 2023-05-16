@@ -701,6 +701,7 @@ class ProjectProcessor:
                     in [".mov", ".mp4", ".avi", ".mkv"]
                 ]
             )
+            print(movie_files)
             results = parallel_map(
                 self.modules["t4_utils"].extract_custom_frames,
                 movie_files,
@@ -714,6 +715,32 @@ class ProjectProcessor:
             )
             if len(results) > 0:
                 self.frames_to_upload_df = pd.concat(results)
+                self.frames_to_upload_df["species_id"] = pd.Series(
+                    [
+                        self.modules["t4_utils"].get_species_ids(
+                            self.project, species_list.value
+                        )
+                    ]
+                    * len(self.frames_to_upload_df)
+                )
+                self.frames_to_upload_df = self.frames_to_upload_df.merge(
+                    self.get_db_table("movies").rename(columns={"id": "movie_id"}),
+                    how="left",
+                    left_on="movie_filename",
+                    right_on="filename",
+                )
+                # Ensure necessary metadata fields are available
+                self.frames_to_upload_df = self.frames_to_upload_df[
+                    [
+                        "frame_path",
+                        "site_id",
+                        "movie_id",
+                        "created_on",
+                        "frame_number",
+                        "species_id",
+                    ]
+                ]
+
             else:
                 logging.error("No results.")
                 self.frames_to_upload_df = pd.DataFrame()
