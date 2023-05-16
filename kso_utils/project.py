@@ -1,5 +1,6 @@
 # base imports
 import os
+import sys
 import glob
 import logging
 import asyncio
@@ -15,7 +16,11 @@ from paramiko import SSHClient
 from scp import SCPClient
 from itertools import chain
 from pathlib import Path
+<<<<<<< HEAD
 from tqdm import tqdm
+=======
+from ast import literal_eval
+>>>>>>> dev
 import imagesize
 import ipysheet
 from folium.plugins import MiniMap
@@ -195,24 +200,77 @@ class ProjectProcessor:
         else:
             return df
 
+    def choose_workflows(self, generate_export: bool = False):
+        self.set_zoo_info(generate_export=generate_export)
+        self.workflow_widget = self.modules["t8_utils"].WidgetMaker(
+            self.zoo_info["workflows"]
+        )
+        display(self.workflow_widget)
+
+    def set_zoo_info(self, generate_export: bool = False):
+        if self.project.Zooniverse_number is not None:
+            self.zoo_project = zu_utils.connect_zoo_project(self.project)
+        else:
+            logging.error("This project is not registered with Zooniverse.")
+            return
+        if self.zoo_info is None or self.zoo_info == {}:
+            self.zoo_info = zu_utils.retrieve_zoo_info(
+                self.project,
+                self.zoo_project,
+                zoo_info=["subjects", "workflows", "classifications"],
+                generate_export=generate_export,
+            )
+
     def get_zoo_info(self, generate_export: bool = False):
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
         :return: The zoo_info is being returned.
         """
-        if self.project.Zooniverse_number is not None:
-            self.zoo_project = zu_utils.connect_zoo_project(self.project)
-            self.zoo_info = zu_utils.retrieve__populate_zoo_info(
-                self.project,
-                self.db_info,
-                self.zoo_project,
-                zoo_info=["subjects", "workflows", "classifications"],
-                generate_export=generate_export,
-            )
+        if "db_path" in self.db_info:
+            if hasattr(self, "workflow_widget"):
+                # If the workflow widget is used, retrieve a subset of the subjects to build the db
+                names, workflow_versions = [], []
+                for i in range(0, len(self.workflow_widget.checks), 3):
+                    names.append(list(self.workflow_widget.checks.values())[i])
+                    workflow_versions.append(
+                        list(self.workflow_widget.checks.values())[i + 2]
+                    )
+
+                self.project.zu_workflows = self.modules["t8_utils"].get_workflow_ids(
+                    self.zoo_info["workflows"], names
+                )
+
+                if not isinstance(self.project.zu_workflows, list):
+                    self.project.zu_workflows = literal_eval(self.project.zu_workflows)
+
+                self.zoo_info["subjects"]["workflow_id"] = self.zoo_info["subjects"][
+                    "workflow_id"
+                ].astype("Int64")
+                subjects_series = self.zoo_info["subjects"][
+                    self.zoo_info["subjects"].workflow_id.isin(
+                        self.project.zu_workflows
+                    )
+                ].copy()
+
+            else:
+                self.set_zoo_info(generate_export=generate_export)
+                subjects_series = self.zoo_info["subjects"].copy()
+
+            # Safely remove subjects table
+            db_utils.drop_table(self.db_info["db_path"], table_name="subjects")
+
+            if len(subjects_series) > 0:
+                # Fill or re-fill subjects table
+                zu_utils.populate_subjects(
+                    subjects_series, self.project, self.db_info["db_path"]
+                )
+            else:
+                logging.error(
+                    "No subjects to populate database from the workflows selected."
+                )
         else:
-            logging.error("This project is not registered with ZU.")
-            return
+            logging.info("No database path found. Subjects have not been added to db")
 
     def get_movie_info(self):
         """
@@ -689,14 +747,16 @@ class ProjectProcessor:
         )
 
         def on_button_clicked(b):
-            self.generated_clips = self.create_clips(
-                self.server_movies_csv,
-                movie_name,
-                movie_path,
-                clip_selection,
-                {},
-                use_gpu,
-                pool_size,
+            self.generated_clips = t_utils.create_clips(
+                available_movies_df=self.server_movies_csv,
+                movie_i=movie_name,
+                movie_path=movie_path,
+                db_info_dict=self.db_info,
+                clip_selection=clip_selection,
+                project=self.project,
+                modification_details={},
+                gpu_available=use_gpu,
+                pool_size=pool_size,
             )
             mod_clips = self.create_modified_clips(
                 self.generated_clips.clip_path,
@@ -719,7 +779,40 @@ class ProjectProcessor:
         :param movie_name: The name of the movie you want to check if it's uploaded
         :type movie_name: str
         """
+<<<<<<< HEAD
         self.check_movie_uploaded(self, movie_i=movie_name)
+=======
+        self.modules["t3_utils"].check_movie_uploaded(
+            movie_i=movie_name, db_info_dict=self.db_info
+        )
+
+    def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
+        """
+        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
+
+        :param upload_data: a pandas dataframe with the following columns:
+        :type upload_data: pd.DataFrame
+        :param subject_type: str = "clip" or "frame"
+        :type subject_type: str
+        """
+        if subject_type == "clip":
+            upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
+                db_info_dict=self.db_info, df=upload_data, project=self.project
+            )
+            self.modules["t3_utils"].upload_clips_to_zooniverse(
+                upload_df, sitename, created_on, self.project.Zooniverse_number
+            )
+            # Clean up subjects after upload
+            self.modules["t3_utils"].remove_temp_clips(upload_df)
+        elif subject_type == "frame":
+            species_list = []
+            upload_df = self.modules["t4_utils"].set_zoo_metadata(
+                upload_data, species_list, self.project, self.db_info
+            )
+            self.modules["t4_utils"].upload_frames_to_zooniverse(
+                upload_df, species_list, self.db_info, self.project
+            )
+>>>>>>> dev
 
     def generate_zu_frames(self):
         """
@@ -750,6 +843,8 @@ class ProjectProcessor:
 
     def generate_custom_frames(
         self,
+        skip_start: int,
+        skip_end: int,
         input_path: str,
         output_path: str,
         num_frames: int = None,
@@ -800,11 +895,17 @@ class ProjectProcessor:
                 movie_files,
                 args=(
                     [output_path] * len(movie_files),
+                    [skip_start] * len(movie_files),
+                    [skip_end] * len(movie_files),
                     [num_frames] * len(movie_files),
                     [frames_skip] * len(movie_files),
                 ),
             )
-            self.frames_to_upload_df = pd.concat(results)
+            if len(results) > 0:
+                self.frames_to_upload_df = pd.concat(results)
+            else:
+                logging.error("No results.")
+                self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
             self.generated_frames = self.modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
@@ -953,7 +1054,18 @@ class MLProjectProcessor(ProjectProcessor):
         self.best_model_path = None
         self.model_type = None
         self.train, self.run, self.test = (None,) * 3
+<<<<<<< HEAD
         self.modules = g_utils.import_modules([])
+=======
+
+        # Before t6_utils gets loaded in, the val.py file in yolov5_tracker repository needs to be removed
+        # to prevent the batch_size error, see issue kso-object-detection #187
+        path_to_val = os.path.join(sys.path[0], "yolov5_tracker/val.py")
+        if os.path.exists(path_to_val):
+            os.remove(path_to_val)
+
+        self.modules = import_modules(["t4_utils", "t5_utils", "t6_utils", "t7_utils"])
+>>>>>>> dev
         self.modules.update(
             g_utils.import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
@@ -1025,16 +1137,16 @@ class MLProjectProcessor(ProjectProcessor):
             self.species_of_interest = species_list.value
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
-                self.project,
-                self.db_info,
-                out_path,
-                perc_test,
-                self.species_of_interest,
-                img_size,
-                remove_nulls,
-                track_frames,
-                n_tracked_frames,
-                agg_df,
+                project=self.project,
+                db_info_dict=self.db_info,
+                out_path=out_path,
+                perc_test=perc_test,
+                class_list=self.species_of_interest,
+                img_size=img_size,
+                remove_nulls=remove_nulls,
+                track_frames=track_frames,
+                n_tracked_frames=n_tracked_frames,
+                agg_df=agg_df,
             )
 
         button.on_click(on_button_clicked)

@@ -33,6 +33,24 @@ def create_connection(db_file: str):
     return conn
 
 
+def drop_table(db_file: str, table_name: str):
+    # Connecting to sqlite
+    conn = sqlite3.connect(db_file)
+
+    # Creating a cursor object using the cursor() method
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {table_name}")
+    except Exception as e:
+        logging.info(f"Table doesn't exist, {e}")
+        return
+    logging.info(f"Table contents {table_name} cleared. ")
+
+    # Commit your changes in the database
+    conn.commit()
+
+
 def insert_many(conn: sqlite3.Connection, data: list, table: str, count: int):
     """
     Insert multiple rows into table

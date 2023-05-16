@@ -147,6 +147,7 @@ def retrieve_zoo_info(
                     "Export retrieval time out, please try again in 1 minute or so."
                 )
                 export_df = {}
+                return
         except:
             logging.info(
                 "No connection with Zooniverse, retrieve template info from google drive."
@@ -265,6 +266,7 @@ def populate_subjects(
             # Create columns to match schema if they don't exist
             subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
             subjects["frame_number"] = subjects.get("frame_number", np.nan)
+            subjects["subject_type"] = subjects.get("subject_type", np.nan)
 
             # Select only relevant metadata columns
             subjects = subjects[
@@ -360,6 +362,10 @@ def populate_subjects(
     # Ensure that subject_ids are not duplicated by workflow
     subjects = subjects.drop_duplicates(subset="id")
 
+    # Add a subject type if it is missing
+    subjects["subject_type"] = subjects[["clip_start_time", "subject_type"]].apply(
+        lambda x: "frame" if np.isnan(x[0]) else "clip", 1
+    )
     # Test table validity
     db_utils.test_table(subjects, "subjects", keys=["id"])
 
