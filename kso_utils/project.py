@@ -16,11 +16,8 @@ from paramiko import SSHClient
 from scp import SCPClient
 from itertools import chain
 from pathlib import Path
-<<<<<<< HEAD
 from tqdm import tqdm
-=======
 from ast import literal_eval
->>>>>>> dev
 import imagesize
 import ipysheet
 from folium.plugins import MiniMap
@@ -779,40 +776,7 @@ class ProjectProcessor:
         :param movie_name: The name of the movie you want to check if it's uploaded
         :type movie_name: str
         """
-<<<<<<< HEAD
-        self.check_movie_uploaded(self, movie_i=movie_name)
-=======
-        self.modules["t3_utils"].check_movie_uploaded(
-            movie_i=movie_name, db_info_dict=self.db_info
-        )
-
-    def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
-        """
-        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
-
-        :param upload_data: a pandas dataframe with the following columns:
-        :type upload_data: pd.DataFrame
-        :param subject_type: str = "clip" or "frame"
-        :type subject_type: str
-        """
-        if subject_type == "clip":
-            upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
-                db_info_dict=self.db_info, df=upload_data, project=self.project
-            )
-            self.modules["t3_utils"].upload_clips_to_zooniverse(
-                upload_df, sitename, created_on, self.project.Zooniverse_number
-            )
-            # Clean up subjects after upload
-            self.modules["t3_utils"].remove_temp_clips(upload_df)
-        elif subject_type == "frame":
-            species_list = []
-            upload_df = self.modules["t4_utils"].set_zoo_metadata(
-                upload_data, species_list, self.project, self.db_info
-            )
-            self.modules["t4_utils"].upload_frames_to_zooniverse(
-                upload_df, species_list, self.db_info, self.project
-            )
->>>>>>> dev
+        movie_utils.check_movie_uploaded(self.db_info, movie_i=movie_name)
 
     def generate_zu_frames(self):
         """
@@ -1054,9 +1018,6 @@ class MLProjectProcessor(ProjectProcessor):
         self.best_model_path = None
         self.model_type = None
         self.train, self.run, self.test = (None,) * 3
-<<<<<<< HEAD
-        self.modules = g_utils.import_modules([])
-=======
 
         # Before t6_utils gets loaded in, the val.py file in yolov5_tracker repository needs to be removed
         # to prevent the batch_size error, see issue kso-object-detection #187
@@ -1064,8 +1025,7 @@ class MLProjectProcessor(ProjectProcessor):
         if os.path.exists(path_to_val):
             os.remove(path_to_val)
 
-        self.modules = import_modules(["t4_utils", "t5_utils", "t6_utils", "t7_utils"])
->>>>>>> dev
+        self.modules = g_utils.import_modules([])
         self.modules.update(
             g_utils.import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
