@@ -222,7 +222,7 @@ def create_example_clips(
     if server == "SNIC":
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", output_clip_folder)
+        clips_folder = str(Path(snic_path, "tmp_dir", output_clip_folder))
     else:
         clips_folder = output_clip_folder
 
@@ -244,7 +244,7 @@ def create_example_clips(
         output_clip_name = (
             movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
         )
-        output_clip_path = Path(clips_folder, output_clip_name)
+        output_clip_path = str(Path(clips_folder, output_clip_name))
 
         # Add the path of the clip to the list
         example_clips = example_clips + [output_clip_path]
@@ -488,7 +488,7 @@ def create_modified_clips(
 
     if server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
+        mod_clips_folder = str(Path(snic_path, "tmp_dir", mod_clip_folder))
     else:
         mod_clips_folder = mod_clip_folder
 
@@ -513,7 +513,7 @@ def create_modified_clips(
         for clip_i in clips_list:
             # Create the filename and path of the modified clip
             output_clip_name = "modified_" + os.path.basename(clip_i)
-            output_clip_path = Path(mod_clips_folder, output_clip_name)
+            output_clip_path = str(Path(mod_clips_folder, output_clip_name))
 
             # Add the path of the clip to the list
             modified_clips = modified_clips + [output_clip_path]
@@ -899,7 +899,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips")
+        clips_folder = str(Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips"))
     else:
         clips_folder = movie_i + "_zooniverseclips"
 
@@ -915,7 +915,7 @@ def create_clips(
 
     # Set the path of the clips
     potential_start_df["clip_path"] = potential_start_df["clip_filename"].apply(
-        lambda x: Path(clips_folder, x), 1
+        lambda x: str(Path(clips_folder, x)), 1
     )
 
     # Create the folder to store the videos if not exist
