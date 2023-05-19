@@ -39,13 +39,13 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     return fc
 
 
-def choose_footage(self, start_path: str = ".", folder_type: str = ""):
-    if self.project.server == "AWS":
+def choose_footage(project: Project, db_info_dict: dict, start_path: str = ".", folder_type: str = ""):
+    if project.server == "AWS":
         available_movies_df = movie_utils.retrieve_movie_info_from_server(
-            project=self.project, db_info_dict=self.db_info
+            project=project, db_info_dict=db_info_dict
         )
         movie_dict = {
-            name: movie_utils.get_movie_path(f_path, self.db_info, self.project)
+            name: movie_utils.get_movie_path(f_path, db_info_dict, project)
             for name, f_path in available_movies_df[["filename", "fpath"]].values
         }
 
