@@ -885,11 +885,7 @@ class ProjectProcessor:
             if len(results) > 0:
                 self.frames_to_upload_df = pd.concat(results)
                 self.frames_to_upload_df["species_id"] = pd.Series(
-                    [
-                        t_utils.get_species_ids(
-                            self.project, species_list.value
-                        )
-                    ]
+                    [t_utils.get_species_ids(self.project, species_list.value)]
                     * len(self.frames_to_upload_df)
                 )
                 self.frames_to_upload_df = self.frames_to_upload_df.merge(
