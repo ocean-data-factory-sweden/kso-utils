@@ -2179,7 +2179,14 @@ def select_sheet_range(db_info_dict: dict, orig_csv: str):
     return df, df_range_rows, df_range_columns
 
 
-def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=None):
+def extract_custom_frames(
+    input_path,
+    output_dir,
+    skip_start=None,
+    skip_end=None,
+    num_frames=None,
+    frame_skip=None,
+):
     """
     This function extracts frames from a video file and saves them as JPEG images.
 
@@ -2199,16 +2206,22 @@ def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=No
 
     # Get the total number of frames in the movie
     num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    skip_start = int(skip_start * fps)
+    skip_end = int(skip_end * fps)
+
+    frame_start = 0 if skip_start is None else skip_start
+    frame_end = num_frames_total if skip_end is None else num_frames_total - skip_end
 
     # Determine which frames to extract based on the input parameters
     if num_frames is not None:
-        frames_to_extract = random.sample(range(num_frames_total), num_frames)
+        frames_to_extract = random.sample(range(frame_start, frame_end), num_frames)
     elif frame_skip is not None:
-        frames_to_extract = range(0, num_frames_total, frame_skip)
+        frames_to_extract = range(frame_start, frame_end, frame_skip)
     else:
-        frames_to_extract = range(num_frames_total)
+        frames_to_extract = range(frame_end)
 
-    output_files = []
+    output_files, input_movies = [], []
 
     # Loop through the frames and extract the selected ones
     for frame_idx in frames_to_extract:
@@ -2230,10 +2243,16 @@ def extract_custom_frames(input_path, output_dir, num_frames=None, frame_skip=No
             # Add output filename to list of files
             output_files.append(output_filename)
 
+            # Add movie filename to list
+            input_movies.append(Path(input_path).name)
+
     # Release the video capture object
     cap.release()
 
-    return pd.DataFrame(output_files, columns=["frame_path"])
+    return pd.DataFrame(
+        np.column_stack([input_movies, output_files, frames_to_extract]),
+        columns=["movie_filename", "frame_path", "frame_number"],
+    )
 
 
 # Function to specify the frame modification

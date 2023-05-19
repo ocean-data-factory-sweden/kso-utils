@@ -581,8 +581,9 @@ def retrieve__populate_zoo_info(
         return zoo_info_dict
 
 
-def set_zoo_metadata(
+def set_zoo_clip_metadata(
     project: Project,
+    db_info_dict: dict,
     df: pd.DataFrame,
 ):
     """
@@ -593,7 +594,7 @@ def set_zoo_metadata(
     """
 
     # Create connection to db
-    conn = db_utils.create_connection(project.db_info["db_path"])
+    conn = db_utils.create_connection(project.db_path)
 
     # Query info about the movie of interest
     sitesdf = pd.read_sql_query("SELECT * FROM sites", conn)
@@ -650,10 +651,10 @@ def set_zoo_metadata(
     # Add spyfish-specific info
     if project.Project_name == "Spyfish_Aotearoa":
         # Read sites csv as pd
-        sitesdf = pd.read_csv(project.db_info["local_sites_csv"])
+        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
 
         # Read movies csv as pd
-        moviesdf = pd.read_csv(project.db_info["local_movies_csv"])
+        moviesdf = pd.read_csv(db_info_dict["local_movies_csv"])
 
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(
@@ -683,7 +684,7 @@ def set_zoo_metadata(
 
     if project.Project_name == "Koster_Seafloor_Obs":
         # Read sites csv as pd
-        sitesdf = pd.read_csv(project.db_info["local_sites_csv"])
+        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
 
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(
@@ -1334,7 +1335,7 @@ def get_frames(
     return df
 
 
-def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
+def upload_zu_subjects(upload_data: pd.DataFrame, subject_type: str):
     """
     This function uploads clips or frames to Zooniverse, depending on the subject_type argument
 
@@ -1344,18 +1345,18 @@ def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
     :type subject_type: str
     """
     if subject_type == "clip":
-        upload_df, sitename, created_on = self.set_zoo_metadata(upload_data)
-        self.upload_clips_to_zooniverse(upload_df, sitename, created_on)
+        upload_df, sitename, created_on = set_zoo_clip_metadata(upload_data)
+        upload_clips_to_zooniverse(upload_df, sitename, created_on)
         # Clean up subjects after upload
         remove_temp_clips(upload_df)
     elif subject_type == "frame":
         species_list = []
-        upload_df = self.set_zoo_metadata(upload_data, species_list)
-        self.upload_frames_to_zooniverse(upload_df, species_list)
+        upload_df = set_zoo_frame_metadata(upload_data, species_list)
+        upload_frames_to_zooniverse(upload_df, species_list)
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
-def set_zoo_metadata(self, df, species_list: list):
+def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
     """
     It takes a dataframe of clips or frames, and adds metadata about the site and project to it
 
@@ -1364,7 +1365,7 @@ def set_zoo_metadata(self, df, species_list: list):
     :param db_info_dict: a dictionary with information about the project
     :return: upload_to_zoo, sitename, created_on
     """
-    project_name = self.project.Project_name
+    project_name = project.Project_name
 
     if not isinstance(df, pd.DataFrame):
         df = df.df
@@ -1376,8 +1377,8 @@ def set_zoo_metadata(self, df, species_list: list):
         df["frame_path"] = df["modif_frame_path"]
 
     # Set project-specific metadata
-    if self.project.Zooniverse_number == 9747 or 9754:
-        conn = db_utils.create_connection(self.project.db_path)
+    if project.Zooniverse_number == 9747 or 9754:
+        conn = db_utils.create_connection(project.db_path)
         sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
         df = df.merge(sites_df, left_on="site_id", right_on="id")
         upload_to_zoo = df[
@@ -1397,7 +1398,7 @@ def set_zoo_metadata(self, df, species_list: list):
     elif project_name == "Spyfish_Aotearoa":
         from kso_utils.spyfish_utils import spyfish_subject_metadata
 
-        upload_to_zoo = spyfish_subject_metadata(df, self.db_info)
+        upload_to_zoo = spyfish_subject_metadata(df, db_info_dict)
     else:
         logging.error("This project is not a supported Zooniverse project.")
 

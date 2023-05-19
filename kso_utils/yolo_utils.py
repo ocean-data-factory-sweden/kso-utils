@@ -356,7 +356,7 @@ def frame_aggregation(
         return
 
     # Select the aggregated classifications from the species of interest
-    train_rows = agg_df
+    train_rows = agg_df[agg_df.label.isin(class_list)]
 
     # Rename columns if in different format
     train_rows = train_rows.rename(

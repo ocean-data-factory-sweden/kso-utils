@@ -903,7 +903,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     "label": species_list[int(s[0])],
                 }
             )
-    w_bbox = widgets.BBoxWidget(image=encode_image(image), classes=species_list)
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
@@ -955,73 +955,64 @@ def get_annotations_viewer(data_path: str, species_list: list):
     def on_skip():
         w_progress.value += 1
         if w_progress.value == len(annotations):
-            button = widgets.Button(
-                description="Click to restart.",
-                disabled=False,
-                display="flex",
-                flex_flow="column",
-                align_items="stretch",
-            )
-            if isinstance(w_container.children[0], widgets.Button):
-                w_container.children = tuple(list(w_container.children[1:]))
-            w_container.children = tuple([button] + list(w_container.children))
-            button.on_click(on_button_clicked)
+            w_progress.value = 0
 
         # open new image in the widget
-        else:
-            image_file = images[w_progress.value]
-            image_p = os.path.join(image_path, image_file)
-            width, height = imagesize.get(image_p)
-            w_bbox.image = encode_image(image_p)
-            label_file = annotations[w_progress.value]
-            bboxes = []
-            with open(os.path.join(annot_path, label_file), "r") as f:
-                for line in f:
-                    s = line.split(" ")
-                    left = (float(s[1]) - (float(s[3]) / 2)) * width
-                    top = (float(s[2]) - (float(s[4]) / 2)) * height
-                    bboxes.append(
-                        {
-                            "x": left,
-                            "y": top,
-                            "width": float(s[3]) * width,
-                            "height": float(s[4]) * height,
-                            "label": species_list[int(s[0])],
-                        }
-                    )
 
-            # here we assign an empty list to bboxes but
-            # we could also run a detection model on the file
-            # and use its output for creating initial bboxes
-            w_bbox.bboxes = bboxes
+        image_file = images[w_progress.value]
+        image_p = os.path.join(image_path, image_file)
+        width, height = imagesize.get(image_p)
+        w_bbox.image = encode_image(image_p)
+        label_file = annotations[w_progress.value]
+        bboxes = []
+        with open(os.path.join(annot_path, label_file), "r") as f:
+            for line in f:
+                s = line.split(" ")
+                left = (float(s[1]) - (float(s[3]) / 2)) * width
+                top = (float(s[2]) - (float(s[4]) / 2)) * height
+                bboxes.append(
+                    {
+                        "x": left,
+                        "y": top,
+                        "width": float(s[3]) * width,
+                        "height": float(s[4]) * height,
+                        "label": species_list[int(s[0])],
+                    }
+                )
 
-    w_bbox.on_skip(on_skip)
+        # here we assign an empty list to bboxes but
+        # we could also run a detection model on the file
+        # and use its output for creating initial bboxes
+        w_bbox.bboxes = bboxes
 
     # when Submit button is pressed we save current annotations
     # and then move on to the next file
     def on_submit():
         image_file = images[w_progress.value]
         width, height = imagesize.get(os.path.join(image_path, image_file))
+        label_file = annotations[w_progress.value]
         # save annotations for current image
-        open(os.path.join(annot_path, label_file), "w").write(
-            "\n".join(
-                [
-                    "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
-                        species_list.index(
-                            i["label"]
-                        ),  # single class vs multiple classes
-                        min((i["x"] + i["width"] / 2) / width, 1.0),
-                        min((i["y"] + i["height"] / 2) / height, 1.0),
-                        min(i["width"] / width, 1.0),
-                        min(i["height"] / height, 1.0),
-                    )
-                    for i in w_bbox.bboxes
-                ]
+        with open(os.path.join(annot_path, label_file), "w") as f:
+            f.write(
+                "\n".join(
+                    [
+                        "{} {:.6f} {:.6f} {:.6f} {:.6f}".format(
+                            species_list.index(
+                                i["label"]
+                            ),  # single class vs multiple classes
+                            min((i["x"] + i["width"] / 2) / width, 1.0),
+                            min((i["y"] + i["height"] / 2) / height, 1.0),
+                            min(i["width"] / width, 1.0),
+                            min(i["height"] / height, 1.0),
+                        )
+                        for i in w_bbox.bboxes
+                    ]
+                )
             )
-        )
         # move on to the next file
         on_skip()
 
+    w_bbox.on_skip(on_skip)
     w_bbox.on_submit(on_submit)
 
     return w_container
@@ -1603,7 +1594,7 @@ def create_example_clips(
     if server == "SNIC":
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", output_clip_folder)
+        clips_folder = str(Path(snic_path, "tmp_dir", output_clip_folder))
     else:
         clips_folder = output_clip_folder
 
@@ -1625,7 +1616,7 @@ def create_example_clips(
         output_clip_name = (
             movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
         )
-        output_clip_path = Path(clips_folder, output_clip_name)
+        output_clip_path = str(Path(clips_folder, output_clip_name))
 
         # Add the path of the clip to the list
         example_clips = example_clips + [output_clip_path]
@@ -1723,7 +1714,7 @@ def create_clips(
     # Specify the temp folder to host the clips
     if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips")
+        clips_folder = str(Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips"))
     else:
         clips_folder = movie_i + "_zooniverseclips"
 
@@ -1739,7 +1730,7 @@ def create_clips(
 
     # Set the path of the clips
     potential_start_df["clip_path"] = potential_start_df["clip_filename"].apply(
-        lambda x: Path(clips_folder, x), 1
+        lambda x: str(Path(clips_folder, x)), 1
     )
 
     # Create the folder to store the videos if not exist
