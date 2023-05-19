@@ -14,6 +14,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 @dataclass
 class Project:
+    # This is defining a data class called `Project` with several attributes including `Project_name`,
+    # `Zooniverse_number`, `db_path`, `server`, `bucket`, `key`, `csv_folder`, `movie_folder`,
+    # `photo_folder`, and `ml_folder`. The `@dataclass` decorator is used to automatically generate
+    # several special methods such as `__init__`, `__repr__`, and `__eq__` for the class. This makes it
+    # easier to create and work with instances of the `Project` class.
     Project_name: str
     Zooniverse_number: int = 0
     db_path: str = None

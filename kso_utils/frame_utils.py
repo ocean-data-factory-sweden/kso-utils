@@ -3,11 +3,15 @@ import os
 import logging
 import argparse
 import pims
-import cv2 as cv
+import cv2
+from sklearn.cluster import DBSCAN
+from collections import Counter
 import pandas as pd
 from pathlib import Path
-from kso_utils.db_utils import create_connection
 from tqdm import tqdm
+
+# util imports
+from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -46,7 +50,7 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
             # Calculating end-point of bounding box based on starting point and w, h
             end_box = tuple([int(box[0] + box[2]), int(box[1] + box[3])])
             # changed color and width to make it visible
-            cv.rectangle(frame, (int(box[0]), int(box[1])), end_box, (255, 0, 0), 1)
+            cv2.rectangle(frame, (int(box[0]), int(box[1])), end_box, (255, 0, 0), 1)
         if not os.path.exists(out_path):
             Path(out_path).mkdir(parents=True, exist_ok=True)
             # Recursively add permissions to folders created
@@ -54,42 +58,87 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
         cv.imwrite(Path(out_path, Path(name[3]).name), frame)
 
 
-def main():
-    "Handles argument parsing and launches the correct function."
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-db",
-        "--db_path",
-        type=str,
-        help="the absolute path to the database file",
-        default=r"koster_lab.db",
-        required=True,
+def bb_iou(boxA, boxB):
+    """
+    The function takes two bounding boxes, computes the area of intersection, and divides it by the area
+    of the union of the two boxes
+
+    :param boxA: The first bounding box
+    :param boxB: The ground truth box
+    :return: The IOU value
+    """
+
+    # Compute edges
+    temp_boxA = boxA.copy()
+    temp_boxB = boxB.copy()
+    temp_boxA[2], temp_boxA[3] = (
+        temp_boxA[0] + temp_boxA[2],
+        temp_boxA[1] + temp_boxA[3],
     )
-    parser.add_argument(
-        "-m",
-        "--movie_dir",
-        type=str,
-        help="the directory of movie files",
-        default=r"/uploads/",
-        required=True,
+    temp_boxB[2], temp_boxB[3] = (
+        temp_boxB[0] + temp_boxB[2],
+        temp_boxB[1] + temp_boxB[3],
     )
-    parser.add_argument(
-        "-o",
-        "--output_dir",
-        type=str,
-        help="the directory to save the frames",
-        default=r"/database/frames/",
-        required=True,
-    )
-    args = parser.parse_args()
-    conn = create_connection(args.db_path)
-    df = pd.read_sql_query(
-        "SELECT b.filename, b.frame_number, a.species_id, a.x_position, a.y_position, a.width, a.height FROM (agg_annotations_frame AS a LEFT JOIN subjects AS b ON a.subject_id=b.id",
-        conn,
-    )
-    drawBoxes(df, args.movie_dir, args.output_dir)
-    print("Frames exported successfully")
+
+    # determine the (x, y)-coordinates of the intersection rectangle
+    xA = max(temp_boxA[0], temp_boxB[0])
+    yA = max(temp_boxA[1], temp_boxB[1])
+    xB = min(temp_boxA[2], temp_boxB[2])
+    yB = min(temp_boxA[3], temp_boxB[3])
+
+    # compute the area of intersection rectangle
+    interArea = abs(max((xB - xA, 0)) * max((yB - yA), 0))
+    if interArea == 0:
+        return 1
+    # compute the area of both the prediction and ground-truth
+    # rectangles
+    boxAArea = abs((temp_boxA[2] - temp_boxA[0]) * (temp_boxA[3] - temp_boxA[1]))
+    boxBArea = abs((temp_boxB[2] - temp_boxB[0]) * (temp_boxB[3] - temp_boxB[1]))
+
+    # compute the intersection over union by taking the intersection
+    # area and dividing it by the sum of prediction + ground-truth
+    # areas - the intersection area
+    iou = interArea / float(boxAArea + boxBArea - interArea)
+
+    # return the intersection over union value
+    return 1 - iou
 
 
-if __name__ == "__main__":
-    main()
+def filter_bboxes(
+    total_users: int, users: list, bboxes: list, obj: float, eps: float, iua: float
+):
+    """
+    If at least half of the users who saw this frame decided that there was an object, then we cluster
+    the bounding boxes based on the IoU criterion. If at least 80% of users agree on the annotation,
+    then we accept the cluster assignment
+
+    :param total_users: total number of users who saw this frame
+    :param users: list of user ids
+    :param bboxes: list of bounding boxes
+    :param obj: the minimum fraction of users who must have seen an object in order for it to be considered
+    :param eps: The maximum distance between two samples for them to be considered as in the same neighborhood
+    :param iua: the minimum percentage of users who must agree on a bounding box for it to be accepted
+    """
+
+    # If at least half of those who saw this frame decided that there was an object
+    user_count = pd.Series(users).nunique()
+    if user_count / total_users >= obj:
+        # Get clusters of annotation boxes based on iou criterion
+        cluster_ids = DBSCAN(min_samples=1, metric=bb_iou, eps=eps).fit_predict(bboxes)
+        # Count the number of users within each cluster
+        counter_dict = Counter(cluster_ids)
+        # Accept a cluster assignment if at least 80% of users agree on annotation
+        passing_ids = [k for k, v in counter_dict.items() if v / user_count >= iua]
+
+        indices = np.isin(cluster_ids, passing_ids)
+
+        final_boxes = []
+        for i in passing_ids:
+            # Compute median over all accepted bounding boxes
+            boxes = np.median(np.array(bboxes)[np.where(cluster_ids == i)], axis=0)
+            final_boxes.append(boxes)
+
+        return indices, final_boxes
+
+    else:
+        return [], bboxes
