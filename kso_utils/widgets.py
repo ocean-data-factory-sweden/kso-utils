@@ -69,7 +69,7 @@ def choose_footage(self, start_path: str = ".", folder_type: str = ""):
         return fc
 
 
-def select_random_clips(db_info_dict, movie_i: str):
+def select_random_clips(project: Project, movie_i: str):
     """
     > The function `select_random_clips` takes in a movie name and a dictionary containing information
     about the database, and returns a dictionary containing the starting points of the clips and the
@@ -82,7 +82,7 @@ def select_random_clips(db_info_dict, movie_i: str):
     :return: A dictionary with the starting points of the clips and the length of the clips.
     """
     # Create connection to db
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Query info about the movie of interest
     movie_df = pd.read_sql_query(
@@ -130,7 +130,7 @@ def select_random_clips(db_info_dict, movie_i: str):
     return clip_length_number
 
 
-def select_clip_n_len(db_info_dict: dict, movie_i: str):
+def select_clip_n_len(project: Project, movie_i: str):
     """
     This function allows the user to select the length of the clips to upload to the database
 
@@ -140,7 +140,7 @@ def select_clip_n_len(db_info_dict: dict, movie_i: str):
     """
 
     # Create connection to db
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Query info about the movie of interest
     movie_df = pd.read_sql_query(
@@ -176,14 +176,14 @@ def select_clip_n_len(db_info_dict: dict, movie_i: str):
     return clip_length_number
 
 
-def choose_species(db_info_dict: dict):
+def choose_species(project: Project):
     """
     This function generates a widget to select the species of interest
     :param db_info_dict: a dictionary containing the path to the database
     :type db_info_dict: dict
     """
     # Create connection to db
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Get a list of the species available
     species_list = pd.read_sql_query("SELECT label from species", conn)[
@@ -2490,13 +2490,13 @@ def update_meta(
             # Process the csv of interest and tests for compatibility with sql table
             csv_i, df_to_db = process_test_csv(
                 project=project,
-                db_info_dict=db_info_dict,
-                local_csv="local_" + meta_name + "_csv",
+                local_csv=str(db_info_dict["local_" + meta_name + "_csv"]),
             )
 
             # Log changes locally
             t_utils.log_meta_changes(
                 project=project,
+                db_info_dict=db_info_dict,
                 meta_key="local_" + meta_name + "_csv",
                 new_sheet_df=sheet_df,
             )

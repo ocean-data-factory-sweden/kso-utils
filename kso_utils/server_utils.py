@@ -106,7 +106,7 @@ def download_init_csv(project: Project, init_keys: list):
                 # Save the server paths in the dict
                 db_initial_info[str("server_" + i + "_csv")] = server_i_csv
 
-    elif server == "TEMPLATE":
+    elif project.server == "TEMPLATE":
         # Specify the url of the folder with csv files of the template project
         url_input = f"https://drive.google.com/uc?&confirm=s5vl&id=1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
 

@@ -24,6 +24,8 @@ from pathlib import Path
 
 import kso_utils.project_utils as project_utils
 import kso_utils.db_utils as db_utils
+import kso_utils.tutorials_utils as t_utils
+import kso_utils.movie_utils as movie_utils
 
 # Widget imports
 from IPython.display import HTML, display, clear_output
@@ -573,9 +575,7 @@ def retrieve__populate_zoo_info(
 
         # Populate the sql with subjects uploaded to Zooniverse
         if "db_path" in db_info_dict:
-            populate_subjects(
-                zoo_info_dict["subjects"], project, db_info_dict["db_path"]
-            )
+            populate_subjects(zoo_info_dict["subjects"], project, project.db_path)
         else:
             logging.info("No database path found. Subjects have not been added to db")
         return zoo_info_dict
@@ -1121,7 +1121,7 @@ def aggregate_classifications(
             agg_users, min_users = agg_params
 
         # Process the raw classifications
-        raw_class_df = process_clips(df)
+        raw_class_df = process_clips(project, df)
 
         # aggregate clips based on their labels
         agg_class_df = aggregate_labels(raw_class_df, agg_users, min_users)
@@ -1207,7 +1207,9 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
 
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(
-    self,
+    project: Project,
+    db_info_dict: dict,
+    zoo_info_dict: dict,
     species_names: list,
     n_frames_subject=3,
     subsample_up_to=100,
@@ -1219,13 +1221,13 @@ def get_frames(
         )
 
     # Transform species names to species ids
-    species_ids = self.get_species_ids(species_names)
+    species_ids = t_utils.get_species_ids(project, species_names)
 
-    conn = db_utils.create_connection(self.project.db_path)
+    conn = db_utils.create_connection(project.db_path)
 
-    if self.project.movie_folder is None:
+    if project.movie_folder is None:
         # Extract frames of interest from a folder with frames
-        if self.project.server == "SNIC":
+        if project.server == "SNIC":
             # Specify volume allocated by SNIC
             snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
@@ -1251,7 +1253,7 @@ def get_frames(
     else:
         ## Choose the Zooniverse workflow/s with classified clips to extract the frames from ####
         # Select the Zooniverse workflow/s of interest
-        workflows_out = WidgetMaker(self.zoo_info["workflows"])
+        workflows_out = WidgetMaker(zoo_info_dict["workflows"])
         display(workflows_out)
 
         # Select the agreement threshold to aggregrate the responses
@@ -1260,7 +1262,7 @@ def get_frames(
         agg_params = choose_agg_parameters("clip")
 
         # Select the temp location to store frames before uploading them to Zooniverse
-        if self.project.server == "SNIC":
+        if project.server == "SNIC":
             # Specify volume allocated by SNIC
             snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             df = FileChooser(str(Path(snic_path, "tmp_dir")))
@@ -1271,16 +1273,16 @@ def get_frames(
         # Callback function
         def extract_files(chooser):
             # Get the aggregated classifications based on the specified agreement threshold
-            clips_df = self.get_classifications(
+            clips_df = get_classifications(
                 workflows_out.checks,
-                self.zoo_info["workflows"],
+                zoo_info_dict["workflows"],
                 "clip",
-                self.zoo_info["classifications"],
-                self.project.db_path,
+                zoo_info_dict["classifications"],
+                project.db_path,
             )
 
-            agg_clips_df, raw_clips_df = self.aggregate_classifications(
-                clips_df, "clip", agg_params=agg_params
+            agg_clips_df, raw_clips_df = aggregate_classifications(
+                project, clips_df, "clip", agg_params=agg_params
             )
 
             # Match format of species name to Zooniverse labels
@@ -1299,28 +1301,31 @@ def get_frames(
                 sp_agg_clips_df = sp_agg_clips_df.sample(subsample_up_to)
 
             # Populate the db with the aggregated classifications
-            populate_agg_annotations(sp_agg_clips_df, "clip", self.project)
+            populate_agg_annotations(sp_agg_clips_df, "clip", project)
 
             # Get df of frames to be extracted
-            frame_df = self.get_species_frames(
+            frame_df = movie_utils.get_species_frames(
+                project,
+                db_info_dict,
                 sp_agg_clips_df,
                 species_ids,
-                conn,
                 n_frames_subject,
             )
 
             # Check the frames haven't been uploaded to Zooniverse
-            frame_df = self.check_frames_uploaded(frame_df, species_ids, conn)
+            frame_df = t_utils.check_frames_uploaded(project, frame_df, species_ids)
 
             # Extract the frames from the videos and store them in the temp location
-            if self.project.server == "SNIC":
+            if project.server == "SNIC":
                 folder_name = chooser.selected
                 frames_folder = Path(
                     folder_name, "_".join(species_names_zoo) + "_frames/"
                 )
             else:
                 frames_folder = "_".join(species_names_zoo) + "_frames/"
-            chooser.df = self.extract_frames(frame_df, frames_folder)
+            chooser.df = movie_utils.extract_frames(
+                project, db_info_dict, frame_df, frames_folder
+            )
 
         # Register callback function
         df.register_callback(extract_files)
@@ -1598,7 +1603,7 @@ def modify_frames(
         )
     else:
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
-        if project.output_path is not None:
+        if hasattr(project, "output_path"):
             mod_frames_folder = project.output_path + mod_frames_folder
 
     # Specify the path of the modified frames
@@ -1693,7 +1698,7 @@ def format_to_gbif_occurence(
     if classified_by == "citizen_scientists":
         #### Retrieve subject information #####
         # Create connection to db
-        conn = db_utils.create_connection(db_info_dict["db_path"])
+        conn = db_utils.create_connection(project.db_path)
 
         # Add annotations to db
         populate_agg_annotations(df, subject_type, project)
@@ -1987,3 +1992,121 @@ def get_classifications(
     )
 
     return classes_df
+
+
+def process_classifications(
+    project: Project,
+    classifications_data,
+    subject_type: str,
+    agg_params: list,
+    summary: bool = False,
+    db_connection=None,
+):
+    """
+    It takes in a dataframe of classifications, a subject type (clip or frame), a list of
+    aggregation parameters, and a boolean for whether or not to return a summary of the
+    classifications.
+
+    It then returns a dataframe of aggregated classifications.
+
+    Let's break it down.
+
+    First, we check that the length of the aggregation parameters is correct for the subject type.
+
+    Then, we define a function called `get_classifications` that takes in a dataframe of
+    classifications and a subject type.
+
+    This function queries the subjects table for the subject type and then merges the
+    classifications dataframe with the subjects dataframe.
+
+    It then returns the merged dataframe.
+
+    Finally, we call the `aggregrate_classifications` function from the `t8_utils` module, passing
+    in the dataframe returned by `get_classifications`, the subject
+
+    :param classifications_data: the dataframe of classifications from the Zooniverse API
+    :param subject_type: This is the type of subject you want to retrieve classifications for. This
+           can be either "clip" or "frame"
+    :type subject_type: str
+    :param agg_params: list
+    :type agg_params: list
+    :param summary: If True, the output will be a summary of the classifications, with the number of
+           classifications per label, defaults to False
+    :type summary: bool (optional)
+    """
+
+    t = False
+    if subject_type == "clip":
+        t = len(agg_params) == 2
+    elif subject_type == "frame":
+        t = len(agg_params) == 5
+
+    if not t:
+        logging.error("Incorrect agg_params length for subject type")
+        return
+
+    def get_classifications(classes_df, subject_type):
+        conn = db_connection
+        if subject_type == "frame":
+            # Query id and subject type from the subjects table
+            subjects_df = pd.read_sql_query(
+                "SELECT id, subject_type, \
+                                                https_location, filename, frame_number, movie_id FROM subjects \
+                                                WHERE subject_type=='frame'",
+                conn,
+            )
+
+        else:
+            # Query id and subject type from the subjects table
+            subjects_df = pd.read_sql_query(
+                "SELECT id, subject_type, \
+                                                https_location, filename, clip_start_time, movie_id FROM subjects \
+                                                WHERE subject_type=='clip'",
+                conn,
+            )
+
+        # Ensure id format matches classification's subject_id
+        classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
+        subjects_df["id"] = subjects_df["id"].astype("Int64")
+
+        # Add subject information based on subject_ids
+        classes_df = pd.merge(
+            classes_df,
+            subjects_df,
+            how="left",
+            left_on="subject_ids",
+            right_on="id",
+        )
+
+        if classes_df[["subject_type", "https_location"]].isna().any().any():
+            # Exclude classifications from missing subjects
+            filtered_class_df = classes_df.dropna(
+                subset=["subject_type", "https_location"], how="any"
+            ).reset_index(drop=True)
+
+            # Report on the issue
+            logging.info(
+                f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}"
+                f" classifications out of {classes_df.shape[0]}"
+                f" missing subject info. Maybe the subjects have been removed from Zooniverse?"
+            )
+
+            classes_df = filtered_class_df
+
+        logging.info(
+            f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
+        )
+
+        return classes_df
+
+    agg_class_df, raw_class_df = aggregate_classifications(
+        project,
+        get_classifications(classifications_data, subject_type),
+        subject_type,
+        agg_params,
+    )
+    if summary:
+        agg_class_df = (
+            agg_class_df.groupby("label")["subject_ids"].agg("count").to_frame()
+        )
+    return agg_class_df, raw_class_df

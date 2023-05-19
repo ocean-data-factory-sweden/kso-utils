@@ -39,6 +39,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 def log_meta_changes(
     project: Project,
+    db_info_dict: dict,
     meta_key: str,
     new_sheet_df: pd.DataFrame,
 ):
@@ -49,9 +50,7 @@ def log_meta_changes(
         "change_info": compare(
             {
                 int(k): v
-                for k, v in pd.read_csv(project.db_info[meta_key])
-                .to_dict("index")
-                .items()
+                for k, v in pd.read_csv(db_info_dict[meta_key]).to_dict("index").items()
             },
             {int(k): v for k, v in new_sheet_df.to_dict("index").items()},
         ),
@@ -1655,7 +1654,7 @@ def create_clips(
     movie_path: str,
     db_info_dict: dict,
     clip_selection,
-    project: project_utils.Project,
+    project: Project,
     modification_details: dict,
     gpu_available: bool,
     pool_size: int = 4,
@@ -1878,20 +1877,24 @@ def check_frames_uploaded(
     frames_df: pd.DataFrame,
     species_ids: list,
 ):
+    from kso_utils.db_utils import create_connection
+
+    conn = create_connection(project.db_path)
+
     if project.server == "SNIC":
         # Get info of frames of the species of interest already uploaded
         if len(species_ids) <= 1:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, \
             frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id=='{species_ids[0]}' AND subject_type='frame'",
-                project.db_connection,
+                conn,
             )
 
         else:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
             {tuple(species_ids)} AND subject_type='frame'",
-                project.db_connection,
+                conn,
             )
 
         # Filter out frames that have already been uploaded

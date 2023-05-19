@@ -69,6 +69,13 @@ class ProjectProcessor:
         # Create empty db and populate with local csv files data
         self.setup_db()
 
+        # Get server details from the db_info
+        self.server_info = {
+            x: self.db_info[x]
+            for x in ["client", "sftp_client"]
+            if x in self.db_info.keys()
+        }
+
         ############ TO REVIEW #############
         # Check if template project
         if self.project.server == "SNIC":
@@ -132,10 +139,10 @@ class ProjectProcessor:
             ]
 
         # Download csv files from the server if needed and store their server path
-        server_utils.download_init_csv(self.project, init_keys)
+        server_utils.download_init_csv(self.project, self.init_keys)
 
         # Store the paths of the local csv files
-        self.load_meta(self, base_keys=self.init_keys)
+        self.load_meta(base_keys=self.init_keys)
 
     def setup_db(self):
         """
@@ -143,26 +150,15 @@ class ProjectProcessor:
         It also return the db connection
         :return: The database connection object.
         """
+
         # Create a new database for the project
         db_utils.create_db(self.project.db_path)
 
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
-        # Get a list of all the files in the csv file directory.
-        files = os.listdir(self.project.csv_folder)
-
-        # Specify the csvs to populate the db
-        csv_interest = ["movies", "species", "sites"]
-
-        # Filter the list of files to only include those of interest.
-        filtered_files = [
-            file for file in files if any(csv_i in file for csv_i in csv_interest)
-        ]
-
-        # Populate the sites, movies and species tables of the db
-        for i in filtered_files:
-            db_utils.populate_db(self.project, i)
+        for i in self.db_info.values():
+            db_utils.populate_db(self.project, str(i))
 
     # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
@@ -199,9 +195,7 @@ class ProjectProcessor:
 
     def choose_workflows(self, generate_export: bool = False):
         self.set_zoo_info(generate_export=generate_export)
-        self.workflow_widget = self.modules["t8_utils"].WidgetMaker(
-            self.zoo_info["workflows"]
-        )
+        self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
         display(self.workflow_widget)
 
     def set_zoo_info(self, generate_export: bool = False):
@@ -224,7 +218,7 @@ class ProjectProcessor:
         the project
         :return: The zoo_info is being returned.
         """
-        if "db_path" in self.db_info:
+        if hasattr(self.project, "db_path"):
             if hasattr(self, "workflow_widget"):
                 # If the workflow widget is used, retrieve a subset of the subjects to build the db
                 names, workflow_versions = [], []
@@ -234,7 +228,7 @@ class ProjectProcessor:
                         list(self.workflow_widget.checks.values())[i + 2]
                     )
 
-                self.project.zu_workflows = self.modules["t8_utils"].get_workflow_ids(
+                self.project.zu_workflows = zu_utils.get_workflow_ids(
                     self.zoo_info["workflows"], names
                 )
 
@@ -255,12 +249,12 @@ class ProjectProcessor:
                 subjects_series = self.zoo_info["subjects"].copy()
 
             # Safely remove subjects table
-            db_utils.drop_table(self.db_info["db_path"], table_name="subjects")
+            db_utils.drop_table(self.project.db_path, table_name="subjects")
 
             if len(subjects_series) > 0:
                 # Fill or re-fill subjects table
                 zu_utils.populate_subjects(
-                    subjects_series, self.project, self.db_info["db_path"]
+                    subjects_series, self.project, self.project.db_path
                 )
             else:
                 logging.error(
@@ -295,6 +289,22 @@ class ProjectProcessor:
 
         :param base_keys: the base keys to load
         """
+        # Filter the list of files to only include those of interest.
+        filtered_files = [
+            file
+            for file in os.listdir(self.project.csv_folder)
+            if any(csv_i in file for csv_i in base_keys)
+        ]
+
+        # Populate the sites, movies and species tables of the db
+        for i in filtered_files:
+            if "sites" in i:
+                self.db_info["local_sites_csv"] = Path(self.project.csv_folder, i)
+            if "movies" in i:
+                self.db_info["local_movies_csv"] = Path(self.project.csv_folder, i)
+            if "species" in i:
+                self.db_info["local_species_csv"] = Path(self.project.csv_folder, i)
+
         for key, val in self.db_info.items():
             if any("local_" + ext in key for ext in base_keys):
                 setattr(self, key, pd.read_csv(val))
@@ -550,7 +560,7 @@ class ProjectProcessor:
         )
 
     def check_species_meta(self):
-        return db_utils.check_species_meta(self.project)
+        return db_utils.check_species_meta(self.project, self.db_info)
 
     def check_sites_meta(self):
         # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
@@ -641,7 +651,7 @@ class ProjectProcessor:
         changes to the local csv file of the new movies that should be added. It creates a metadata row
         for each new movie, which should be filled in by the user before uploading can continue.
         """
-        movie_list = t_utils.choose_new_videos_to_upload()
+        movie_list = kso_widgets.choose_new_videos_to_upload()
         button = widgets.Button(
             description="Click to upload movies",
             disabled=False,
@@ -729,11 +739,15 @@ class ProjectProcessor:
         # t3_utils.create_clips
 
         if is_example:
-            clip_selection = self.select_random_clips(movie_i=movie_name)
+            clip_selection = kso_widgets.select_random_clips(
+                project=self.project, movie_i=movie_name
+            )
         else:
-            clip_selection = self.select_clip_n_len(movie_i=movie_name)
+            clip_selection = kso_widgets.select_clip_n_len(
+                project=self.project, movie_i=movie_name
+            )
 
-        clip_modification = t_utils.clip_modification_widget()
+        clip_modification = kso_widgets.clip_modification_widget()
 
         button = widgets.Button(
             description="Click to extract clips.",
@@ -755,7 +769,8 @@ class ProjectProcessor:
                 gpu_available=use_gpu,
                 pool_size=pool_size,
             )
-            mod_clips = self.create_modified_clips(
+            mod_clips = t_utils.create_modified_clips(
+                self.project,
                 self.generated_clips.clip_path,
                 movie_name,
                 clip_modification.checks,
@@ -776,7 +791,7 @@ class ProjectProcessor:
         :param movie_name: The name of the movie you want to check if it's uploaded
         :type movie_name: str
         """
-        movie_utils.check_movie_uploaded(self.db_info, movie_i=movie_name)
+        movie_utils.check_movie_uploaded(self.project, movie_i=movie_name)
 
     def generate_zu_frames(self):
         """
@@ -784,7 +799,7 @@ class ProjectProcessor:
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
         """
 
-        frame_modification = t_utils.clip_modification_widget()
+        frame_modification = kso_widgets.clip_modification_widget()
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -795,7 +810,8 @@ class ProjectProcessor:
         )
 
         def on_button_clicked(b):
-            self.generated_frames = self.modify_frames(
+            self.generated_frames = zu_utils.modify_frames(
+                project=self.project,
                 frames_to_upload_df=self.frames_to_upload_df.df.reset_index(drop=True),
                 species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
@@ -833,8 +849,8 @@ class ProjectProcessor:
         containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
         function that applies the given function to each element of a list of movie_files.
         """
-        frame_modification = t_utils.clip_modification_widget()
-        species_list = self.choose_species()
+        frame_modification = kso_widgets.clip_modification_widget()
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -893,7 +909,7 @@ class ProjectProcessor:
         :type subsample_up_to: int (optional)
         """
 
-        species_list = kso_widgets.choose_species()
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Click to fetch frames",
@@ -906,8 +922,10 @@ class ProjectProcessor:
         def on_button_clicked(b):
             self.species_of_interest = species_list.value
             self.frames_to_upload_df = zu_utils.get_frames(
+                project=self.project,
+                zoo_info_dict=self.zoo_info,
+                db_info_dict=self.db_info,
                 species_names=species_list.value,
-                db_path=self.db_info["db_path"],
                 n_frames_subject=n_frames_subject,
                 subsample_up_to=subsample_up_to,
             )
@@ -952,10 +970,9 @@ class ProjectProcessor:
         the database
         """
         t_utils.check_frames_uploaded(
-            self.frames_to_upload_df,
             self.project,
+            self.frames_to_upload_df,
             self.species_of_interest,
-            self.db_connection,
         )
 
     # t8
@@ -978,10 +995,12 @@ class ProjectProcessor:
         self, classifications_data, subject_type, agg_params, summary
     ):
         return zu_utils.process_classifications(
+            project=self.project,
             classifications_data=classifications_data,
             subject_type=subject_type,
             agg_params=agg_params,
             summary=summary,
+            db_connection=self.db_connection,
         )
 
     def process_annotations(self):
@@ -1035,7 +1054,7 @@ class MLProjectProcessor(ProjectProcessor):
         model_selected = t_utils.choose_model_type()
 
         async def f():
-            x = await t_utils.single_wait_for_change(model_selected, "value")
+            x = await kso_widgets.single_wait_for_change(model_selected, "value")
             self.model_type = x
             self.modules.update(self.load_yolov5_modules())
             if all(["train", "detect", "val"]) in self.modules:
@@ -1082,7 +1101,7 @@ class MLProjectProcessor(ProjectProcessor):
         track_frames: bool = False,
         n_tracked_frames: int = 0,
     ):
-        species_list = self.choose_species()
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Aggregate frames",

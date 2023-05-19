@@ -285,7 +285,7 @@ def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
     # Create connection to db
     from kso_utils.db_utils import create_connection
 
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Query info about the movie of interest
     movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
@@ -568,7 +568,7 @@ def check_movies_from_server(project: Project):
     return missing_from_server, missing_from_csv
 
 
-def check_movie_uploaded(db_info_dict, movie_i: str):
+def check_movie_uploaded(project: Project, movie_i: str):
     """
     This function takes in a movie name and a dictionary containing the path to the database and returns
     a boolean value indicating whether the movie has already been uploaded to Zooniverse
@@ -582,7 +582,7 @@ def check_movie_uploaded(db_info_dict, movie_i: str):
     # Create connection to db
     from kso_utils.db_utils import create_connection
 
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Query info about the clip subjects uploaded to Zooniverse
     subjects_df = pd.read_sql_query(
@@ -607,6 +607,7 @@ def check_movie_uploaded(db_info_dict, movie_i: str):
 
 def get_species_frames(
     project: Project,
+    db_info_dict: dict,
     agg_clips_df: pd.DataFrame,
     species_ids: list,
     n_frames_subject: int,
@@ -619,11 +620,14 @@ def get_species_frames(
     """
 
     from kso_utils.zooniverse_utils import clean_label
+    from kso_utils.db_utils import create_connection
+
+    conn = create_connection(project.db_path)
 
     # Retrieve list of subjects
     subjects_df = pd.read_sql_query(
         "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
-        project.db_connection,
+        conn,
     )
 
     agg_clips_df["subject_ids"] = pd.to_numeric(
@@ -646,7 +650,7 @@ def get_species_frames(
     server = project.server
 
     if server in ["SNIC", "TEMPLATE"]:
-        movies_df = retrieve_movie_info_from_server(project, project.server_dict)
+        movies_df = retrieve_movie_info_from_server(project, db_info_dict=db_info_dict)
 
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
@@ -669,7 +673,7 @@ def get_species_frames(
     # Retrieve species info
     species_df = pd.read_sql_query(
         "SELECT id, label, scientificName FROM species",
-        project.db_connection,
+        conn,
     )
 
     # Retrieve species info
@@ -713,6 +717,7 @@ def get_species_frames(
 # Function to extract selected frames from videos
 def extract_frames(
     project: Project,
+    db_info_dict: dict,
     df: pd.DataFrame,
     frames_folder: str,
 ):
@@ -738,9 +743,7 @@ def extract_frames(
         [os.chmod(root, 0o777) for root, dirs, files in os.walk(frames_folder)]
 
     for movie in df["fpath"].unique():
-        url = get_movie_path(
-            project=project, db_info_dict=project.server_info, f_path=movie
-        )
+        url = get_movie_path(project=project, db_info_dict=db_info_dict, f_path=movie)
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")

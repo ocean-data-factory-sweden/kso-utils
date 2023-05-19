@@ -346,7 +346,7 @@ def frame_aggregation(
     # Establish connection to database
     from kso_utils.db_utils import create_connection
 
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(project.db_path)
 
     # Select the id/s of species of interest
     if class_list[0] == "":

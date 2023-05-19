@@ -206,16 +206,16 @@ def get_id(
     return id_value
 
 
-def get_column_names_db(db_info_dict: pd.DataFrame, table_i: str):
+def get_column_names_db(db_path: str, table_i: str):
     """
     > This function returns the "column" names of the sql table of interest
 
-    :param db_info_dict: The dictionary containing the database information
+    :param db_path: path of the database file
     :param table_i: a string of the name of the table of interest
     :return: A list of column names of the table of interest
     """
     # Connect to the db
-    conn = create_connection(db_info_dict["db_path"])
+    conn = create_connection(db_path)
 
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
@@ -266,7 +266,7 @@ def populate_db(project: project_utils.Project, local_csv: str):
 
     # Add values of the processed csv to the sql table of interest
     add_to_table(
-        project.db_initial_info["db_path"],
+        project.db_path,
         csv_i,
         [tuple(i) for i in df.values],
         len(df.columns),
@@ -282,7 +282,7 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
 
     """
     # Load the csv with the information of interest
-    df = pd.read_csv(project.db_info_dict[local_csv])
+    df = pd.read_csv(local_csv)
 
     # Save the category of interest and process the df
     if "sites" in local_csv:
@@ -298,7 +298,7 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
         field_names, csv_i, df = process_photos_df(df, project)
 
     # Add the names of the basic columns in the sql db
-    field_names = field_names + get_column_names_db(df, csv_i)
+    field_names = field_names + get_column_names_db(project.db_path, csv_i)
     field_names.remove("id")
 
     # Select relevant fields
@@ -310,7 +310,7 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
     return csv_i, df
 
 
-def process_sites_df(df: pd.DataFrame, project: Project):
+def process_sites_df(df: pd.DataFrame, project: project_utils.Project):
     """
     > This function processes the sites dataframe and returns a string with the category of interest.
     :param df: a pandas dataframe of the information of interest
@@ -332,7 +332,7 @@ def process_sites_df(df: pd.DataFrame, project: Project):
     return field_names, csv_i, df
 
 
-def process_movies_df(df: pd.DataFrame, project: Project):
+def process_movies_df(df: pd.DataFrame, project: project_utils.Project):
     """
     > This function processes the movies dataframe and returns a string with the category of interest
     :param df: a pandas dataframe of the information of interest
@@ -349,16 +349,16 @@ def process_movies_df(df: pd.DataFrame, project: Project):
         df = process_koster_movies_csv(df)
 
     # Reference movies with their respective sites
-    sites_df = pd.read_sql_query(
-        "SELECT id, siteName FROM sites", project.db_connection
-    )
+    conn = create_connection(project.db_path)
+
+    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
     sites_df = sites_df.rename(columns={"id": "site_id"})
 
     # Merge movies and sites dfs
     df = pd.merge(df, sites_df, how="left", on="siteName")
 
     # Prevent column_name error
-    df = df.rename(columns={"Author": "author"}, inplace=True)
+    df = df.rename(columns={"Author": "author"})
 
     # Select only those fields of interest
     if "fpath" not in df.columns:
@@ -373,7 +373,7 @@ def process_movies_df(df: pd.DataFrame, project: Project):
     return field_names, csv_i, df
 
 
-def process_photos_df(df: pd.DataFrame, project: Project):
+def process_photos_df(df: pd.DataFrame, project: project_utils.Project):
     """
     > This function processes the photos dataframe and returns a string with the category of interest
     :param df: a pandas dataframe of the information of interest
@@ -393,7 +393,7 @@ def process_photos_df(df: pd.DataFrame, project: Project):
     return field_names, csv_i, df
 
 
-def process_species_df(df: pd.DataFrame, project: Project):
+def process_species_df(df: pd.DataFrame, project: project_utils.Project):
     """
     > This function processes the species dataframe and returns a string with the category of interest
     :param df: a pandas dataframe of the information of interest
@@ -570,7 +570,7 @@ def get_col_names(project: project_utils.Project, local_csv: str):
         raise ValueError("The local csv doesn't have a table match in the schema")
 
 
-def check_species_meta(project: project_utils.Project):
+def check_species_meta(project: project_utils.Project, db_info_dict: dict):
     """
     > The function `check_species_meta` loads the csv with species information and checks if it is empty
 
@@ -578,10 +578,10 @@ def check_species_meta(project: project_utils.Project):
     :param project: The project name
     """
     # Load the csv with movies information
-    species_df = pd.read_csv(project.db_info["local_species_csv"])
+    species_df = pd.read_csv(db_info_dict["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    conn = create_connection(project.db_info["db_path"])
+    conn = create_connection(project.db_path)
     data = conn.execute("SELECT * FROM species")
     field_names = [i[0] for i in data.description]
 
