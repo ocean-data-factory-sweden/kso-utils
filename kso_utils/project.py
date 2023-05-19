@@ -870,7 +870,7 @@ class ProjectProcessor:
                     in [".mov", ".mp4", ".avi", ".mkv"]
                 ]
             )
-            
+
             results = g_utils.parallel_map(
                 self.extract_custom_frames,
                 movie_files,
