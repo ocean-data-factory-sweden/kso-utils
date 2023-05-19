@@ -886,7 +886,7 @@ class ProjectProcessor:
                 self.frames_to_upload_df = pd.concat(results)
                 self.frames_to_upload_df["species_id"] = pd.Series(
                     [
-                        self.modules["t4_utils"].get_species_ids(
+                        t_utils.get_species_ids(
                             self.project, species_list.value
                         )
                     ]
