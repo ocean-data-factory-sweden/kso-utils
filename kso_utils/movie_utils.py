@@ -65,32 +65,29 @@ def get_fps_duration(movie_path: str):
     return fps, duration
 
 
-def get_movie_path(f_path: str, db_info_dict: dict, project: Project):
+def get_movie_path(f_path: str, server_info: dict, project: Project):
     """
     Function to get the path (or url) of a movie
 
     :param f_path: string with the original path of a movie
-    :param db_info_dict: a dictionary with the initial information of the project
+    :param server_info: a dictionary containing the path to the database and the client to the server
     :param project: the project object
     :return: a string containing the path (or url) where the movie of interest can be access from
 
     """
-    # Get the project-specific server
-    server = project.server
-
-    if server == "AWS":
+    if project.server == "AWS":
         # Extract the key from the orignal path of the movie
         movie_key = urllib.parse.unquote(f_path).split("/", 3)[3]
 
         # Generate presigned url
-        movie_url = db_info_dict["client"].generate_presigned_url(
+        movie_url = server_info["client"].generate_presigned_url(
             "get_object",
-            Params={"Bucket": db_info_dict["bucket"], "Key": movie_key},
+            Params={"Bucket": project.bucket, "Key": movie_key},
             ExpiresIn=86400,
         )
         return movie_url
 
-    elif server == "SNIC":
+    elif project.server == "SNIC":
         logging.error("Getting the path of the movies is still work in progress")
         return f_path
 
@@ -215,82 +212,93 @@ def standarise_movie_format(
         logging.info(f"{movie_filename} format is standard.")
 
 
-def retrieve_movie_info_from_server(project: Project, db_info_dict: dict):
+def retrieve_movie_info_from_server(project: Project, server_info: dict, db_connection):
     """
     This function uses the project information and the database information, and returns a dataframe with the
     movie information
 
     :param project: the project object
-    :param db_info_dict: a dictionary containing the path to the database and the client to the server
-    :type db_info_dict: dict
+    :param server_info: a dictionary containing the path to the database and the client to the server
+    :type server_info: dict
     :return: A dataframe with the following columns (index, movie_id, fpath, spath, exists, filename_ext)
 
     """
 
     from kso_utils.server_utils import get_snic_files, get_matching_s3_keys
 
-    server = project.server
-    bucket_i = project.bucket
-    movie_folder = project.movie_folder
+    if not server_info and not project.server == "LOCAL":
+        raise ValueError(
+            "There is no information to connect to the server with the movies."
+        )
 
-    if server == "AWS":
-        logging.info("Retrieving movies from AWS server")
-        # Retrieve info from the bucket
-        server_df = get_matching_s3_keys(
-            client=db_info_dict["client"],
-            bucket=bucket_i,
+    # Retrieve the list of local movies available
+    elif project.server == "LOCAL":
+        logging.info("Retrieving movies that are available locally")
+        # Read the movie files from the movie_path folder
+        local_files = os.listdir(project.movie_folder)
+        available_movies_list = [
+            filename
+            for filename in local_files
+            if filename.endswith(get_movie_extensions())
+        ]
+
+        # Save the list of movies as a pd df
+        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+
+    # Retrieve the list of movies available in AWS
+    elif project.server == "AWS":
+        logging.info("Retrieving movies that are available in AWS")
+        # List all the movies available from the S3 bucket
+        available_movies_list = get_matching_s3_keys(
+            client=server_info["client"],
+            bucket=project.bucket,
             suffix=get_movie_extensions(),
         )
-        # Get the fpath(html) from the key
-        server_df["spath"] = server_df["Key"].apply(
-            lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
-            + urllib.parse.quote(x, safe="://").replace("\\", "/")
-        )
 
-    elif server == "SNIC":
-        if "client" in db_info_dict:
+        # Get the fpath(html) from the key
+        available_movies_list = [
+            "http://marine-buv.s3.ap-southeast-2.amazonaws.com/" + filename
+            for filename in available_movies_list
+        ]
+
+        # Get the fpath(html) from the key
+        # server_df["spath"] = server_mov_list.apply(
+        #     lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
+        #     + urllib.parse.quote(x, safe="://").replace("\\", "/")
+        # )
+
+        # Save the list of movies as a pd df
+        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+
+    # Retrieve the list of movies available in Wildlife.ai
+    elif project.server == "TEMPLATE":
+        # Combine wildlife.ai storage and filenames of the movie examples
+        available_movies_list = [
+            "https://www.wildlife.ai/wp-content/uploads/2022/06/" + filename
+            for filename in project.local_movies_csv["filename"].tolist()
+        ]
+
+        # Save the list of movies as a pd df
+        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+
+    # Retrieve the list of movies available in SNIC
+    elif project.server == "SNIC":
+        if "client" in server_info:
             server_df = get_snic_files(
-                client=db_info_dict["client"], folder=movie_folder
+                client=server_info["client"], folder=project.movie_folder
             )
         else:
             logging.error("No database connection could be established.")
             return pd.DataFrame(columns=["filename"])
 
-    elif server == "LOCAL":
-        if [movie_folder, bucket_i] == ["None", "None"]:
-            logging.info(
-                "No movies to be linked. If you do not have any movie files, please use Tutorial 4 instead."
-            )
-            return pd.DataFrame(columns=["filename"])
-        else:
-            server_files = os.listdir(movie_folder)
-            server_df = pd.Series(server_files, name="spath").to_frame()
-    elif server == "TEMPLATE":
-        # Combine wildlife.ai storage and filenames of the movie examples
-        server_df = pd.read_csv(db_info_dict["local_movies_csv"])[["filename"]]
-
-        # Get the fpath(html) from the key
-        server_df = server_df.rename(columns={"filename": "fpath"})
-
-        server_df["spath"] = server_df["fpath"].apply(
-            lambda x: "https://www.wildlife.ai/wp-content/uploads/2022/06/" + str(x), 1
-        )
-
-        # Remove fpath values
-        server_df.drop(columns=["fpath"], axis=1, inplace=True)
-
     else:
         raise ValueError("The server type you selected is not currently supported.")
 
-    # Create connection to db
-    from kso_utils.db_utils import create_connection
-
-    conn = create_connection(project.db_path)
-
     # Query info about the movie of interest
-    movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
+    movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
     movies_df = movies_df.rename(columns={"id": "movie_id"})
 
+    print("movies_df", movies_df)
     # If full path is provided, separate into filename and full path
     server_df["spath_full"] = server_df["spath"]
     server_df["spath"] = server_df["spath"].apply(lambda x: Path(x).name, 1)

@@ -67,7 +67,7 @@ class ProjectProcessor:
         # Create empty db and populate with local csv files data
         self.setup_db()
 
-        ############ TO REVIEW in SNIC#############
+        ############ TO REVIEW #############
         # Check if template project
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):
@@ -75,8 +75,6 @@ class ProjectProcessor:
                 status = self.mount_snic()
                 if status == 0:
                     return
-
-    #
 
     ############# Finish Review ###################
 
@@ -279,11 +277,10 @@ class ProjectProcessor:
 
     def get_movie_info(self):
         """
-        It retrieves a csv file from the server, and then updates the local variable server_movies_csv
-        with the contents of that csv file
+        This function checks what movies from the movies csv are available
         """
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
-            self.project, self.db_info
+            self.project, self.server_info, self.db_connection
         )
         logging.info("server_movies_csv updated")
 

@@ -171,13 +171,13 @@ def get_ml_data(project: Project):
 
 
 def update_csv_server(
-    project: Project, db_info_dict: dict, orig_csv: str, updated_csv: str
+    project: Project, server_info: dict, orig_csv: str, updated_csv: str
 ):
     """
     > This function updates the original csv file with the updated csv file in the server
 
     :param project: the project object
-    :param db_info_dict: a dictionary containing the following keys:
+    :param server_info: a dictionary containing the path to the database and the client to the server
     :type db_info_dict: dict
     :param orig_csv: the original csv file name
     :type orig_csv: str
@@ -192,7 +192,7 @@ def update_csv_server(
         logging.info("Updating csv file in AWS server")
         # Update csv to AWS
         upload_file_to_s3(
-            db_info_dict["client"],
+            server_info["client"],
             bucket=db_info_dict["bucket"],
             key=str(db_info_dict[orig_csv]),
             filename=str(db_info_dict[updated_csv]),
@@ -245,15 +245,7 @@ def upload_movie_server(
     if project.server == "AWS":
         # Retrieve the key of the movie of interest
         f_path_key = f_path.split("/").str[:2].str.join("/")
-        logging.info(f_path_key)
-
-        # Upload the movie to AWS
-        # upload_file_to_s3(db_info_dict["client"],
-        # bucket=db_info_dict["bucket"],
-        # key=f_path_key,
-        # filename=movie_path)
-
-        # logging.info(f"{movie_path} has been added to the server")
+        logging.info(f_path_key)    
 
     elif project.server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
@@ -661,7 +653,7 @@ def update_new_deployments(
 
         # Get a dataframe of movies from the deployment
         movies_s3_pd = get_matching_s3_keys(
-            db_info_dict["client"],
+            project.server_info["client"],
             db_info_dict["bucket"],
             prefix=deployment_i,
             suffix=get_movie_extensions(),
@@ -690,7 +682,7 @@ def update_new_deployments(
                 # Download the files from the S3 bucket
                 if not os.path.exists(movie_i_output):
                     download_object_from_s3(
-                        client=db_info_dict["client"],
+                        client=project.server_info["client"],
                         bucket=db_info_dict["bucket"],
                         key=movie_i,
                         filename=movie_i_output,
@@ -732,7 +724,7 @@ def update_new_deployments(
 
             # Upload the concatenated video to the S3
             upload_file_to_s3(
-                db_info_dict["client"],
+                project.server_info["client"],
                 bucket=db_info_dict["bucket"],
                 key=deployment_i + "/" + filename,
                 filename=filename,
@@ -753,7 +745,7 @@ def update_new_deployments(
             # Delete the movies from the S3 bucket
             for movie_i in sorted(movie_files_server):
                 delete_file_from_s3(
-                    client=db_info_dict["client"],
+                    client=project.server_info["client"],
                     bucket=db_info_dict["bucket"],
                     key=movie_i,
                 )
@@ -784,7 +776,7 @@ def check_deployment(
 
     # Get list of movies available in server from that survey
     deployments_in_server_df = get_matching_s3_keys(
-        db_info_dict["client"], db_info_dict["bucket"], prefix=survey_server_name
+        project.server_info["client"], db_info_dict["bucket"], prefix=survey_server_name
     )
 
     # Get a list of the movies in the server
@@ -849,7 +841,7 @@ def check_deployment(
 
 
 def update_new_deployments(
-    db_info_dict: dict,
+    server_info: dict,
     deployment_filenames: list,
     survey_server_name: str,
     deployment_date: widgets.Widget,
@@ -859,7 +851,7 @@ def update_new_deployments(
     and the date of the deployment, and it returns a list of the movies in the server
 
     :param deployment_filenames: a list of the filenames of the videos you want to concatenate
-    :param db_info_dict: a dictionary with the following keys:
+    :param server_info: a dictionary containing the path to the database and the client to the server
     :param survey_server_name: the name of the folder in the server where the survey is stored
     :param deployment_date: the date of the deployment
     :return: A list of the movies in the server
@@ -877,7 +869,9 @@ def update_new_deployments(
 
         # Retrieve files info from the deployment folder of interest
         deployments_files = get_matching_s3_keys(
-            db_info_dict["client"], db_info_dict["bucket"], prefix=deployment_folder
+            server_info["client"],
+            db_info_dict["bucket"],
+            prefix=deployment_folder,
         )
         # Get a list of the movies in the server
         files_server = deployments_files.Key.to_list()
@@ -897,7 +891,7 @@ def update_new_deployments(
             for movie_i in sorted(movie_files_server):
                 temp_i = movie_i.split("/")[2]
                 download_object_from_s3(
-                    client=db_info_dict["client"],
+                    client=project.server_info["client"],
                     bucket=db_info_dict["bucket"],
                     key=movie_i,
                     filename=temp_i,
@@ -934,12 +928,12 @@ def update_new_deployments(
         return movie_files_server
 
 
-def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
+def upload_concat_movie(server_info: dict, new_deployment_row: pd.DataFrame):
     """
     It uploads the concatenated video to the server and updates the movies csv file with the new
     information
 
-    :param db_info_dict: a dictionary with the following keys:
+    :param server_info: a dictionary containing the path to the database and the client to the server
     :param new_deployment_row: new deployment dataframe with the information of the new deployment
     """
 
@@ -975,7 +969,7 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
 
         # Upload movie to the s3 bucket
         upload_file_to_s3(
-            client=db_info_dict["client"],
+            client=server_info["client"],
             bucket=db_info_dict["bucket"],
             key=new_deployment_row["prefix_conc"][0],
             filename=new_deployment_row["concat_video"][0],
@@ -991,7 +985,7 @@ def upload_concat_movie(db_info_dict: dict, new_deployment_row: pd.DataFrame):
 
         # Save the updated df in the server
         upload_file_to_s3(
-            db_info_dict["client"],
+            server_info["client"],
             bucket=db_info_dict["bucket"],
             key=db_info_dict["server_movies_csv"],
             filename=str(db_info_dict["local_movies_csv"]),
