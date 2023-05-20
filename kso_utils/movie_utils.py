@@ -540,42 +540,6 @@ def preview_movie(
         return HTML(html_code), movie_path
 
 
-def check_movies_from_server(project: Project):
-    """
-    It takes in a dataframe of movies and a dictionary of database information, and returns two
-    dataframes: one of movies missing from the server, and one of movies missing from the csv
-
-    :param db_info_dict: a dictionary with the following keys:
-    :param project: the project object
-    """
-
-    from kso_utils.spyfish_utils import check_spyfish_movies
-
-    # Load the csv with movies information
-    movies_df = pd.read_csv(project.db_info["local_movies_csv"])
-
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        # Retrieve movies that are missing info in the movies.csv
-        missing_info = check_spyfish_movies(movies_df, project.db_info)
-
-    # Find out files missing from the Server
-    missing_from_server = missing_info[missing_info["_merge"] == "left_only"]
-
-    logging.info(f"There are {len(missing_from_server.index)} movies missing")
-
-    # Find out files missing from the csv
-    missing_from_csv = missing_info[missing_info["_merge"] == "right_only"].reset_index(
-        drop=True
-    )
-
-    logging.info(
-        f"There are {len(missing_from_csv.index)} movies missing from movies.csv. Their filenames are: {missing_from_csv.filename.unique()}"
-    )
-
-    return missing_from_server, missing_from_csv
-
-
 def check_movie_uploaded(project: Project, movie_i: str):
     """
     This function takes in a movie name and a dictionary containing the path to the database and returns
