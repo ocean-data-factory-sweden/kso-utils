@@ -67,14 +67,7 @@ class ProjectProcessor:
         # Create empty db and populate with local csv files data
         self.setup_db()
 
-        # Get server details from the db_info
-        self.server_info = {
-            x: self.db_info[x]
-            for x in ["client", "sftp_client"]
-            if x in self.db_info.keys()
-        }
-
-        ############ TO REVIEW #############
+        ############ TO REVIEW in SNIC#############
         # Check if template project
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):
@@ -83,21 +76,7 @@ class ProjectProcessor:
                 if status == 0:
                     return
 
-    #         # Create empty meta tables
-    #         self.init_meta()
-    #         # Setup initial db
-    #         self.setup_db()
-    #         # Get server details from the db_info
-    #         self.server_info = {
-    #             x: self.db_info[x]
-    #             for x in ["client", "sftp_client"]
-    #             if x in self.db_info.keys()
-    #         }
-    #         if self.project.movie_folder is not None:
-    #             # Check movies on server
-    #             self.get_movie_info()
-    #         # Reads csv files
-    #         self.load_meta()
+    #
 
     ############# Finish Review ###################
 
