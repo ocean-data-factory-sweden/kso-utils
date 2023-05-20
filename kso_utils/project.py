@@ -46,6 +46,7 @@ class ProjectProcessor:
     def __init__(self, project: project_utils.Project):
         self.project = project
         self.db_connection = None
+        self.init_keys = ["movies", "species", "photos", "surveys", "sites"]
         self.server_info = {}
         self.db_info = {}
         self.zoo_info = {}
@@ -59,9 +60,6 @@ class ProjectProcessor:
 
         # Get server details and connect to server
         self.get_server_info()
-
-        # Store the potential names of the csv files
-        self.init_keys = ["movies", "species", "photos", "surveys", "sites"]
 
         # Map initial csv files
         self.map_init_csv()
@@ -139,26 +137,63 @@ class ProjectProcessor:
             ]
 
         # Download csv files from the server if needed and store their server path
-        server_utils.download_init_csv(self.project, self.init_keys)
+        self.db_info = server_utils.download_init_csv(
+            self.project, self.init_keys, self.server_info
+        )
 
         # Store the paths of the local csv files
-        self.load_meta(base_keys=self.init_keys)
+        self.load_meta()
+
+    def load_meta(self):
+        """
+        It loads the metadata from the relevant local csv files into the `db_info` dictionary
+        """
+        # Retrieve a list with all the csv files in the folder with initival csvs
+        local_files = os.listdir(self.project.csv_folder)
+        local_csv_files = [
+            filename for filename in local_files if filename.endswith("csv")
+        ]
+
+        # Select only csv files that are relevant to start the db
+        local_csvs_db = [
+            file
+            for file in local_csv_files
+            if any(local_csv_files in file for local_csv_files in self.init_keys)
+        ]
+
+        # Store the paths of the local csv files of interest into the "db_info" dictionary
+        for local_csv in local_csvs_db:
+            # Specify the key of the csv
+            init_key = [key for key in self.init_keys if key in local_csv][0]
+
+            # Specify the key in the dictionary of the csv file
+            csv_key = str("local_" + init_key + "_csv")
+
+            # Store the path of the csv file
+            self.db_info[csv_key] = Path(self.project.csv_folder, local_csv)
+
+            # Read the local csv files into a pd df
+            setattr(self, csv_key, pd.read_csv(self.db_info[csv_key]))
 
     def setup_db(self):
         """
-        The function creates a database and populates it with the data from the csv files.
+        The function creates a database and populates it with the data from the local csv files.
         It also return the db connection
         :return: The database connection object.
         """
-
         # Create a new database for the project
         db_utils.create_db(self.project.db_path)
 
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
-        for i in self.db_info.values():
-            db_utils.populate_db(self.project, str(i))
+        # Store the paths of the local_csvs
+        local_csvs = [
+            str(file) for file in self.db_info.values() if "local" in str(file)
+        ]
+
+        # Populate the db with initial info from the local_csvs
+        [db_utils.populate_db(self.project, i) for i in local_csvs]
 
     # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
@@ -283,31 +318,6 @@ class ProjectProcessor:
         return movie_utils.get_movie_path(filepath, self.db_info, self.project)
 
     # t1
-    def load_meta(self, base_keys=["movies", "species", "sites"]):
-        """
-        It loads the metadata from the local csv files into the `db_info` dictionary
-
-        :param base_keys: the base keys to load
-        """
-        # Filter the list of files to only include those of interest.
-        filtered_files = [
-            file
-            for file in os.listdir(self.project.csv_folder)
-            if any(csv_i in file for csv_i in base_keys)
-        ]
-
-        # Populate the sites, movies and species tables of the db
-        for i in filtered_files:
-            if "sites" in i:
-                self.db_info["local_sites_csv"] = Path(self.project.csv_folder, i)
-            if "movies" in i:
-                self.db_info["local_movies_csv"] = Path(self.project.csv_folder, i)
-            if "species" in i:
-                self.db_info["local_species_csv"] = Path(self.project.csv_folder, i)
-
-        for key, val in self.db_info.items():
-            if any("local_" + ext in key for ext in base_keys):
-                setattr(self, key, pd.read_csv(val))
 
     def select_meta_range(self, meta_key: str):
         """

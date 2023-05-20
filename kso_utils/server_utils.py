@@ -45,37 +45,34 @@ def connect_to_server(project: Project):
         return {}
 
     # Create an empty dictionary to host the server connections
-    server_dict = {}
+    server_info = {}
 
     if project.server == "AWS":
         # Connect to AWS as a client
         client = get_aws_client()
 
-        # Store the bucket and key information
-        server_dict["bucket"] = bucket
-        server_dict["key"] = key
-
     elif project.server == "SNIC":
         # Connect to SNIC as a client and get sftp
         client, sftp_client = get_snic_client()
     else:
-        server_dict = {}
+        server_info = {}
 
     if "client" in vars():
-        server_dict["client"] = client
+        server_info["client"] = client
 
     if "sftp_client" in vars():
-        server_dict["sftp_client"] = sftp_client
+        server_info["sftp_client"] = sftp_client
 
-    return server_dict
+    return server_info
 
 
-def download_init_csv(project: Project, init_keys: list):
+def download_init_csv(project: Project, init_keys: list, server_info: dict):
     """
     > This function connects to the server of the project and downloads the csv files of interest
 
     :param project: the project object
     :param init_keys: list of potential names of the csv files
+    :param server_info: A dictionary with the client and sftp_client
     :return: A dictionary with the server paths of the csv files
     """
 
@@ -83,28 +80,38 @@ def download_init_csv(project: Project, init_keys: list):
     db_initial_info = {}
 
     if project.server == "AWS":
-        for i in init_keys:
-            # Check if server path exists
-            server_i_csv = get_matching_s3_keys(
-                client=project.server_dict["client"],
-                bucket=project.server_dict["bucket"],
-                prefix=project.server_dict["key"] + "/" + i,
-            )["Key"][0]
+        # Retrieve a list with all the csv files in the folder with initival csvs
+        server_csv_files = get_matching_s3_keys(
+            client=server_info["client"],
+            bucket=project.bucket,
+            suffix="csv",
+        )
 
-            if server_i_csv:
-                # Specify the local path for the csv
-                local_i_csv = str(Path(project.csv_folder, Path(server_i_csv).name))
+        # Select only csv files that are relevant to start the db
+        server_csvs_db = [
+            s
+            for s in server_csv_files
+            if any(server_csv_files in s for server_csv_files in init_keys)
+        ]
 
-                # Download the csv
-                download_object_from_s3(
-                    client=project.server_dict["client"],
-                    bucket=project.server_dict["bucket"],
-                    key=server_i_csv,
-                    filename=local_i_csv,
-                )
+        # Download each csv file locally and store the path of the server csv
+        for server_csv in server_csvs_db:
+            # Specify the key of the csv
+            init_key = [key for key in init_keys if key in server_csv][0]
 
-                # Save the server paths in the dict
-                db_initial_info[str("server_" + i + "_csv")] = server_i_csv
+            # Save the server path of the csv in a dict
+            db_initial_info[str("server_" + init_key + "_csv")] = server_csv
+
+            # Specify the local path for the csv
+            local_i_csv = str(Path(project.csv_folder, Path(server_csv).name))
+
+            # Download the csv
+            download_object_from_s3(
+                client=server_info["client"],
+                bucket=project.bucket,
+                key=server_csv,
+                filename=local_i_csv,
+            )
 
     elif project.server == "TEMPLATE":
         # Specify the url of the folder with csv files of the template project
@@ -369,6 +376,7 @@ def get_matching_s3_keys(
     :param bucket: Name of the S3 bucket.
     :param prefix: Only fetch keys that start with this prefix (optional).
     :param suffix: Only fetch keys that end with this suffix (optional).
+    return a list of the matching objects
     """
 
     # Select the relevant bucket
@@ -376,10 +384,7 @@ def get_matching_s3_keys(
         obj["Key"] for obj in get_matching_s3_objects(client, bucket, prefix, suffix)
     ]
 
-    # Set the contents as pandas dataframe
-    contents_s3_pd = pd.DataFrame(s3_keys, columns=["Key"])
-
-    return contents_s3_pd
+    return s3_keys
 
 
 def download_object_from_s3(
