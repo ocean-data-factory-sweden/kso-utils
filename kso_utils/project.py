@@ -166,11 +166,11 @@ class ProjectProcessor:
 
         # Store the paths of the local_csvs
         local_csvs = [
-            str(file) for file in self.db_info.values() if "local" in str(file)
+            str(file) for file in list(self.db_info.keys()) if "local" in str(file)
         ]
 
         # Populate the db with initial info from the local_csvs
-        [db_utils.populate_db(self.project, i) for i in local_csvs]
+        [db_utils.populate_db(self, i) for i in local_csvs]
 
     # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):

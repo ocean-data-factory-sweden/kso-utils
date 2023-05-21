@@ -255,7 +255,8 @@ def create_db(db_path: str):
 
 def populate_db(project: project_utils.Project, local_csv: str):
     """
-    > This function populates a sql table of interest based on the info from the respective csv
+    > This function processes and tests the initial csv files compatibility with sql db
+    and populates the table of interest
 
     :param db_initial_info: The dictionary containing the initial database information
     :param local_csv: a string of the names of the local csv to populate from
@@ -264,13 +265,15 @@ def populate_db(project: project_utils.Project, local_csv: str):
     # Process the csv of interest and tests for compatibility with sql table
     csv_i, df = process_test_csv(project=project, local_csv=local_csv)
 
-    # Add values of the processed csv to the sql table of interest
-    add_to_table(
-        project.db_path,
-        csv_i,
-        [tuple(i) for i in df.values],
-        len(df.columns),
-    )
+    # Only populate the tables if df is not empty
+    if not df.empty:
+        # Add values of the processed csv to the sql table of interest
+        add_to_table(
+            project.project.db_path,
+            csv_i,
+            [tuple(i) for i in df.values],
+            len(df.columns),
+        )
 
 
 def process_test_csv(project: project_utils.Project, local_csv: str):
@@ -281,24 +284,99 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
     :return: a string of the category of interest and the processed dataframe
 
     """
-    # Load the csv with the information of interest
-    df = pd.read_csv(local_csv)
+    from kso_utils.spyfish_utils import process_spyfish_sites, process_spyfish_movies
+    from kso_utils.koster_utils import process_koster_movies_csv
+    from kso_utils.sgu_utils import process_sgu_photos_csv
 
     # Save the category of interest and process the df
     if "sites" in local_csv:
-        field_names, csv_i, df = process_sites_df(df, project)
+        # Specify the category of interest
+        csv_i = "sites"
 
-    if "movies" in local_csv:
-        field_names, csv_i, df = process_movies_df(df, project)
+        # Specify the id of the df of interest
+        field_names = ["site_id"]
 
-    if "species" in local_csv:
-        field_names, csv_i, df = process_species_df(df, project)
+        # Check if the project is the Spyfish Aotearoa
+        if project.project.Project_name == "Spyfish_Aotearoa":
+            # Rename columns to match schema fields
+            df = process_spyfish_sites(project.local_sites_csv)
 
-    if "photos" in local_csv:
-        field_names, csv_i, df = process_photos_df(df, project)
+        else:
+            df = project.local_sites_csv
+
+    elif "movies" in local_csv:
+        # Specify the category of interest
+        csv_i = "movies"
+
+        # Specify the id of the df of interest
+        field_names = ["movie_id"]
+
+        # Check if the project is the Spyfish Aotearoa
+        if project.project.Project_name == "Spyfish_Aotearoa":
+            df = process_spyfish_movies(project.local_movies_csv)
+
+        # Check if the project is the KSO
+        elif project.project.Project_name == "Koster_Seafloor_Obs":
+            df = process_koster_movies_csv(project.local_movies_csv)
+
+        else:
+            df = project.local_movies_csv
+
+        # Reference movies with their respective sites
+        sites_df = pd.read_sql_query(
+            "SELECT id, siteName FROM sites", project.db_connection
+        )
+        sites_df = sites_df.rename(columns={"id": "site_id"})
+
+        # Merge movies and sites dfs
+        df = pd.merge(df, sites_df, how="left", on="siteName")
+
+        # Prevent column_name error
+        df = df.rename(columns={"Author": "author"})
+
+        # Select only those fields of interest
+        if "fpath" not in df.columns:
+            df["fpath"] = df["filename"]
+
+    elif "species" in local_csv:
+        # Specify the category of interest
+        csv_i = "species"
+
+        # Specify the id of the df of interest
+        field_names = ["species_id"]
+
+        # Rename columns to match sql fields
+        df = project.local_species_csv.rename(columns={"commonName": "label"})
+
+    elif "photos" in local_csv:
+        # Check if the project is the SGU
+        if project.project.Project_name == "SGU":
+            # Process the local photos df
+            df = process_sgu_photos_csv(project)
+        else:
+            df = project.local_photos_csv
+
+        # Specify the category of interest
+        csv_i = "photos"
+
+        # Specify the id of the df of interest
+        field_names = ["ID"]
+
+    else:
+        logging.error(
+            f"{local_csv} has not been processed because the db schema does not have a table for it"
+        )
+
+        # create an Empty DataFrame object
+        df = pd.DataFrame()
+
+        # Specify the category of interest
+        csv_i = "other_category"
+
+        return csv_i, df
 
     # Add the names of the basic columns in the sql db
-    field_names = field_names + get_column_names_db(project.db_path, csv_i)
+    field_names = field_names + get_column_names_db(project.project.db_path, csv_i)
     field_names.remove("id")
 
     # Select relevant fields
@@ -308,109 +386,6 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
     test_table(df, csv_i, [df.columns[0]])
 
     return csv_i, df
-
-
-def process_sites_df(df: pd.DataFrame, project: project_utils.Project):
-    """
-    > This function processes the sites dataframe and returns a string with the category of interest.
-    :param df: a pandas dataframe of the information of interest
-    :param project: The project object
-    :return: a string of the category of interest and the processed dataframe
-    """
-
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        # Rename columns to match schema fields
-        df = process_spyfish_sites(df)
-
-    # Specify the category of interest
-    csv_i = "sites"
-
-    # Specify the id of the df of interest
-    field_names = ["site_id"]
-
-    return field_names, csv_i, df
-
-
-def process_movies_df(df: pd.DataFrame, project: project_utils.Project):
-    """
-    > This function processes the movies dataframe and returns a string with the category of interest
-    :param df: a pandas dataframe of the information of interest
-    :param project: The project object
-    :return: a string of the category of interest and the processed dataframe
-    """
-
-    # Check if the project is the Spyfish Aotearoa
-    if project.Project_name == "Spyfish_Aotearoa":
-        df = process_spyfish_movies(df)
-
-    # Check if the project is the KSO
-    if project.Project_name == "Koster_Seafloor_Obs":
-        df = process_koster_movies_csv(df)
-
-    # Reference movies with their respective sites
-    conn = create_connection(project.db_path)
-
-    sites_df = pd.read_sql_query("SELECT id, siteName FROM sites", conn)
-    sites_df = sites_df.rename(columns={"id": "site_id"})
-
-    # Merge movies and sites dfs
-    df = pd.merge(df, sites_df, how="left", on="siteName")
-
-    # Prevent column_name error
-    df = df.rename(columns={"Author": "author"})
-
-    # Select only those fields of interest
-    if "fpath" not in df.columns:
-        df["fpath"] = df["filename"]
-
-    # Specify the category of interest
-    csv_i = "movies"
-
-    # Specify the id of the df of interest
-    field_names = ["movie_id"]
-
-    return field_names, csv_i, df
-
-
-def process_photos_df(df: pd.DataFrame, project: project_utils.Project):
-    """
-    > This function processes the photos dataframe and returns a string with the category of interest
-    :param df: a pandas dataframe of the information of interest
-    :param project: The project object
-    :return: a string of the category of interest and the processed dataframe
-    """
-    # Check if the project is the SGU
-    if project.Project_name == "SGU":
-        df = process_sgu_photos_csv(Project)
-
-    # Specify the category of interest
-    csv_i = "photos"
-
-    # Specify the id of the df of interest
-    field_names = ["ID"]
-
-    return field_names, csv_i, df
-
-
-def process_species_df(df: pd.DataFrame, project: project_utils.Project):
-    """
-    > This function processes the species dataframe and returns a string with the category of interest
-    :param df: a pandas dataframe of the information of interest
-    :param project: The project object
-    :return: a string of the category of interest and the processed dataframe
-    """
-
-    # Rename columns to match sql fields
-    df = df.rename(columns={"commonName": "label"})
-
-    # Specify the category of interest
-    csv_i = "species"
-
-    # Specify the id of the df of interest
-    field_names = ["species_id"]
-
-    return field_names, csv_i, df
 
 
 #### Rarely used functions
