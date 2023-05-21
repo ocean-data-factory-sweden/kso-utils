@@ -245,7 +245,7 @@ def upload_movie_server(
     if project.server == "AWS":
         # Retrieve the key of the movie of interest
         f_path_key = f_path.split("/").str[:2].str.join("/")
-        logging.info(f_path_key)    
+        logging.info(f_path_key)
 
     elif project.server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
