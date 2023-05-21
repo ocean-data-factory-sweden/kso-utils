@@ -170,7 +170,8 @@ class ProjectProcessor:
         ]
 
         # Populate the db with initial info from the local_csvs
-        [db_utils.populate_db(self, i) for i in local_csvs]
+        # (sorted reverselly alphabetically to load sites before movies)
+        [db_utils.populate_db(self, i) for i in sorted(local_csvs, reverse=True)]
 
     # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
@@ -280,7 +281,9 @@ class ProjectProcessor:
         This function checks what movies from the movies csv are available
         """
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
-            self.project, self.server_info, self.db_connection
+            project=self.project,
+            server_info=self.server_info,
+            db_connection=self.db_connection,
         )
 
         logging.info("Information of available movies has been retrieved")
@@ -945,6 +948,38 @@ class ProjectProcessor:
 
         button.on_click(on_button_clicked)
         display(button)
+
+    def upload_zu_subjects(self, subject_type: str):
+        """
+        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
+
+        :param
+        :param subject_type: str = "clip" or "frame"
+        :type subject_type: str
+        """
+        if subject_type == "clip":
+            upload_df, sitename, created_on = zu_utils.set_zoo_clip_metadata(
+                project=self.project,
+                generated_clipsdf=self.generated_clips,
+                sitesdf=self.local_sites_csv,
+                moviesdf=self.local_movies_csv,
+            )
+            zu_utils.upload_clips_to_zooniverse(
+                project=self.project,
+                upload_to_zoo=upload_df,
+                sitename=sitename,
+                created_on=created_on,
+            )
+            # Clean up subjects after upload
+            zu_utils.remove_temp_clips(upload_df)
+        elif subject_type == "frame":
+            species_list = []
+            upload_df = zu_utils.set_zoo_frame_metadata(
+                upload_data, species_list, self.project, self.db_info
+            )
+            zu_utils.upload_frames_to_zooniverse(
+                upload_df, species_list, self.db_info, self.project
+            )
 
     # t5, t6, t7
     def get_team_name(self):

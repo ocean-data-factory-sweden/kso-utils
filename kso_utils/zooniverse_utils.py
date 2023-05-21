@@ -582,34 +582,33 @@ def retrieve__populate_zoo_info(
 
 
 def set_zoo_clip_metadata(
-    project: Project,
-    db_info_dict: dict,
-    df: pd.DataFrame,
+    project: project_utils.Project,
+    generated_clipsdf: pd.DataFrame,
+    sitesdf: pd.DataFrame,
+    moviesdf: pd.DataFrame,
 ):
     """
-    It takes a dataframe with clips, and adds metadata about the site and project to it
+    This function updates the dataframe of clips to be uploaded with
+    metadata about the site and project
 
-    :param df: the dataframe with the clips to upload
+    :param project: the project object
+    :param generated_clipsdf: a df with the information of the clips to be uploaded
+    :param sitesdf: a df with the information of the sites of the project
+    :param moviesdf: a df with the information of the movies of the project
     :return: upload_to_zoo, sitename, created_on
     """
+    # Add spyfish-specific info
+    if project.Project_name == "Spyfish_Aotearoa":
+        # Rename the site columns to match standard cols names
+        sitesdf = sitesdf.rename(columns={"schema_site_id": "id", "SiteID": "siteName"})
 
-    # Create connection to db
-    conn = db_utils.create_connection(project.db_path)
+    # Rename the id column to match generated_clipsdf
+    sitesdf = sitesdf.rename(columns={"id": "site_id", "siteName": "#siteName"})
 
-    # Query info about the movie of interest
-    sitesdf = pd.read_sql_query("SELECT * FROM sites", conn)
-
-    # Rename the id column to match movies df
-    sitesdf = sitesdf.rename(
-        columns={
-            "id": "site_id",
-        }
-    )
-
-    # Combine site info to the df
-    if "site_id" in df.columns:
-        upload_to_zoo = df.merge(sitesdf, on="site_id")
-        sitename = upload_to_zoo["siteName"].unique()[0]
+    # Combine site info to the generated_clips df
+    if "site_id" in generated_clipsdf.columns:
+        upload_to_zoo = generated_clipsdf.merge(sitesdf, on="site_id")
+        sitename = upload_to_zoo["#siteName"].unique()[0]
     else:
         raise ValueError("Sites table empty. Perhaps try to rebuild the initial db.")
 
@@ -623,7 +622,6 @@ def set_zoo_clip_metadata(
             "clip_length": "#clip_length",
             "filename": "#VideoFilename",
             "clip_modification_details": "#clip_modification_details",
-            "siteName": "#siteName",
         }
     )
 
@@ -650,42 +648,20 @@ def set_zoo_clip_metadata(
 
     # Add spyfish-specific info
     if project.Project_name == "Spyfish_Aotearoa":
-        # Read sites csv as pd
-        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
-
-        # Read movies csv as pd
-        moviesdf = pd.read_csv(db_info_dict["local_movies_csv"])
-
-        # Rename columns to match schema names
-        sitesdf = sitesdf.rename(
-            columns={
-                "siteName": "SiteID",
-            }
-        )
-
-        # Include movie info to the sites df
-        sitesdf = sitesdf.merge(moviesdf, on="SiteID")
-
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(
             columns={
                 "LinkToMarineReserve": "!LinkToMarineReserve",
-                "SiteID": "#SiteID",
             }
         )
 
         # Select only relevant columns
-        sitesdf = sitesdf[["!LinkToMarineReserve", "#SiteID", "ProtectionStatus"]]
+        sitesdf = sitesdf[["!LinkToMarineReserve", "#siteName", "ProtectionStatus"]]
 
         # Include site info to the df
-        upload_to_zoo = upload_to_zoo.merge(
-            sitesdf, left_on="#siteName", right_on="#SiteID"
-        )
+        upload_to_zoo = upload_to_zoo.merge(sitesdf, on="#siteName")
 
     if project.Project_name == "Koster_Seafloor_Obs":
-        # Read sites csv as pd
-        sitesdf = pd.read_csv(db_info_dict["local_sites_csv"])
-
         # Rename columns to match schema names
         sitesdf = sitesdf.rename(
             columns={
@@ -736,7 +712,7 @@ def upload_clips_to_zooniverse(
     :param upload_to_zoo: the dataframe of clips to upload
     :param sitename: the name of the site you're uploading clips from
     :param created_on: the date the clips were created
-    :param project: the project ID of the project you want to upload to
+    :param project: the project object
     """
 
     # Estimate the number of clips
@@ -758,7 +734,7 @@ def upload_clips_to_zooniverse(
     new_subjects = []
 
     logging.info("Uploading subjects to Zooniverse")
-    for modif_clip_path, metadata in tqdm(
+    for clip_path, metadata in tqdm(
         subject_metadata.items(), total=len(subject_metadata)
     ):
         # Create a subject
@@ -768,7 +744,7 @@ def upload_clips_to_zooniverse(
         subject.links.project = project.Zooniverse_number
 
         # Add location of clip
-        subject.add_location(modif_clip_path)
+        subject.add_location(clip_path)
 
         # Add metadata
         subject.metadata.update(metadata)
@@ -1333,26 +1309,6 @@ def get_frames(
         display(df)
 
     return df
-
-
-def upload_zu_subjects(upload_data: pd.DataFrame, subject_type: str):
-    """
-    This function uploads clips or frames to Zooniverse, depending on the subject_type argument
-
-    :param upload_data: a pandas dataframe with the following columns:
-    :type upload_data: pd.DataFrame
-    :param subject_type: str = "clip" or "frame"
-    :type subject_type: str
-    """
-    if subject_type == "clip":
-        upload_df, sitename, created_on = set_zoo_clip_metadata(upload_data)
-        upload_clips_to_zooniverse(upload_df, sitename, created_on)
-        # Clean up subjects after upload
-        remove_temp_clips(upload_df)
-    elif subject_type == "frame":
-        species_list = []
-        upload_df = set_zoo_frame_metadata(upload_data, species_list)
-        upload_frames_to_zooniverse(upload_df, species_list)
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse

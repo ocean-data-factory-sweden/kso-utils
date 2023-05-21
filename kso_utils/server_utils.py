@@ -54,6 +54,11 @@ def connect_to_server(project: Project):
     elif project.server == "SNIC":
         # Connect to SNIC as a client and get sftp
         client, sftp_client = get_snic_client()
+
+    elif project.server == "TEMPLATE":
+        # Connect to SNIC as a client and get sftp
+        client = "Wildlife.ai"
+
     else:
         server_info = {}
 

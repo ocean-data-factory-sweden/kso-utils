@@ -273,10 +273,13 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
 
     # Retrieve the list of movies available in Wildlife.ai
     elif project.server == "TEMPLATE":
+        # Temporarily retrieve the movies_info
+        movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
+
         # Combine wildlife.ai storage and filenames of the movie examples
         available_movies_list = [
             "https://www.wildlife.ai/wp-content/uploads/2022/06/" + filename
-            for filename in project.local_movies_csv["filename"].tolist()
+            for filename in movies_df["filename"].tolist()
         ]
 
         # Save the list of movies as a pd df
