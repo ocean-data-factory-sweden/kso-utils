@@ -220,6 +220,7 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     :param project: the project object
     :param server_info: a dictionary containing the path to the database and the client to the server
     :type server_info: dict
+    :param db_connection: a SQL3 connection to the db of the project
     :return: A dataframe with the following columns (index, movie_id, fpath, spath, exists, filename_ext)
 
     """
@@ -298,7 +299,6 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
     movies_df = movies_df.rename(columns={"id": "movie_id"})
 
-    print("movies_df", movies_df)
     # If full path is provided, separate into filename and full path
     server_df["spath_full"] = server_df["spath"]
     server_df["spath"] = server_df["spath"].apply(lambda x: Path(x).name, 1)
@@ -358,7 +358,7 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     )
 
     # Add movie folder for SNIC
-    if server == "SNIC":
+    if project.server == "SNIC":
         available_movies_df["spath"] = available_movies_df["spath_full"]
 
     logging.info(
@@ -478,7 +478,7 @@ def convert_video(
 # Function to preview underwater movies
 def preview_movie(
     project: Project,
-    db_info_dict: dict,
+    server_info: dict,
     available_movies_df: pd.DataFrame,
     movie_i: str,
 ):
@@ -486,7 +486,7 @@ def preview_movie(
     It takes a movie filename and returns a HTML object that can be displayed in the notebook
 
     :param project: the project object
-    :param db_info_dict: a dictionary containing the database information
+    :param server_info: a dictionary containing the server client information
     :param available_movies_df: a dataframe with all the movies in the database
     :param movie_i: the filename of the movie you want to preview
     :return: A tuple of two elements:
@@ -513,7 +513,7 @@ def preview_movie(
         if project.server == "SNIC":
             movie_path = get_movie_path(
                 project=project,
-                db_info_dict=db_info_dict,
+                server_info=server_info,
                 f_path=movie_selected["spath"].values[0],
             )
             url = (
@@ -523,7 +523,7 @@ def preview_movie(
         else:
             url = get_movie_path(
                 f_path=movie_selected["fpath"].values[0],
-                db_info_dict=db_info_dict,
+                server_info=server_info,
                 project=project,
             )
             movie_path = url

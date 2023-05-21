@@ -282,7 +282,8 @@ class ProjectProcessor:
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
             self.project, self.server_info, self.db_connection
         )
-        logging.info("server_movies_csv updated")
+
+        logging.info("Information of available movies has been retrieved")
 
     def load_movie(self, filepath):
         """
@@ -365,16 +366,19 @@ class ProjectProcessor:
         """
         movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, db_info, server_movies_csv):
+        async def f(project, server_info, server_movies_csv):
             x = await kso_widgets.single_wait_for_change(movie_selected, "value")
             html, movie_path = movie_utils.preview_movie(
-                project, db_info, server_movies_csv, x
+                project=project,
+                server_info=server_info,
+                available_movies_df=server_movies_csv,
+                movie_i=x,
             )
             display(html)
             self.movie_selected = x
             self.movie_path = movie_path
 
-        asyncio.create_task(f(self.project, self.db_info, self.server_movies_csv))
+        asyncio.create_task(f(self.project, self.server_info, self.server_movies_csv))
 
     def check_meta_sync(self, meta_key: str):
         """
