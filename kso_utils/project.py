@@ -1365,7 +1365,7 @@ class MLProjectProcessor(ProjectProcessor):
         self.run = self.modules["wandb"].init(
             entity=self.team_name,
             project="model-evaluations",
-            settings=self.modules["wandb"].Settings(start_method="fork"),
+            settings=self.modules["wandb"].Settings(start_method="thread"),
         )
         self.modules["detect"].run(
             weights=[
