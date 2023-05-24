@@ -119,7 +119,6 @@ def download_init_csv(project: Project, init_keys: list, server_info: dict):
     elif project.server == "TEMPLATE":
         gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
         download_gdrive(gdrive_id, project.csv_folder)
-        
 
     elif project.server in ["LOCAL", "SNIC"]:
         logging.info(
@@ -981,6 +980,7 @@ def upload_concat_movie(server_info: dict, new_deployment_row: pd.DataFrame):
 
         # Remove temporary movie
         logging.info("Movies csv file succesfully updated in the server.")
+
 
 ###################################
 # #######Google Drive functions#####
