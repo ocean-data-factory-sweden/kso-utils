@@ -5,7 +5,6 @@ import glob
 import logging
 import asyncio
 import wandb
-import folium
 import numpy as np
 import pandas as pd
 import ipywidgets as widgets
@@ -20,7 +19,6 @@ from tqdm import tqdm
 from ast import literal_eval
 import imagesize
 import ipysheet
-from folium.plugins import MiniMap
 from IPython.display import display, clear_output
 from IPython.core.display import HTML
 

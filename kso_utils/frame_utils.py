@@ -1,7 +1,6 @@
 # base imports
 import os
 import logging
-import argparse
 import pims
 import cv2
 from sklearn.cluster import DBSCAN
@@ -9,9 +8,8 @@ from collections import Counter
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+import numpy as np
 
-# util imports
-from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -55,7 +53,7 @@ def drawBoxes(df: pd.DataFrame, movie_dir: str, out_path: str):
             Path(out_path).mkdir(parents=True, exist_ok=True)
             # Recursively add permissions to folders created
             [os.chmod(root, 0o777) for root, dirs, files in os.walk(out_path)]
-        cv.imwrite(Path(out_path, Path(name[3]).name), frame)
+        cv2.imwrite(Path(out_path, Path(name[3]).name), frame)
 
 
 def bb_iou(boxA, boxB):

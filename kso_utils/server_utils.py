@@ -1,7 +1,5 @@
 # base imports
 import os
-import io
-import requests
 import pandas as pd
 import getpass
 import gdown
@@ -19,7 +17,7 @@ from pathlib import Path
 from paramiko import SFTPClient, SSHClient
 
 # util imports
-from kso_utils.project_utils import Project, find_project
+from kso_utils.project_utils import Project
 
 # Logging
 logging.basicConfig()

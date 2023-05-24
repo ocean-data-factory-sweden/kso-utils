@@ -3,7 +3,6 @@ import os
 import sqlite3
 import logging
 import pandas as pd
-from pathlib import Path
 
 # util imports
 import kso_utils.db_starter.schema as schema

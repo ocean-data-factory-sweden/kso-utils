@@ -28,7 +28,7 @@ import kso_utils.tutorials_utils as t_utils
 import kso_utils.movie_utils as movie_utils
 
 # Widget imports
-from IPython.display import HTML, display, clear_output
+from IPython.display import display
 import ipywidgets as widgets
 
 

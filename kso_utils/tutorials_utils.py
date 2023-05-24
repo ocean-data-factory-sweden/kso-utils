@@ -23,12 +23,12 @@ from PIL import Image as PILImage, ImageDraw
 
 # widget imports
 from tqdm import tqdm
-import ipysheet
 import ipywidgets as widgets
 from IPython.display import HTML, display, clear_output
 
 # Util imports
 from kso_utils.project_utils import Project
+import kso_utils.movie_utils as movie_utils
 
 # Logging
 logging.basicConfig()
@@ -903,7 +903,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     "label": species_list[int(s[0])],
                 }
             )
-    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
+    w_bbox = widgets.BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
@@ -1689,7 +1689,7 @@ def create_clips(
 
         if not clip_selection.result == len(list_clip_start[0]):
             logging.info(
-                f"There was an issue estimating the starting seconds for the clips"
+                "There was an issue estimating the starting seconds for the clips"
             )
 
     else:
