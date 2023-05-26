@@ -2575,7 +2575,7 @@ def open_csv(
         df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
         # Display columns
         logging.info(f"Displaying {df.columns.tolist()}")
-    
+
     # Load the df as ipysheet
     sheet = ipysheet.from_dataframe(df_filtered)
 
