@@ -1,7 +1,7 @@
 boto3==1.26.64
-dataclass_csv==1.4.0
+dataclass-csv==1.4.0
 ffmpeg==1.4
-ffmpeg_python==0.2.0
+ffmpeg-python==0.2.0
 fiftyone==0.20.0
 fiftyone_db==0.4.0
 folium==0.12.1
@@ -12,9 +12,9 @@ ipyfilechooser==0.4.4
 ipysheet==0.4.4
 ipython==8.11.0
 ipywidgets==7.7.2
-jupyter_bbox_widget==0.5.0
+jupyter-bbox-widget==0.5.0
 natsort==8.1.0
-numpy>=1.22.0,<1.24.2
+numpy>=1.22.0,<1.24.1
 opencv-contrib-python==4.6.0.66
 opencv-python==4.6.0.66
 opencv-python-headless==4.6.0.66

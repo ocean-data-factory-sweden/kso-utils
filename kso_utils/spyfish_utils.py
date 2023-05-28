@@ -8,13 +8,11 @@ import subprocess
 from pathlib import Path
 
 # util imports
-from kso_utils.movie_utils import get_movie_extensions
 from kso_utils.server_utils import (
     get_matching_s3_keys,
     download_object_from_s3,
     upload_file_to_s3,
 )
-from kso_utils.db_utils import create_connection
 
 # Logging
 logging.basicConfig()
@@ -58,72 +56,6 @@ def get_spyfish_col_names(table_name: str):
 
     else:
         raise ValueError("The table for Spyfish doesn't match the schema tables")
-
-
-def check_spyfish_movies(movies_df: pd.DataFrame, db_info_dict: dict):
-    """
-    It takes a dataframe of movies and a dictionary with the info of the database and returns a
-    dataframe with the movies that are in the database
-
-    :param movies_df: a dataframe with the movies to be checked
-    :type movies_df: pd.DataFrame
-    :param db_info_dict: a dictionary with the following keys:
-    :type db_info_dict: dict
-    :return: A dataframe with the movies that are in the database and in the S3 bucket.
-    """
-    #     ################# Get survey and site id from the movies csv
-
-    #     # Load the csv with with sites and survey choices
-    #     choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-
-    #     # Read surveys csv
-    #     surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"],parse_dates=['SurveyStartDate'])
-
-    #     # Add short name of the marine reserve to the survey df
-    #     surveys_df = surveys_df.merge(choices_df[["ShortFolder", "MarineReserve"]],
-    #                                  righton="MarineReserve",
-    #                                  lefton="LinkToMarineReserve",
-    #                                  how="left")
-
-    #     # Add survey info to each movie
-    #     movies_df = movies_df.merge(surveys_df,
-    #                                 on=['SurveyID'],
-    #                                 how='left')
-
-    #     # Add a column with the year of the survey
-    #     movies_df["survey_year"] = movies_df["SurveyStartDate"].dt.year.values[0]
-
-    #     # Create a column with the deployment folder each movie should be
-    #     movies_df["deployment_folder"] = movies_df["ShortFolder"] + "-buv-" + movies_df["survey_year"] + "/"
-
-    # Get a dataframe of all movies from AWS
-    movies_s3_pd = get_matching_s3_keys(
-        db_info_dict["client"],
-        db_info_dict["bucket"],
-        suffix=get_movie_extensions(),
-    )
-
-    # Specify the key of the movies (path in S3 of the object)
-    movies_s3_pd["filename"] = movies_s3_pd.Key.str.split("/").str[-1]
-
-    # Create a column with the deployment folder of each movie
-    movies_s3_pd["deployment_folder"] = (
-        movies_s3_pd.Key.str.split("/").str[:2].str.join("/")
-    )
-
-    #     print(movies_s3_pd.head())
-    # Missing info for files in the "buv-zooniverse-uploads"
-    movies_df = movies_df.merge(
-        movies_s3_pd, on=["filename"], how="outer", indicator=True
-    )
-
-    # Check that movies can be mapped
-    #     movies_df['exists'] = np.where(movies_df["_merge"]=="left_only", False, True)
-
-    # Drop _merge columns to match sql squema
-    #     movies_df = movies_df.drop("_merge", axis=1)
-
-    return movies_df
 
 
 def add_fps_length_spyfish(
@@ -353,6 +285,8 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
 
     # Create connection to db
+    from kso_utils.db_utils import create_connection
+
     conn = create_connection(db_path)
 
     ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
@@ -439,38 +373,38 @@ def process_clips_spyfish(annotations, row_class_id, rows_list: list):
     return rows_list
 
 
-def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: str):
-    """
-    > This function downloads the csv with the sites and survey choices from the server and saves it
-    locally
+# def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: str):
+#     """
+#     > This function downloads the csv with the sites and survey choices from the server and saves it
+#     locally
 
-    :param server_dict: a dictionary containing the server information
-    :param db_initial_info: a dictionary with the following keys:
-    :param db_csv_info: the local path to the folder where the csv files will be downloaded
-    :return: The db_initial_info dictionary with the server and local paths of the choices csv
-    """
-    # Get the server path of the csv with sites and survey choices
-    server_choices_csv = get_matching_s3_keys(
-        server_dict["client"],
-        db_initial_info["bucket"],
-        prefix=db_initial_info["key"] + "/" + "choices",
-    )["Key"][0]
+#     :param server_dict: a dictionary containing the server information
+#     :param db_initial_info: a dictionary with the following keys:
+#     :param db_csv_info: the local path to the folder where the csv files will be downloaded
+#     :return: The db_initial_info dictionary with the server and local paths of the choices csv
+#     """
+#     # Get the server path of the csv with sites and survey choices
+#     server_choices_csv = get_matching_s3_keys(
+#         server_dict["client"],
+#         db_initial_info["bucket"],
+#         prefix=db_initial_info["key"] + "/" + "choices",
+#     )["Key"][0]
 
-    # Specify the local path for the csv
-    local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
+#     # Specify the local path for the csv
+#     local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
 
-    # Download the csv
-    download_object_from_s3(
-        server_dict["client"],
-        bucket=db_initial_info["bucket"],
-        key=server_choices_csv,
-        filename=local_choices_csv,
-    )
+#     # Download the csv
+#     download_object_from_s3(
+#         server_dict["client"],
+#         bucket=db_initial_info["bucket"],
+#         key=server_choices_csv,
+#         filename=local_choices_csv,
+#     )
 
-    db_initial_info["server_choices_csv"] = server_choices_csv
-    db_initial_info["local_choices_csv"] = Path(local_choices_csv)
+#     db_initial_info["server_choices_csv"] = server_choices_csv
+#     db_initial_info["local_choices_csv"] = Path(local_choices_csv)
 
-    return db_initial_info
+#     return db_initial_info
 
 
 def spyfish_subject_metadata(df: pd.DataFrame, db_info_dict: dict):

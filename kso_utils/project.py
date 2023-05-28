@@ -1,72 +1,52 @@
 # base imports
 import os
+import sys
 import glob
 import logging
 import asyncio
+import wandb
+import folium
 import numpy as np
 import pandas as pd
 import ipywidgets as widgets
+import ffmpeg
+import shutil
+import paramiko
+from paramiko import SSHClient
+from scp import SCPClient
 from itertools import chain
 from pathlib import Path
+from tqdm import tqdm
+from ast import literal_eval
 import imagesize
-import multiprocessing
+import ipysheet
+from folium.plugins import MiniMap
+from IPython.display import display, clear_output
+from IPython.core.display import HTML
 
 # util imports
 import kso_utils.tutorials_utils as t_utils
-import kso_utils.project_utils as p_utils
+import kso_utils.project_utils as project_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
 import kso_utils.zooniverse_utils as zu_utils
-from IPython.display import display, HTML
-
+import kso_utils.general as g_utils
+import kso_utils.widgets as kso_widgets
 
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-# General project utilities
-def import_model_modules(module_names):
-    importlib = __import__("importlib")
-    modules = {}
-    for module_name, module_full in zip(["train", "detect", "val"], module_names):
-        try:
-            modules[module_name] = importlib.import_module(module_full)
-        except ModuleNotFoundError:
-            logging.error(f"Module {module_name} could not be imported.")
-    return modules
-
-
-def import_modules(module_names, utils: bool = True, models: bool = False):
-    importlib = __import__("importlib")
-    modules = {}
-    model_presets = ["train", "detect", "val"]
-    for i, module_name in enumerate(module_names):
-        if utils:
-            module_full = "kso_utils." + module_name
-        else:
-            module_full = module_name
-        try:
-            if models:
-                module_name = model_presets[i]
-            modules[module_name] = importlib.import_module(module_full)
-        except ModuleNotFoundError:
-            logging.error(f"Module {module_name} could not be imported.")
-    return modules
-
-
-def parallel_map(func, iterable, args=()):
-    with multiprocessing.Pool() as pool:
-        results = pool.starmap(func, zip(iterable, *args))
-    return results
-
-
 class ProjectProcessor:
-    def __init__(self, project: p_utils.Project):
+    # The ProjectProcessor class initializes various attributes and methods for processing a project,
+    # including importing modules, setting up a database, and loading metadata.
+    def __init__(self, project: project_utils.Project):
         self.project = project
         self.db_connection = None
+        self.init_keys = ["movies", "species", "photos", "surveys", "sites"]
         self.server_info = {}
         self.db_info = {}
         self.zoo_info = {}
@@ -76,20 +56,27 @@ class ProjectProcessor:
         self.generated_clips = pd.DataFrame()
 
         # Import modules
-        self.modules = import_modules(
-            ["t1_utils", "t2_utils", "t3_utils", "t4_utils", "t8_utils"]
-        )
-        # Create empty meta tables
-        self.init_meta()
-        # Setup initial db
+        self.modules = g_utils.import_modules([])
+
+        # Get server details and connect to server
+        self.get_server_info()
+
+        # Map initial csv files
+        self.map_init_csv()
+
+        # Create empty db and populate with local csv files data
         self.setup_db()
-        # Get server details from the db_info
-        self.server_info = {x:self.db_info[x] for x in ['client', 'sftp_client'] if x in self.db_info.keys()}
-        if self.project.movie_folder is not None:
-            # Check movies on server
-            self.get_movie_info()
-        # Reads csv files
-        self.load_meta()
+
+        ############ TO REVIEW #############
+        # Check if template project
+        if self.project.server == "SNIC":
+            if not os.path.exists(self.project.csv_folder):
+                logging.error("Not running on SNIC server, attempting to mount...")
+                status = self.mount_snic()
+                if status == 0:
+                    return
+
+    ############# Finish Review ###################
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -99,51 +86,94 @@ class ProjectProcessor:
         logging.info("Stored variable names.")
         return list(self.__dict__.keys())
 
-    # general
-    def mount_snic(self, snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"):
+    # Functions to initiate the project
+    def get_server_info(self):
         """
-        It mounts the remote directory to the local machine
+        It connects to the server and returns the server info
+        :return: The server_info is added to the ProjectProcessor class.
+        """
+        try:
+            self.server_info = server_utils.connect_to_server(self.project)
+        except BaseException as e:
+            logging.error(f"Server connection could not be established. Details {e}")
+            return
 
-        :param snic_path: The path to the SNIC directory on the remote server, defaults to
-               /mimer/NOBACKUP/groups/snic2021-6-9/
-        :type snic_path: str (optional)
-        :return: The return value is the exit status of the command.
+    def map_init_csv(self):
         """
-        cmd = "sshfs {}:{} {}".format(
-            self.server_info["client"].get_transport().get_username(),
-            snic_path,
-            snic_path,
+        This function maps the csv files, download them from the server (if needed) and
+        stores the server/local paths of the csv files
+        """
+
+        # Create the folder to store the csv files if not exist
+        if not os.path.exists(self.project.csv_folder):
+            Path(self.project.csv_folder).mkdir(parents=True, exist_ok=True)
+            # Recursively add permissions to folders created
+            [
+                os.chmod(root, 0o777)
+                for root, dirs, files in os.walk(self.project.csv_folder)
+            ]
+
+        # Download csv files from the server if needed and store their server path
+        self.db_info = server_utils.download_init_csv(
+            self.project, self.init_keys, self.server_info
         )
-        stdin, stdout, stderr = self.server_info["client"].exec_command(cmd)
-        # Print output and errors (if any)
-        logging.info("Output:", stdout.read().decode("utf-8"))
-        logging.error("Errors:", stderr.read().decode("utf-8"))
-        # Verify that the remote directory is mounted
-        if os.path.ismount(snic_path):
-            logging.info("Remote directory mounted successfully!")
-            return 1
-        else:
-            logging.error("Failed to mount remote directory!")
-            return 0
+
+        # Store the paths of the local csv files
+        self.load_meta()
+
+    def load_meta(self):
+        """
+        It loads the metadata from the relevant local csv files into the `db_info` dictionary
+        """
+        # Retrieve a list with all the csv files in the folder with initival csvs
+        local_files = os.listdir(self.project.csv_folder)
+        local_csv_files = [
+            filename for filename in local_files if filename.endswith("csv")
+        ]
+
+        # Select only csv files that are relevant to start the db
+        local_csvs_db = [
+            file
+            for file in local_csv_files
+            if any(local_csv_files in file for local_csv_files in self.init_keys)
+        ]
+
+        # Store the paths of the local csv files of interest into the "db_info" dictionary
+        for local_csv in local_csvs_db:
+            # Specify the key of the csv
+            init_key = [key for key in self.init_keys if key in local_csv][0]
+
+            # Specify the key in the dictionary of the csv file
+            csv_key = str("local_" + init_key + "_csv")
+
+            # Store the path of the csv file
+            self.db_info[csv_key] = Path(self.project.csv_folder, local_csv)
+
+            # Read the local csv files into a pd df
+            setattr(self, csv_key, pd.read_csv(self.db_info[csv_key]))
 
     def setup_db(self):
         """
-        The function checks if the project is running on the SNIC server, if not it attempts to mount
-        the server. If the server is available, the function creates a database and adds the database to
-        the project
+        The function creates a database and populates it with the data from the local csv files.
+        It also return the db connection
         :return: The database connection object.
         """
-        if self.project.server == "SNIC":
-            if not os.path.exists(self.project.csv_folder):
-                logging.error("Not running on SNIC server, attempting to mount...")
-                status = self.mount_snic()
-                if status == 0:
-                    return
-        db_utils.init_db(self.project.db_path)
-        self.db_info = self.modules["t1_utils"].initiate_db(self.project)
-        # connect to the database and add to project
+        # Create a new database for the project
+        db_utils.create_db(self.project.db_path)
+
+        # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
+        # Store the paths of the local_csvs
+        local_csvs = [
+            str(file) for file in list(self.db_info.keys()) if "local" in str(file)
+        ]
+
+        # Populate the db with initial info from the local_csvs
+        # (sorted reverselly alphabetically to load sites before movies)
+        [db_utils.populate_db(self, i) for i in sorted(local_csvs, reverse=True)]
+
+    # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
         """
         It takes a table name as an argument, connects to the database, gets the column names, gets the
@@ -153,7 +183,10 @@ class ProjectProcessor:
         :param interactive: A boolean which displays the table as HTML
         :return: A dataframe
         """
-        cursor = self.db_connection.cursor()
+        if self.db_connection is not None:
+            cursor = self.db_connection.cursor()
+        else:
+            return
         # Get column names
         cursor.execute(f"SELECT * FROM {table_name}")
         rows = cursor.fetchall()
@@ -173,34 +206,87 @@ class ProjectProcessor:
         else:
             return df
 
+    def choose_workflows(self, generate_export: bool = False):
+        self.set_zoo_info(generate_export=generate_export)
+        self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
+        display(self.workflow_widget)
+
+    def set_zoo_info(self, generate_export: bool = False):
+        if self.project.Zooniverse_number is not None:
+            self.zoo_project = zu_utils.connect_zoo_project(self.project)
+        else:
+            logging.error("This project is not registered with Zooniverse.")
+            return
+        if self.zoo_info is None or self.zoo_info == {}:
+            self.zoo_info = zu_utils.retrieve_zoo_info(
+                self.project,
+                self.zoo_project,
+                zoo_info=["subjects", "workflows", "classifications"],
+                generate_export=generate_export,
+            )
+
     def get_zoo_info(self, generate_export: bool = False):
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
         :return: The zoo_info is being returned.
         """
-        if self.project.Zooniverse_number is not None:
-            self.zoo_project = zu_utils.connect_zoo_project(self.project)
-            self.zoo_info = zu_utils.retrieve__populate_zoo_info(
-                self.project,
-                self.db_info,
-                self.zoo_project,
-                zoo_info=["subjects", "workflows", "classifications"],
-                generate_export=generate_export,
-            )
+        if hasattr(self.project, "db_path"):
+            if hasattr(self, "workflow_widget"):
+                # If the workflow widget is used, retrieve a subset of the subjects to build the db
+                names, workflow_versions = [], []
+                for i in range(0, len(self.workflow_widget.checks), 3):
+                    names.append(list(self.workflow_widget.checks.values())[i])
+                    workflow_versions.append(
+                        list(self.workflow_widget.checks.values())[i + 2]
+                    )
+
+                self.project.zu_workflows = zu_utils.get_workflow_ids(
+                    self.zoo_info["workflows"], names
+                )
+
+                if not isinstance(self.project.zu_workflows, list):
+                    self.project.zu_workflows = literal_eval(self.project.zu_workflows)
+
+                self.zoo_info["subjects"]["workflow_id"] = self.zoo_info["subjects"][
+                    "workflow_id"
+                ].astype("Int64")
+                subjects_series = self.zoo_info["subjects"][
+                    self.zoo_info["subjects"].workflow_id.isin(
+                        self.project.zu_workflows
+                    )
+                ].copy()
+
+            else:
+                self.set_zoo_info(generate_export=generate_export)
+                subjects_series = self.zoo_info["subjects"].copy()
+
+            # Safely remove subjects table
+            db_utils.drop_table(self.project.db_path, table_name="subjects")
+
+            if len(subjects_series) > 0:
+                # Fill or re-fill subjects table
+                zu_utils.populate_subjects(
+                    subjects_series, self.project, self.project.db_path
+                )
+            else:
+                logging.error(
+                    "No subjects to populate database from the workflows selected."
+                )
         else:
-            logging.error("This project is not registered with ZU.")
-            return
+            logging.info("No database path found. Subjects have not been added to db")
 
     def get_movie_info(self):
         """
-        It retrieves a csv file from the server, and then updates the local variable server_movies_csv
-        with the contents of that csv file
+        This function checks what movies from the movies csv are available
         """
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
-            self.project, self.db_info
+            project=self.project,
+            server_info=self.server_info,
+            db_connection=self.db_connection,
         )
-        logging.info("server_movies_csv updated")
+
+        logging.info("Information of available movies has been retrieved")
 
     def load_movie(self, filepath):
         """
@@ -212,35 +298,6 @@ class ProjectProcessor:
         return movie_utils.get_movie_path(filepath, self.db_info, self.project)
 
     # t1
-    def init_meta(self, init_keys=["movies", "species", "sites"]):
-        """
-        This function creates a new attribute for the class, which is a pandas dataframe.
-        The attribute name is a concatenation of the string 'local_' and the value of the variable
-        meta_name, and the string '_csv'.
-
-        The value of the attribute is a pandas dataframe.
-
-        The function is called with the argument init_keys, which is a list of strings.
-
-        The function loops through the list of strings, and for each string, it creates a new attribute
-        for the class.
-
-        :param init_keys: a list of strings that are the names of the metadata files you want to
-               initialize
-        """
-        for meta_name in init_keys:
-            setattr(self, "local_" + meta_name + "_csv", pd.DataFrame())
-            setattr(self, "server_" + meta_name + "_csv", pd.DataFrame())
-
-    def load_meta(self, base_keys=["movies", "species", "sites"]):
-        """
-        It loads the metadata from the local csv files into the `db_info` dictionary
-
-        :param base_keys: the base keys to load
-        """
-        for key, val in self.db_info.items():
-            if any("local_" + ext in key for ext in base_keys):
-                setattr(self, key, pd.read_csv(val))
 
     def select_meta_range(self, meta_key: str):
         """
@@ -251,9 +308,7 @@ class ProjectProcessor:
         :type meta_key: str
         :return: meta_df, range_rows, range_columns
         """
-        meta_df, range_rows, range_columns = self.modules[
-            "t1_utils"
-        ].select_sheet_range(
+        meta_df, range_rows, range_columns = kso_widgets.select_sheet_range(
             db_info_dict=self.db_info, orig_csv=f"local_{meta_key}_csv"
         )
         return meta_df, range_rows, range_columns
@@ -268,7 +323,7 @@ class ProjectProcessor:
         :param range_columns: a list of columns to display in the sheet
         :return: df_filtered, sheet
         """
-        df_filtered, sheet = self.modules["t1_utils"].open_csv(
+        df_filtered, sheet = kso_widgets.open_csv(
             df=meta_df, df_range_rows=range_rows, df_range_columns=range_columns
         )
         display(sheet)
@@ -283,35 +338,27 @@ class ProjectProcessor:
         :param sheet: the name of the sheet you want to view
         :return: A dataframe with the changes highlighted.
         """
-        highlight_changes, sheet_df = self.modules["t1_utils"].display_changes(
+        highlight_changes, sheet_df = kso_widgets.display_changes(
             self.db_info, isheet=sheet, df_filtered=df_filtered
         )
         display(highlight_changes)
         return sheet_df
 
-    def update_meta(self, new_table, meta_name):
-        """
-        `update_meta` takes a new table, a meta name, and updates the local and server meta files
-
-        :param new_table: the name of the table that you want to update
-        :param meta_name: the name of the metadata file (e.g. "movies")
-        :return: The return value is a boolean.
-        """
-        return self.modules["t1_utils"].update_csv(
-            self.db_info,
+    def update_meta(
+        self,
+        sheet_df: pd.DataFrame,
+        meta_name: str,
+    ):
+        return kso_widgets.update_meta(
             self.project,
-            new_table,
-            getattr(self, "local_" + meta_name + "_csv"),
-            "local_" + meta_name + "_csv",
-            "server_" + meta_name + "_csv",
+            self.db_info,
+            sheet_df=sheet_df,
+            df=getattr(self, "local_" + meta_name + "_csv"),
+            meta_name=meta_name,
         )
 
     def map_sites(self):
-        """
-        It takes the database information and the project name and returns a dictionary of the sites in
-        the project. This information is displayed using a map widget.
-        """
-        return self.modules["t1_utils"].map_site(self.db_info, self.project)
+        return kso_widgets.map_sites(project=self.project, db_info_dict=self.db_info)
 
     def preview_media(self):
         """
@@ -320,18 +367,21 @@ class ProjectProcessor:
         function `f` is an asynchronous function that takes in the value of the `movie_selected` widget
         and displays the movie preview
         """
-        movie_selected = t_utils.select_movie(self.server_movies_csv)
+        movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, db_info, server_movies_csv):
-            x = await t_utils.single_wait_for_change(movie_selected, "value")
+        async def f(project, server_info, server_movies_csv):
+            x = await kso_widgets.single_wait_for_change(movie_selected, "value")
             html, movie_path = movie_utils.preview_movie(
-                project, db_info, server_movies_csv, x
+                project=project,
+                server_info=server_info,
+                available_movies_df=server_movies_csv,
+                movie_i=x,
             )
             display(html)
             self.movie_selected = x
             self.movie_path = movie_path
 
-        asyncio.create_task(f(self.project, self.db_info, self.server_movies_csv))
+        asyncio.create_task(f(self.project, self.server_info, self.server_movies_csv))
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -352,26 +402,158 @@ class ProjectProcessor:
             logging.error(f"Local and server versions of {meta_key} are not synced.")
             return
 
-    def check_movies_meta(self, review_method: str = "Basic", gpu: bool = False):
+    def check_movies_meta(
+        self,
+        review_method: str,
+        gpu_available: bool = False,
+    ):
         """
-        `check_movies_meta` checks the metadata of the movies in the database
+        > The function `check_movies_csv` loads the csv with movies information and checks if it is empty
 
-        :param review_method: This is the method used to review the movies. The options are: Basic, Advanced, defaults to
-               Basic
-        :type review_method: str (optional)
-        :param gpu: bool = False, defaults to False
-        :type gpu: bool (optional)
+        :param review_method: The method used to review the movies
+        :param gpu_available: Boolean, whether or not a GPU is available
         """
-        return self.modules["t1_utils"].check_movies_csv(
-            self.db_info, self.server_movies_csv, self.project, review_method, gpu
+
+        # Load the csv with movies information
+        df = pd.read_csv(self.db_info["local_movies_csv"])
+
+        # Get project-specific column names
+        col_names = db_utils.get_col_names(self.project, "local_movies_csv")
+
+        # Set project-specific column names of interest
+        col_fps = col_names["fps"]
+        col_duration = col_names["duration"]
+        col_sampling_start = col_names["sampling_start"]
+        col_sampling_end = col_names["sampling_end"]
+        col_fpath = col_names["fpath"]
+
+        if review_method.startswith("Basic"):
+            # Check if fps or duration is missing from any movie
+            if (
+                not df[[col_fps, col_duration, col_sampling_start, col_sampling_end]]
+                .isna()
+                .any()
+                .any()
+            ):
+                logging.info(
+                    "There are no empty entries for fps, duration and sampling information"
+                )
+
+            else:
+                # Create a df with only those rows with missing fps/duration
+                df_missing = df[
+                    df[col_fps].isna() | df[col_duration].isna()
+                ].reset_index(drop=True)
+
+                ##### Select only movies that can be mapped ####
+                # Merge the missing fps/duration df with the available movies
+                df_missing = df_missing.merge(
+                    self.server_movies_csv[["filename", "exists", "spath"]],
+                    on=["filename"],
+                    how="left",
+                )
+
+                if df_missing.exists.isnull().values.any():
+                    # Replace na with False
+                    df_missing["exists"] = df_missing["exists"].fillna(False)
+
+                    logging.info(
+                        f"Only # {df_missing[df_missing['exists']].shape[0]} out of"
+                        f"# {df_missing[~df_missing['exists']].shape[0]} movies with missing information are available."
+                        f" Proceeding to retrieve fps and duration info for only those {df_missing[df_missing['exists']].shape[0]} available movies."
+                    )
+
+                    # Select only available movies
+                    df_missing = df_missing[df_missing["exists"]].reset_index(drop=True)
+
+                # Rename column to match the movie_path format
+                df_missing = df_missing.rename(
+                    columns={
+                        "spath": "movie_path",
+                    }
+                )
+
+                logging.info("Getting the fps and duration of the movies")
+                # Read the movies and overwrite the existing fps and duration info
+                df_missing[[col_fps, col_duration]] = pd.DataFrame(
+                    [
+                        movie_utils.get_fps_duration(i)
+                        for i in tqdm(
+                            df_missing["movie_path"], total=df_missing.shape[0]
+                        )
+                    ],
+                    columns=[col_fps, col_duration],
+                )
+
+                # Add the missing info to the original df based on movie ids
+                df.set_index("movie_id", inplace=True)
+                df_missing.set_index("movie_id", inplace=True)
+                df.update(df_missing)
+                df.reset_index(drop=False, inplace=True)
+
+        else:
+            logging.info("Retrieving the paths to access the movies")
+            # Add a column with the path (or url) where the movies can be accessed from
+            df["movie_path"] = pd.Series(
+                [
+                    movie_utils.get_movie_path(i, self.db_info, self.project)
+                    for i in tqdm(df[col_fpath], total=df.shape[0])
+                ]
+            )
+
+            logging.info("Getting the fps and duration of the movies")
+            # Read the movies and overwrite the existing fps and duration info
+            df[[col_fps, col_duration]] = pd.DataFrame(
+                [
+                    movie_utils.get_fps_duration(i)
+                    for i in tqdm(df["movie_path"], total=df.shape[0])
+                ],
+                columns=[col_fps, col_duration],
+            )
+
+            logging.info("Standardising the format, frame rate and codec of the movies")
+
+            # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
+            [
+                movie_utils.standarise_movie_format(
+                    i, j, k, self.db_info, self.project, gpu_available
+                )
+                for i, j, k in tqdm(
+                    zip(df["movie_path"], df["filename"], df[col_fpath]),
+                    total=df.shape[0],
+                )
+            ]
+
+            # Drop unnecessary columns
+            df = df.drop(columns=["movie_path"])
+
+        # Fill out missing sampling start information
+        df.loc[df[col_sampling_start].isna(), col_sampling_start] = 0.0
+
+        # Fill out missing sampling end information
+        df.loc[df[col_sampling_end].isna(), col_sampling_end] = df[col_duration]
+
+        # Prevent sampling end times longer than actual movies
+        if (df[col_sampling_end] > df[col_duration]).any():
+            mov_list = df[df[col_sampling_end] > df[col_duration]].filename.unique()
+            raise ValueError(
+                f"The sampling_end times of the following movies are longer than the actual movies {mov_list}"
+            )
+
+        # Save the updated df locally
+        df.to_csv(self.db_info["local_movies_csv"], index=False)
+        logging.info("The local movies.csv file has been updated")
+
+        # Save the updated df in the server
+        server_utils.update_csv_server(
+            project=self.project,
+            db_info_dict=self.db_info,
+            orig_csv="server_movies_csv",
+            updated_csv="local_movies_csv",
         )
 
     def check_species_meta(self):
-        """
-        This function checks the species metadata file for the project and returns a boolean value
-        :return: the result of the check_species_csv function.
-        """
-        return self.modules["t1_utils"].check_species_csv(self.db_info, self.project)
+        return db_utils.check_species_meta(self.project, self.db_info)
 
     def check_sites_meta(self):
         # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
@@ -380,15 +562,81 @@ class ProjectProcessor:
     # t2
     def upload_movies(self, movie_list: list):
         """
-        > This function takes a list of movie objects and uploads them to the server
+        It uploads the new movies to the SNIC server and creates new rows to be updated
+        with movie metadata and saved into movies.csv
 
-        :param movie_list: a list of dictionaries, each dictionary containing the following keys:
-        :type movie_list: list
-        :return: A list of movie objects
+        :param db_info_dict: a dictionary with the following keys:
+        :param movie_list: list of new movies that are to be added to movies.csv
         """
-        return self.modules["t2_utils"].upload_new_movies(
-            self.project, self.db_info, movie_list
+        # Get number of new movies to be added
+        movie_folder = self.project.movie_folder
+        number_of_movies = len(movie_list)
+        # Get current movies
+        movies_df = pd.read_csv(self.db_info["local_movies_csv"])
+        # Set up a new row for each new movie
+        new_movie_rows_sheet = ipysheet.sheet(
+            rows=number_of_movies,
+            columns=movies_df.shape[1],
+            column_headers=movies_df.columns.tolist(),
         )
+        if len(movie_list) == 0:
+            logging.error("No valid movie found to upload.")
+            return
+        for index, movie in enumerate(movie_list):
+            if self.project.server == "SNIC":
+                # Specify volume allocated by SNIC
+                snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
+                remote_fpath = Path(f"{snic_path}/tmp_dir/", movie[1])
+            else:
+                remote_fpath = Path(f"{movie_folder}", movie[1])
+            if os.path.exists(remote_fpath):
+                logging.info(
+                    "Filename "
+                    + str(movie[1])
+                    + " already exists on SNIC, try again with a new file"
+                )
+                return
+            else:
+                # process video
+                stem = "processed"
+                p = Path(movie[0])
+                processed_video_path = p.with_name(f"{p.stem}_{stem}{p.suffix}").name
+                logging.info("Movie to be uploaded: " + processed_video_path)
+                ffmpeg.input(p).output(
+                    processed_video_path,
+                    crf=22,
+                    pix_fmt="yuv420p",
+                    vcodec="libx264",
+                    threads=4,
+                ).run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
+
+                if self.project.server == "SNIC":
+                    server_utils.upload_object_to_snic(
+                        self.db_info["sftp_client"],
+                        str(processed_video_path),
+                        str(remote_fpath),
+                    )
+                elif self.project.server in ["LOCAL", "TEMPLATE"]:
+                    shutil.copy2(str(processed_video_path), str(remote_fpath))
+                logging.info("movie uploaded\n")
+            # Fetch movie metadata that can be calculated from movie file
+            fps, duration = movie_utils.get_fps_duration(movie[0])
+            movie_id = str(max(movies_df["movie_id"]) + 1)
+            ipysheet.cell(index, 0, movie_id)
+            ipysheet.cell(index, 1, movie[1])
+            ipysheet.cell(index, 2, "-")
+            ipysheet.cell(index, 3, "-")
+            ipysheet.cell(index, 4, "-")
+            ipysheet.cell(index, 5, fps)
+            ipysheet.cell(index, 6, duration)
+            ipysheet.cell(index, 7, "-")
+            ipysheet.cell(index, 8, "-")
+        logging.info("All movies uploaded:\n")
+        logging.info(
+            "Complete this sheet by filling the missing info on the movie you just uploaded"
+        )
+        display(new_movie_rows_sheet)
+        return new_movie_rows_sheet
 
     def add_movies(self):
         """
@@ -396,7 +644,7 @@ class ProjectProcessor:
         changes to the local csv file of the new movies that should be added. It creates a metadata row
         for each new movie, which should be filled in by the user before uploading can continue.
         """
-        movie_list = self.modules["t2_utils"].choose_new_videos_to_upload()
+        movie_list = kso_widgets.choose_new_videos_to_upload()
         button = widgets.Button(
             description="Click to upload movies",
             disabled=False,
@@ -418,8 +666,10 @@ class ProjectProcessor:
             )
 
             def on_button_clicked2(b):
-                self.local_movies_csv = self.modules["t2_utils"].add_new_rows_to_csv(
-                    self.db_info, new_sheet
+                movies_df = pd.read_csv(self.db_info["local_movies_csv"])
+                new_movie_rows_df = ipysheet.to_dataframe(new_sheet)
+                self.local_movies_csv = pd.concat(
+                    [movies_df, new_movie_rows_df], ignore_index=True
                 )
                 logging.info("Changed saved locally")
 
@@ -453,7 +703,7 @@ class ProjectProcessor:
                  - 'class': the class of the annotation
                  - 'bbox': the bounding box of the annotation
         """
-        return self.modules["t8_utils"].get_annotations_viewer(
+        return t_utils.get_annotations_viewer(
             folder_path, species_list=annotation_classes
         )
 
@@ -482,15 +732,15 @@ class ProjectProcessor:
         # t3_utils.create_clips
 
         if is_example:
-            clip_selection = self.modules["t3_utils"].select_random_clips(
-                movie_i=movie_name, db_info_dict=self.db_info
+            clip_selection = kso_widgets.select_random_clips(
+                project=self.project, movie_i=movie_name
             )
         else:
-            clip_selection = self.modules["t3_utils"].select_clip_n_len(
-                movie_i=movie_name, db_info_dict=self.db_info
+            clip_selection = kso_widgets.select_clip_n_len(
+                project=self.project, movie_i=movie_name
             )
 
-        clip_modification = self.modules["t3_utils"].clip_modification_widget()
+        clip_modification = kso_widgets.clip_modification_widget()
 
         button = widgets.Button(
             description="Click to extract clips.",
@@ -501,22 +751,22 @@ class ProjectProcessor:
         )
 
         def on_button_clicked(b):
-            self.generated_clips = self.modules["t3_utils"].create_clips(
-                self.server_movies_csv,
-                movie_name,
-                movie_path,
-                self.db_info,
-                clip_selection,
-                self.project,
-                {},
-                use_gpu,
-                pool_size,
+            self.generated_clips = t_utils.create_clips(
+                available_movies_df=self.server_movies_csv,
+                movie_i=movie_name,
+                movie_path=movie_path,
+                db_info_dict=self.db_info,
+                clip_selection=clip_selection,
+                project=self.project,
+                modification_details={},
+                gpu_available=use_gpu,
+                pool_size=pool_size,
             )
-            mod_clips = self.modules["t3_utils"].create_modified_clips(
+            mod_clips = t_utils.create_modified_clips(
+                self.project,
                 self.generated_clips.clip_path,
                 movie_name,
                 clip_modification.checks,
-                self.project,
                 use_gpu,
                 pool_size,
             )
@@ -534,36 +784,7 @@ class ProjectProcessor:
         :param movie_name: The name of the movie you want to check if it's uploaded
         :type movie_name: str
         """
-        self.modules["t3_utils"].check_movie_uploaded(
-            movie_i=movie_name, db_info_dict=self.db_info
-        )
-
-    def upload_zu_subjects(self, upload_data: pd.DataFrame, subject_type: str):
-        """
-        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
-
-        :param upload_data: a pandas dataframe with the following columns:
-        :type upload_data: pd.DataFrame
-        :param subject_type: str = "clip" or "frame"
-        :type subject_type: str
-        """
-        if subject_type == "clip":
-            upload_df, sitename, created_on = self.modules["t3_utils"].set_zoo_metadata(
-                self.db_info, upload_data, self.project
-            )
-            self.modules["t3_utils"].upload_clips_to_zooniverse(
-                upload_df, sitename, created_on, self.project.Zooniverse_number
-            )
-            # Clean up subjects after upload
-            self.modules["t3_utils"].remove_temp_clips(upload_df)
-        elif subject_type == "frame":
-            species_list = []
-            upload_df = self.modules["t4_utils"].set_zoo_metadata(
-                upload_data, species_list, self.project, self.db_info
-            )
-            self.modules["t4_utils"].upload_frames_to_zooniverse(
-                upload_df, species_list, self.db_info, self.project
-            )
+        movie_utils.check_movie_uploaded(self.project, movie_i=movie_name)
 
     def generate_zu_frames(self):
         """
@@ -571,7 +792,7 @@ class ProjectProcessor:
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
         """
 
-        frame_modification = self.modules["t3_utils"].clip_modification_widget()
+        frame_modification = kso_widgets.clip_modification_widget()
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -582,11 +803,11 @@ class ProjectProcessor:
         )
 
         def on_button_clicked(b):
-            self.generated_frames = self.modules["t4_utils"].modify_frames(
+            self.generated_frames = zu_utils.modify_frames(
+                project=self.project,
                 frames_to_upload_df=self.frames_to_upload_df.df.reset_index(drop=True),
                 species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
-                project=self.project,
             )
 
         button.on_click(on_button_clicked)
@@ -595,6 +816,8 @@ class ProjectProcessor:
 
     def generate_custom_frames(
         self,
+        skip_start: int,
+        skip_end: int,
         input_path: str,
         output_path: str,
         num_frames: int = None,
@@ -619,8 +842,8 @@ class ProjectProcessor:
         containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
         function that applies the given function to each element of a list of movie_files.
         """
-        frame_modification = self.modules["t3_utils"].clip_modification_widget()
-        species_list = self.modules["t4_utils"].choose_species(self.db_info)
+        frame_modification = kso_widgets.clip_modification_widget()
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -640,22 +863,50 @@ class ProjectProcessor:
                     in [".mov", ".mp4", ".avi", ".mkv"]
                 ]
             )
-            results = parallel_map(
-                self.modules["t4_utils"].extract_custom_frames,
+
+            results = g_utils.parallel_map(
+                self.extract_custom_frames,
                 movie_files,
                 args=(
                     [output_path] * len(movie_files),
+                    [skip_start] * len(movie_files),
+                    [skip_end] * len(movie_files),
                     [num_frames] * len(movie_files),
                     [frames_skip] * len(movie_files),
                 ),
             )
-            self.frames_to_upload_df = pd.concat(results)
+            if len(results) > 0:
+                self.frames_to_upload_df = pd.concat(results)
+                self.frames_to_upload_df["species_id"] = pd.Series(
+                    [t_utils.get_species_ids(self.project, species_list.value)]
+                    * len(self.frames_to_upload_df)
+                )
+                self.frames_to_upload_df = self.frames_to_upload_df.merge(
+                    self.get_db_table("movies").rename(columns={"id": "movie_id"}),
+                    how="left",
+                    left_on="movie_filename",
+                    right_on="filename",
+                )
+                # Ensure necessary metadata fields are available
+                self.frames_to_upload_df = self.frames_to_upload_df[
+                    [
+                        "frame_path",
+                        "site_id",
+                        "movie_id",
+                        "created_on",
+                        "frame_number",
+                        "species_id",
+                    ]
+                ]
+
+            else:
+                logging.error("No results.")
+                self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
-            self.generated_frames = self.modules["t4_utils"].modify_frames(
+            self.generated_frames = self.modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,
-                project=self.project,
             )
 
         button.on_click(on_button_clicked)
@@ -674,7 +925,7 @@ class ProjectProcessor:
         :type subsample_up_to: int (optional)
         """
 
-        species_list = self.modules["t4_utils"].choose_species(self.db_info)
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Click to fetch frames",
@@ -686,12 +937,11 @@ class ProjectProcessor:
 
         def on_button_clicked(b):
             self.species_of_interest = species_list.value
-            self.frames_to_upload_df = self.modules["t4_utils"].get_frames(
-                species_names=species_list.value,
-                db_path=self.db_info["db_path"],
-                zoo_info_dict=self.zoo_info,
-                server_dict=self.db_info,
+            self.frames_to_upload_df = zu_utils.get_frames(
                 project=self.project,
+                zoo_info_dict=self.zoo_info,
+                db_info_dict=self.db_info,
+                species_names=species_list.value,
                 n_frames_subject=n_frames_subject,
                 subsample_up_to=subsample_up_to,
             )
@@ -699,19 +949,53 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(button)
 
-    def check_frames_uploaded(self):
+    def upload_zu_subjects(self, subject_type: str):
         """
-        This function checks if the frames in the frames_to_upload_df dataframe have been uploaded to
-        the database
+        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
+
+        :param
+        :param subject_type: str = "clip" or "frame"
+        :type subject_type: str
         """
-        self.modules["t4_utils"].check_frames_uploaded(
-            self.frames_to_upload_df,
-            self.project,
-            self.species_of_interest,
-            self.db_connection,
-        )
+        if subject_type == "clip":
+            upload_df, sitename, created_on = zu_utils.set_zoo_clip_metadata(
+                project=self.project,
+                generated_clipsdf=self.generated_clips,
+                sitesdf=self.local_sites_csv,
+                moviesdf=self.local_movies_csv,
+            )
+            zu_utils.upload_clips_to_zooniverse(
+                project=self.project,
+                upload_to_zoo=upload_df,
+                sitename=sitename,
+                created_on=created_on,
+            )
+            # Clean up subjects after upload
+            zu_utils.remove_temp_clips(upload_df)
+        elif subject_type == "frame":
+            species_list = []
+            upload_df = zu_utils.set_zoo_frame_metadata(
+                upload_data, species_list, self.project, self.db_info
+            )
+            zu_utils.upload_frames_to_zooniverse(
+                upload_df, species_list, self.db_info, self.project
+            )
 
     # t5, t6, t7
+    def get_team_name(self):
+        """
+        > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
+
+        :param project_name: The name of the project you want to get the data from
+        :type project_name: str
+        :return: The team name is being returned.
+        """
+
+        if self.project.Project_name == "Spyfish_Aotearoa":
+            return "wildlife-ai"
+        else:
+            return "koster"
+
     def get_ml_data(self):
         # get template ml data
         pass
@@ -728,135 +1012,57 @@ class ProjectProcessor:
         # code for preparing movie files (standardising formats)
         pass
 
-    # t8
-    def process_classifications(
-        self,
-        classifications_data,
-        subject_type: str,
-        agg_params: list,
-        summary: bool = False,
-    ):
+    def check_frames_uploaded(self):
         """
-        It takes in a dataframe of classifications, a subject type (clip or frame), a list of
-        aggregation parameters, and a boolean for whether or not to return a summary of the
-        classifications.
-
-        It then returns a dataframe of aggregated classifications.
-
-        Let's break it down.
-
-        First, we check that the length of the aggregation parameters is correct for the subject type.
-
-        Then, we define a function called `get_classifications` that takes in a dataframe of
-        classifications and a subject type.
-
-        This function queries the subjects table for the subject type and then merges the
-        classifications dataframe with the subjects dataframe.
-
-        It then returns the merged dataframe.
-
-        Finally, we call the `aggregrate_classifications` function from the `t8_utils` module, passing
-        in the dataframe returned by `get_classifications`, the subject
-
-        :param classifications_data: the dataframe of classifications from the Zooniverse API
-        :param subject_type: This is the type of subject you want to retrieve classifications for. This
-               can be either "clip" or "frame"
-        :type subject_type: str
-        :param agg_params: list
-        :type agg_params: list
-        :param summary: If True, the output will be a summary of the classifications, with the number of
-               classifications per label, defaults to False
-        :type summary: bool (optional)
+        This function checks if the frames in the frames_to_upload_df dataframe have been uploaded to
+        the database
         """
-
-        t = False
-        if subject_type == "clip":
-            t = len(agg_params) == 2
-        elif subject_type == "frame":
-            t = len(agg_params) == 5
-
-        if not t:
-            logging.error("Incorrect agg_params length for subject type")
-            return
-
-        def get_classifications(classes_df, subject_type):
-            conn = self.db_connection
-            if subject_type == "frame":
-                # Query id and subject type from the subjects table
-                subjects_df = pd.read_sql_query(
-                    "SELECT id, subject_type, \
-                                                https_location, filename, frame_number, movie_id FROM subjects \
-                                                WHERE subject_type=='frame'",
-                    conn,
-                )
-
-            else:
-                # Query id and subject type from the subjects table
-                subjects_df = pd.read_sql_query(
-                    "SELECT id, subject_type, \
-                                                https_location, filename, clip_start_time, movie_id FROM subjects \
-                                                WHERE subject_type=='clip'",
-                    conn,
-                )
-
-            # Ensure id format matches classification's subject_id
-            classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
-            subjects_df["id"] = subjects_df["id"].astype("Int64")
-
-            # Add subject information based on subject_ids
-            classes_df = pd.merge(
-                classes_df,
-                subjects_df,
-                how="left",
-                left_on="subject_ids",
-                right_on="id",
-            )
-
-            if classes_df[["subject_type", "https_location"]].isna().any().any():
-                # Exclude classifications from missing subjects
-                filtered_class_df = classes_df.dropna(
-                    subset=["subject_type", "https_location"], how="any"
-                ).reset_index(drop=True)
-
-                # Report on the issue
-                logging.info(
-                    f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}"
-                    f" classifications out of {classes_df.shape[0]}"
-                    f" missing subject info. Maybe the subjects have been removed from Zooniverse?"
-                )
-
-                classes_df = filtered_class_df
-
-            logging.info(
-                f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
-            )
-
-            return classes_df
-
-        agg_class_df, raw_class_df = self.modules["t8_utils"].aggregate_classifications(
-            get_classifications(classifications_data, subject_type),
-            subject_type,
+        t_utils.check_frames_uploaded(
             self.project,
-            agg_params,
+            self.frames_to_upload_df,
+            self.species_of_interest,
         )
-        if summary:
-            agg_class_df = (
-                agg_class_df.groupby("label")["subject_ids"].agg("count").to_frame()
-            )
-        return agg_class_df, raw_class_df
+
+    # t8
+    def get_classifications(
+        self,
+        workflow_dict: dict,
+        workflows_df: pd.DataFrame,
+        subj_type: str,
+        class_df: pd.DataFrame,
+    ):
+        return zu_utils.get_classifications(
+            workflow_dict=workflow_dict,
+            workflows_df=workflows_df,
+            subj_type=subj_type,
+            class_df=class_df,
+            db_path=self.project.db_path,
+        )
+
+    def process_classifications(
+        self, classifications_data, subject_type, agg_params, summary
+    ):
+        return zu_utils.process_classifications(
+            project=self.project,
+            classifications_data=classifications_data,
+            subject_type=subject_type,
+            agg_params=agg_params,
+            summary=summary,
+            db_connection=self.db_connection,
+        )
 
     def process_annotations(self):
         # code for prepare dataset for machine learning
         pass
 
     def format_to_gbif(self, agg_df: pd.DataFrame, subject_type: str):
-        return self.modules["t8_utils"].format_to_gbif_occurence(
+        return zu_utils.format_to_gbif_occurence(
+            project=self.project,
+            db_info_dict=self.db_info,
+            zoo_info_dict=self.zoo_info,
             df=agg_df,
             classified_by="citizen_scientists",
             subject_type=subject_type,
-            db_info_dict=self.db_info,
-            project=self.project,
-            zoo_info_dict=self.zoo_info,
         )
 
 
@@ -879,36 +1085,41 @@ class MLProjectProcessor(ProjectProcessor):
         self.best_model_path = None
         self.model_type = None
         self.train, self.run, self.test = (None,) * 3
-        self.modules = import_modules(["t4_utils", "t5_utils", "t6_utils", "t7_utils"])
+
+        # Before t6_utils gets loaded in, the val.py file in yolov5_tracker repository needs to be removed
+        # to prevent the batch_size error, see issue kso-object-detection #187
+        path_to_val = os.path.join(sys.path[0], "yolov5_tracker/val.py")
+        if os.path.exists(path_to_val):
+            os.remove(path_to_val)
+
+        self.modules = g_utils.import_modules([])
         self.modules.update(
-            import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
+            g_utils.import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
-        if "t6_utils" in self.modules:
-            self.team_name = self.modules["t6_utils"].get_team_name(
-                self.project.Project_name
-            )
-        if "t5_utils" in self.modules:
-            model_selected = self.modules["t5_utils"].choose_model_type()
 
-            async def f():
-                x = await t_utils.single_wait_for_change(model_selected, "value")
-                self.model_type = x
-                self.modules.update(self.load_yolov5_modules())
-                if all(["train", "detect", "val"]) in self.modules:
-                    self.train, self.run, self.test = (
-                        self.modules["train"],
-                        self.modules["detect"],
-                        self.modules["val"],
-                    )
+        self.team_name = self.get_team_name()
 
-            asyncio.create_task(f())
+        model_selected = t_utils.choose_model_type()
+
+        async def f():
+            x = await kso_widgets.single_wait_for_change(model_selected, "value")
+            self.model_type = x
+            self.modules.update(self.load_yolov5_modules())
+            if all(["train", "detect", "val"]) in self.modules:
+                self.train, self.run, self.test = (
+                    self.modules["train"],
+                    self.modules["detect"],
+                    self.modules["val"],
+                )
+
+        asyncio.create_task(f())
 
     def load_yolov5_modules(self):
         # Model-specific imports
         if self.model_type == 1:
             module_names = ["yolov5.train", "yolov5.detect", "yolov5.val"]
             logging.info("Object detection model loaded")
-            return import_modules(module_names, utils=False, models=True)
+            return g_utils.import_modules(module_names, utils=False, models=True)
         elif self.model_type == 2:
             logging.info("Image classification model loaded")
             module_names = [
@@ -916,7 +1127,7 @@ class MLProjectProcessor(ProjectProcessor):
                 "yolov5.classify.predict",
                 "yolov5.classify.val",
             ]
-            return import_modules(module_names, utils=False, models=True)
+            return g_utils.import_modules(module_names, utils=False, models=True)
         elif self.model_type == 3:
             logging.info("Image segmentation model loaded")
             module_names = [
@@ -924,7 +1135,7 @@ class MLProjectProcessor(ProjectProcessor):
                 "yolov5.segment.predict",
                 "yolov5.segment.val",
             ]
-            return import_modules(module_names, utils=False, models=True)
+            return g_utils.import_modules(module_names, utils=False, models=True)
         else:
             logging.info("Invalid model specification")
 
@@ -938,7 +1149,7 @@ class MLProjectProcessor(ProjectProcessor):
         track_frames: bool = False,
         n_tracked_frames: int = 0,
     ):
-        species_list = self.modules["t4_utils"].choose_species(self.db_info)
+        species_list = kso_widgets.choose_species(self.project)
 
         button = widgets.Button(
             description="Aggregate frames",
@@ -953,16 +1164,16 @@ class MLProjectProcessor(ProjectProcessor):
             self.species_of_interest = species_list.value
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
-                self.project,
-                self.db_info,
-                out_path,
-                perc_test,
-                self.species_of_interest,
-                img_size,
-                remove_nulls,
-                track_frames,
-                n_tracked_frames,
-                agg_df,
+                project=self.project,
+                db_info_dict=self.db_info,
+                out_path=out_path,
+                perc_test=perc_test,
+                class_list=self.species_of_interest,
+                img_size=img_size,
+                remove_nulls=remove_nulls,
+                track_frames=track_frames,
+                n_tracked_frames=n_tracked_frames,
+                agg_df=agg_df,
             )
 
         button.on_click(on_button_clicked)
@@ -970,7 +1181,7 @@ class MLProjectProcessor(ProjectProcessor):
 
     def choose_entity(self, alt_name: bool = False):
         if self.team_name is None:
-            return self.modules["t5_utils"].choose_entity()
+            return t_utils.choose_entity()
         else:
             if not alt_name:
                 logging.info(
@@ -979,17 +1190,121 @@ class MLProjectProcessor(ProjectProcessor):
                     " set the argument alt_name to True"
                 )
             else:
-                return self.modules["t5_utils"].choose_entity()
+                return t_utils.choose_entity()
+
+    # Function to choose a model to evaluate
+    def choose_model(self):
+        """
+        It takes a project name and returns a dropdown widget that displays the metrics of the model
+        selected
+
+        :param project_name: The name of the project you want to load the model from
+        :return: The model_widget is being returned.
+        """
+        model_dict = {}
+        model_info = {}
+        api = wandb.Api()
+        # weird error fix (initialize api another time)
+
+        project_name = self.project.Project_name.replace(" ", "_")
+        if self.team_name == "wildlife-ai":
+            logging.info("Please note: Using models from adi-ohad-heb-uni account.")
+            full_path = "adi-ohad-heb-uni/project-wildlife-ai"
+            api.runs(path=full_path).objects
+        else:
+            full_path = f"{self.team_name}/{project_name.lower()}"
+
+        runs = api.runs(full_path)
+
+        for run in runs:
+            model_artifacts = [
+                artifact
+                for artifact in chain(run.logged_artifacts(), run.used_artifacts())
+                if artifact.type == "model"
+            ]
+            if len(model_artifacts) > 0:
+                model_dict[run.name] = model_artifacts[0].name.split(":")[0]
+                model_info[model_artifacts[0].name.split(":")[0]] = run.summary
+
+        # Add "no movie" option to prevent conflicts
+        # models = np.append(list(model_dict.keys()),"No model")
+
+        model_widget = widgets.Dropdown(
+            options=[(name, model) for name, model in model_dict.items()],
+            description="Select model:",
+            ensure_option=False,
+            disabled=False,
+            layout=widgets.Layout(width="50%"),
+            style={"description_width": "initial"},
+        )
+
+        main_out = widgets.Output()
+        display(model_widget, main_out)
+
+        # Display model metrics
+        def on_change(change):
+            with main_out:
+                clear_output()
+                if change["new"] == "No file":
+                    logging.info("Choose another file")
+                else:
+                    if project_name == "model-registry":
+                        logging.info("No metrics available")
+                    else:
+                        logging.info(
+                            {
+                                k: v
+                                for k, v in model_info[change["new"]].items()
+                                if "metrics" in k
+                            }
+                        )
+
+        model_widget.observe(on_change, names="value")
+        return model_widget
+
+    def transfer_model(
+        model_name: str, artifact_dir: str, project_name: str, user: str, password: str
+    ):
+        """
+        It takes the model name, the artifact directory, the project name, the user and the password as
+        arguments and then downloads the latest model from the project and uploads it to the server
+
+        :param model_name: the name of the model you want to transfer
+        :type model_name: str
+        :param artifact_dir: the directory where the model is stored
+        :type artifact_dir: str
+        :param project_name: The name of the project you want to transfer the model from
+        :type project_name: str
+        :param user: the username of the remote server
+        :type user: str
+        :param password: the password for the user you're using to connect to the server
+        :type password: str
+        """
+        ssh = SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.load_system_host_keys()
+        ssh.connect(
+            hostname="80.252.221.46", port=2230, username=user, password=password
+        )
+
+        # SCPCLient takes a paramiko transport as its only argument
+        scp = SCPClient(ssh.get_transport())
+        scp.put(
+            f"{artifact_dir}/weights/best.pt",
+            f"/home/koster/model_config/weights/ \
+                {os.path.basename(project_name)}_{os.path.basename(os.path.dirname(artifact_dir))}_{model_name}",
+        )
+        scp.close()
 
     def setup_paths(self):
-        if not isinstance(self.output_path, str):
+        if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
-        self.data_path, self.hyp_path = self.modules["t5_utils"].setup_paths(
+        self.data_path, self.hyp_path = yolo_utils.setup_paths(
             self.output_path, self.model_type
         )
 
     def choose_train_params(self):
-        return self.modules["t5_utils"].choose_train_params(self.model_type)
+        return t_utils.choose_train_params(self.model_type)
 
     def train_yolov5(
         self, exp_name, weights, epochs=50, batch_size=16, img_size=[720, 540]
@@ -1069,12 +1384,12 @@ class MLProjectProcessor(ProjectProcessor):
         )
 
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
-        self.modules["t6_utils"].set_config(conf_thres, model, eval_dir)
-        self.modules["t6_utils"].add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = self.modules["t6_utils"].generate_csv_report(
+        yolo_utils.set_config(conf_thres, model, eval_dir)
+        yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
+        self.csv_report = yolo_utils.generate_csv_report(
             eval_dir.selected, wandb_log=True
         )
-        self.modules["wandb"].finish()
+        wandb.finish()
 
     def track_individuals(
         self,
@@ -1084,7 +1399,7 @@ class MLProjectProcessor(ProjectProcessor):
         conf_thres: float,
         img_size: tuple = (540, 540),
     ):
-        latest_tracker = self.modules["t6_utils"].track_objects(
+        latest_tracker = yolo_utils.track_objects(
             source_dir=source,
             artifact_dir=artifact_dir,
             tracker_folder=eval_dir,
@@ -1092,13 +1407,11 @@ class MLProjectProcessor(ProjectProcessor):
             img_size=img_size,
             gpu=True if self.modules["torch"].cuda.is_available() else False,
         )
-        self.modules["t6_utils"].add_data_wandb(
+        yolo_utils.add_data_wandb(
             Path(latest_tracker).parent.absolute(), "tracker_output", self.run
         )
-        self.csv_report = self.modules["t6_utils"].generate_csv_report(
-            eval_dir, wandb_log=True
-        )
-        self.tracking_report = self.modules["t6_utils"].generate_counts(
+        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
+        self.tracking_report = yolo_utils.generate_counts(
             eval_dir, latest_tracker, artifact_dir, wandb_log=True
         )
         self.modules["wandb"].finish()
@@ -1147,13 +1460,47 @@ class MLProjectProcessor(ProjectProcessor):
         #    self.run_history, key=lambda x: x["metrics"]["metrics/"+sort_metric]
         # )
 
-    def get_model(self, model: str, download_dir: str):
-        return self.modules["t6_utils"].get_model(
-            model_name=model,
-            project_name=self.project_name,
-            download_path=download_dir,
-            team_name=self.team_name,
-        )
+    def get_model(self, model_name: str, download_path: str):
+        """
+        It downloads the latest model checkpoint from the specified project and model name
+
+        :param model_name: The name of the model you want to download
+        :type model_name: str
+        :param project_name: The name of the project you want to download the model from
+        :type project_name: str
+        :param download_path: The path to download the model to
+        :type download_path: str
+        :return: The path to the downloaded model checkpoint.
+        """
+        if self.team_name == "wildlife-ai":
+            logging.info("Please note: Using models from adi-ohad-heb-uni account.")
+            full_path = "adi-ohad-heb-uni/project-wildlife-ai"
+        else:
+            full_path = f"{self.team_name}/{self.project.Project_name.lower()}"
+        api = wandb.Api()
+        try:
+            api.artifact_type(type_name="model", project=full_path).collections()
+        except Exception as e:
+            logging.error(
+                f"No model collections found. No artifacts have been logged. {e}"
+            )
+            return None
+        collections = [
+            coll
+            for coll in api.artifact_type(
+                type_name="model", project=full_path
+            ).collections()
+        ]
+        model = [i for i in collections if i.name == model_name]
+        if len(model) > 0:
+            model = model[0]
+        else:
+            logging.error("No model found")
+        artifact = api.artifact(full_path + "/" + model.name + ":latest")
+        logging.info("Downloading model checkpoint...")
+        artifact_dir = artifact.download(root=download_path)
+        logging.info("Checkpoint downloaded.")
+        return os.path.realpath(artifact_dir)
 
     def get_best_model(self, metric="mAP_0.5", download_path: str = ""):
         # Get the best model from the run history according to the specified metric
@@ -1207,6 +1554,48 @@ class MLProjectProcessor(ProjectProcessor):
         with open(output_path, "wb") as f:
             f.write(converter)
 
+    def get_dataset(self, model: str, team_name: str = "koster"):
+        """
+        It takes in a project name and a model name, and returns the paths to the train and val datasets
+
+        :param project_name: The name of the project you want to download the dataset from
+        :type project_name: str
+        :param model: The model you want to use
+        :type model: str
+        :return: The return value is a list of two directories, one for the training data and one for the validation data.
+        """
+        api = wandb.Api()
+        if "_" in model:
+            run_id = model.split("_")[1]
+            try:
+                run = api.run(
+                    f"{team_name}/{self.project.Project_name.lower()}/runs/{run_id}"
+                )
+            except wandb.CommError:
+                logging.error("Run data not found")
+                return "empty_string", "empty_string"
+            datasets = [
+                artifact
+                for artifact in run.used_artifacts()
+                if artifact.type == "dataset"
+            ]
+            if len(datasets) == 0:
+                logging.error(
+                    "No datasets are linked to these runs. Please try another run."
+                )
+                return "empty_string", "empty_string"
+            dirs = []
+            for i in range(len(["train", "val"])):
+                artifact = datasets[i]
+                logging.info(f"Downloading {artifact.name} checkpoint...")
+                artifact_dir = artifact.download()
+                logging.info(f"{artifact.name} - Dataset downloaded.")
+                dirs.append(artifact_dir)
+            return dirs
+        else:
+            logging.error("Externally trained model. No data available.")
+            return "empty_string", "empty_string"
+
 
 class Annotator:
     def __init__(self, dataset_name, images_path, potential_labels=None):
@@ -1214,8 +1603,8 @@ class Annotator:
         self.images_path = images_path
         self.potential_labels = potential_labels
         self.bboxes = {}
-        self.modules = import_modules(["t5_utils", "t6_utils", "t7_utils"])
-        self.modules.update(import_modules(["fiftyone"], utils=False))
+        self.modules = g_utils.import_modules([])
+        self.modules.update(g_utils.import_modules(["fiftyone"], utils=False))
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -1266,7 +1655,7 @@ class Annotator:
         dataset.save()
 
     def annotate(self, autolabel_model: str = None):
-        return self.modules["t6_utils"].get_annotator(
+        return t_utils.get_annotator(
             self.images_path, self.potential_labels, autolabel_model
         )
 
