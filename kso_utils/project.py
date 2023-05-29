@@ -568,7 +568,7 @@ class ProjectProcessor:
             is_example=is_example,
         )
         clip_modification = kso_widgets.clip_modification_widget()
-
+        
         button = widgets.Button(
             description="Click to extract clips.",
             disabled=False,
