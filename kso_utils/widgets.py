@@ -1305,18 +1305,18 @@ def open_csv(
     :return: A (subset) dataframe with the information of interest and the same data in an interactive sheet
     """
     # Extract the first and last row to display
-    range_start = int(df_range_rows.label[0])
-    range_end = int(df_range_rows.label[1])
+    range_start = int(df_range_rows[0])
+    range_end = int(df_range_rows[1])
 
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
 
     # Filter the dataframe based on the selection: rows and columns
     df_filtered_row = df.filter(items=range(range_start, range_end), axis=0)
-    if not len(df_range_columns.label) == 0:
-        df_filtered = df_filtered_row.filter(items=df_range_columns.label, axis=1)
+    if not len(df_range_columns) == 0:
+        df_filtered = df_filtered_row.filter(items=df_range_columns, axis=1)
         # Display columns
-        logging.info(f"Displaying {df_range_columns.label}")
+        logging.info(f"Displaying {df_range_columns}")
     else:
         df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
         # Display columns
