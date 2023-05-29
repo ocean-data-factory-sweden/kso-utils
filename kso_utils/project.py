@@ -180,14 +180,20 @@ class ProjectProcessor:
             for i in local_dfs
         ]
 
-    def choose_workflows(self, generate_export: bool = False):
-        self.set_zoo_info(generate_export=generate_export)
+    def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
+        self.set_zoo_info(generate_export=generate_export, zoo_cred=zoo_cred)
         self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
         display(self.workflow_widget)
 
-    def set_zoo_info(self, generate_export: bool = False):
+    def set_zoo_info(self, generate_export: bool = False, zoo_cred=False):
+        """
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+        This is used in the automatic tests in gitlab called autotests.py.
+        when it is set to False, then the credentials are retrieved from the interacitve widget.
+
+        """
         if self.project.Zooniverse_number is not None:
-            self.zoo_project = zu_utils.connect_zoo_project(self.project)
+            self.zoo_project = zu_utils.connect_zoo_project(self.project, zoo_cred)
         else:
             logging.error("This project is not registered with Zooniverse.")
             return
@@ -199,10 +205,15 @@ class ProjectProcessor:
                 generate_export=generate_export,
             )
 
-    def get_zoo_info(self, generate_export: bool = False):
+    def get_zoo_info(self, generate_export: bool = False, zoo_cred=False):
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
+        
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+        This is used in the automatic tests in gitlab called autotests.py.
+        when it is set to False, then the credentials are retrieved from the interacitve widget.
+        
         :return: The zoo_info is being returned.
         """
         if hasattr(self.project, "db_path"):
@@ -232,7 +243,7 @@ class ProjectProcessor:
                 ].copy()
 
             else:
-                self.set_zoo_info(generate_export=generate_export)
+                self.set_zoo_info(generate_export=generate_export, zoo_cred=zoo_cred)
                 subjects_series = self.zoo_info["subjects"].copy()
 
             # Safely remove subjects table
@@ -594,7 +605,7 @@ class ProjectProcessor:
             )
 
         clip_modification = kso_widgets.clip_modification_widget()
-
+        
         button = widgets.Button(
             description="Click to extract clips.",
             disabled=False,
