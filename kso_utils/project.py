@@ -1089,8 +1089,10 @@ class MLProjectProcessor(ProjectProcessor):
         # Before t6_utils gets loaded in, the val.py file in yolov5_tracker repository needs to be removed
         # to prevent the batch_size error, see issue kso-object-detection #187
         path_to_val = os.path.join(sys.path[0], "yolov5_tracker/val.py")
-        if os.path.exists(path_to_val):
+        try:
             os.remove(path_to_val)
+        except OSError:
+            pass
 
         self.modules = g_utils.import_modules([])
         self.modules.update(
