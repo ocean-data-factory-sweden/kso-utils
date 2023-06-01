@@ -155,42 +155,6 @@ def is_url(url):
         return False
 
 
-# Function to extract the videos
-def extract_example_clips(
-    output_clip_path: str, start_time_i: int, clip_length: int, movie_path: str
-):
-    """
-    > Extracts a clip from a movie file, and saves it to a new file
-
-    :param output_clip_path: The path to the output clip
-    :param start_time_i: The start time of the clip in seconds
-    :param clip_length: The length of the clip in seconds
-    :param movie_path: the path to the movie file
-    """
-
-    # Extract the clip
-    if not os.path.exists(output_clip_path):
-        subprocess.call(
-            [
-                "ffmpeg",
-                "-ss",
-                str(start_time_i),
-                "-t",
-                str(clip_length),
-                "-i",
-                str(movie_path),
-                "-c",
-                "copy",
-                "-an",  # removes the audio
-                "-force_key_frames",
-                "1",
-                str(output_clip_path),
-            ]
-        )
-
-        os.chmod(output_clip_path, 0o777)
-
-
 def check_clip_size(clips_list: list):
     """
     > This function takes a list of file paths and returns a dataframe with the file path and size of
@@ -1318,84 +1282,6 @@ class WidgetMaker(widgets.VBox):
             names.append(list(init_dict.values())[i])
             organisations.append(list(init_dict.values())[i + 1])
         return {n: org for n, org in zip(names, organisations)}
-
-
-def create_example_clips(
-    project: Project,
-    movie_i: str,
-    movie_path: str,
-    clip_selection,
-    pool_size=4,
-):
-    """
-    This function takes a movie and extracts clips from it, based on the start time and length of the
-    clips
-
-    :param movie_i: str, the name of the movie
-    :type movie_i: str
-    :param movie_path: the path to the movie
-    :type movie_path: str
-    :param project: the project object
-    :param clip_selection: a dictionary with the following keys:
-    :param pool_size: The number of parallel processes to run, defaults to 4 (optional)
-    :return: The path of the clips
-    """
-
-    # Specify the starting seconds and length of the example clips
-    clips_start_time = clip_selection.result["clip_start_time"]
-    clip_length = clip_selection.result["random_clip_length"]
-
-    # Get project-specific server info
-    server = project.server
-
-    # Specify the temp folder to host the clips
-    output_clip_folder = movie_i + "_clips"
-    if server == "SNIC":
-        # Specify volume allocated by SNIC
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = str(Path(snic_path, "tmp_dir", output_clip_folder))
-    else:
-        clips_folder = output_clip_folder
-
-    # Create the folder to store the videos if not exist
-    if not os.path.exists(clips_folder):
-        Path(clips_folder).mkdir(parents=True, exist_ok=True)
-        # Recursively add permissions to folders created
-        [os.chmod(root, 0o777) for root, dirs, files in os.walk(clips_folder)]
-
-    # Specify the number of parallel items
-    pool = multiprocessing.Pool(pool_size)
-
-    # Create empty list to keep track of new clips
-    example_clips = []
-
-    # Create the information for each clip and extract it (printing a progress bar)
-    for start_time_i in clips_start_time:
-        # Create the filename and path of the clip
-        output_clip_name = (
-            movie_i + "_clip_" + str(start_time_i) + "_" + str(clip_length) + ".mp4"
-        )
-        output_clip_path = str(Path(clips_folder, output_clip_name))
-
-        # Add the path of the clip to the list
-        example_clips = example_clips + [output_clip_path]
-
-        # Extract the clips and store them in the folder
-        pool.apply_async(
-            extract_example_clips,
-            (
-                output_clip_path,
-                start_time_i,
-                clip_length,
-                movie_path,
-            ),
-        )
-
-    pool.close()
-    pool.join()
-
-    logging.info("Clips extracted successfully")
-    return example_clips
 
 
 def create_clips(
