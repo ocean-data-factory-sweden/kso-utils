@@ -180,8 +180,8 @@ class ProjectProcessor:
             for i in local_dfs
         ]
 
-    def choose_workflows(self, generate_export: bool = False):
-        self.set_zoo_info(generate_export=generate_export)
+    def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
+        self.set_zoo_info(generate_export=generate_export, zoo_cred=zoo_cred)
         self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
         display(self.workflow_widget)
 
@@ -605,7 +605,7 @@ class ProjectProcessor:
             )
 
         clip_modification = kso_widgets.clip_modification_widget()
-
+        
         button = widgets.Button(
             description="Click to extract clips.",
             disabled=False,
