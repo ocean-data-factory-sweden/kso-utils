@@ -242,7 +242,7 @@ def modify_clips(
     if gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
-        b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
+        crf = df.filter(regex="crf$", axis=1).values[0][0]
 
         subprocess.call(
             [
@@ -253,12 +253,16 @@ def modify_clips(
                 "cuda",
                 "-i",
                 clip_i,
-                "-c:a",
-                "copy",
-                "-c:v",
-                "h264_nvenc",
-                "-b:v",
-                b_v,
+                "-threads",
+                "4",
+                "-c:a", # audio codec... 
+                "copy", # copy, so no decoding-filtering-encoding operations will occur (for audio in this case)
+                "-c:v", # video codec, same as -vcodec
+                "h264_nvenc", # to use gpu in the video codec
+                "-crf", # for the compression
+                crf,
+                #"-vf", # for the collor correction,
+                #"curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'",
                 output_clip_path,
             ]
         )
@@ -367,7 +371,7 @@ def extract_clips(
            modifications, and the values are dictionaries containing the details of the modification.
     :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
     """
-    if not modification_details and gpu_available:
+    if gpu_available:
         # Create clips without any modification
         subprocess.call(
             [
@@ -394,37 +398,6 @@ def extract_clips(
         )
         os.chmod(str(output_clip_path), 0o777)
 
-    elif modification_details and gpu_available:
-        # Unnest the modification detail dict
-        df = pd.json_normalize(modification_details, sep="_")
-        b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
-
-        subprocess.call(
-            [
-                "ffmpeg",
-                "-hwaccel",
-                "cuda",
-                "-hwaccel_output_format",
-                "cuda",
-                "-ss",
-                str(upl_second_i),
-                "-t",
-                str(clip_length),
-                "-i",
-                movie_path,
-                "-threads",
-                "4",
-                "-an",  # removes the audio
-                "-c:a",
-                "copy",
-                "-c:v",
-                "h264_nvenc",
-                "-b:v",
-                b_v,
-                str(output_clip_path),
-            ]
-        )
-        os.chmod(str(output_clip_path), 0o777)
     else:
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
