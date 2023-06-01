@@ -1482,7 +1482,7 @@ def select_clip_length():
 
 
 class clip_modification_widget(widgets.VBox):
-    def __init__(self):
+    def __init__(self, gpu_available):
         """
         The function creates a widget that allows the user to select which modifications to run
         """
@@ -1503,13 +1503,14 @@ class clip_modification_widget(widgets.VBox):
             self.bool_widget_holder,
         ]
         self.widget_count.observe(self._add_bool_widgets, names=["value"])
+        self.gpu_available = gpu_available
         super().__init__(children=children)
 
     def _add_bool_widgets(self, widg):
         num_bools = widg["new"]
         new_widgets = []
         for _ in range(num_bools):
-            new_widget = select_modification()
+            new_widget = select_modification(self.gpu_available)
             for wdgt in [new_widget]:
                 wdgt.description = wdgt.description + f" #{_}"
             new_widgets.extend([new_widget])
@@ -1520,40 +1521,67 @@ class clip_modification_widget(widgets.VBox):
         return {w.description: w.value for w in self.bool_widget_holder.children}
 
 
-def select_modification():
+def select_modification(gpu_available):
     """
     This function creates a dropdown widget that allows the user to select a clip modification
     :return: A widget that allows the user to select a clip modification.
     """
     # Widget to select the clip modification
-
-    clip_modifications = {
-        "Color_correction": {
-            "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
-                                        '0/0 0.525/0.451 1/1', \
-                                        '0/0 0.459/0.517 1/1')"
+    if gpu_available == False:
+        clip_modifications = {
+            "Color_correction": {
+                "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
+                                            '0/0 0.525/0.451 1/1', \
+                                            '0/0 0.459/0.517 1/1')"
+            }
+            # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+            ,
+            "Zoo_low_compression": {
+                "crf": "25",
+                "bv": "7",
+            },
+            "Zoo_medium_compression": {
+                "crf": "27",
+                "bv": "6",
+            },
+            "Zoo_high_compression": {
+                "crf": "30",
+                "bv": "5",
+            },
+            "Blur_sensitive_info": {
+                "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
+                                ,thickness='fill').drawbox(0, 'ih*(95/100)', \
+                                'iw', 'ih*(15/100)', color='black', thickness='fill')",
+                "None": {},
+            },
         }
-        # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
-        ,
-        "Zoo_low_compression": {
-            "crf": "25",
-            "bv": "7",
-        },
-        "Zoo_medium_compression": {
-            "crf": "27",
-            "bv": "6",
-        },
-        "Zoo_high_compression": {
-            "crf": "30",
-            "bv": "5",
-        },
-        "Blur_sensitive_info": {
-            "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
-                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
-                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
-            "None": {},
-        },
-    }
+    
+        if gpu_available == True:
+            clip_modifications = {
+                "Color_correction": {
+                    "filter": "curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'"
+                }
+                # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+                ,
+                "Zoo_low_compression": {
+                    "crf": "25",
+                    "bv": "7",
+                },
+                "Zoo_medium_compression": {
+                    "crf": "27",
+                    "bv": "6",
+                },
+                "Zoo_high_compression": {
+                    "crf": "30",
+                    "bv": "5",
+                },
+                "Blur_sensitive_info": { ## NOT POSSIBLE YET
+                    "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
+                                    ,thickness='fill').drawbox(0, 'ih*(95/100)', \
+                                    'iw', 'ih*(15/100)', color='black', thickness='fill')",
+                    "None": {},
+                },
+            }
 
     select_modification_widget = widgets.Dropdown(
         options=[(a, b) for a, b in clip_modifications.items()],

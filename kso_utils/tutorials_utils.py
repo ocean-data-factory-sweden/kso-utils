@@ -242,7 +242,10 @@ def modify_clips(
     if gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
-        crf = df.filter(regex="crf$", axis=1).values[0][0]
+        try:
+            crf = df.filter(regex="crf$", axis=1).values[0][0]
+        except:
+            crf = 17
 
         subprocess.call(
             [
@@ -270,7 +273,7 @@ def modify_clips(
     else:
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{clip_i}')"
-        default_output_prompt = f".output('{output_clip_path}', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+        default_output_prompt = f".output('{output_clip_path}', crf=17, pix_fmt='yuv420p', vcodec='libx264')"
         full_prompt = init_prompt
         mod_prompt = ""
 
@@ -281,7 +284,10 @@ def modify_clips(
             else:
                 # Unnest the modification detail dict
                 df = pd.json_normalize(modification_details, sep="_")
-                crf = df.filter(regex="crf$", axis=1).values[0][0]
+                try:
+                    crf = df.filter(regex="crf$", axis=1).values[0][0]
+                except:
+                    crf = 17
                 out_prompt = f".output('{output_clip_path}', crf={crf}, preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
 
         if len(mod_prompt) > 0:
@@ -393,6 +399,8 @@ def extract_clips(
                 "copy",
                 "-c:v",
                 "h264_nvenc",
+                "-crf", # for the compression
+                "17", # visually no loss, but still compression so that it is quicker
                 str(output_clip_path),
             ]
         )
@@ -401,30 +409,11 @@ def extract_clips(
     else:
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
-        full_prompt = init_prompt
-        mod_prompt = ""
-        output_prompt = ""
-        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', crf=20, pix_fmt='yuv420p', vcodec='libx264')"
+        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', crf=17, pix_fmt='yuv420p', vcodec='libx264')"
 
-        # Set up modification
-        for transform in modification_details.values():
-            if "filter" in transform:
-                mod_prompt += transform["filter"]
-
-            else:
-                # Unnest the modification detail dict
-                df = pd.json_normalize(modification_details, sep="_")
-                crf = df.filter(regex="crf$", axis=1).values[0][0]
-                output_prompt = f".output('{str(output_clip_path)}', crf={crf}, ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', preset='veryfast', pix_fmt='yuv420p', vcodec='libx264')"
-
-        # Run the modification
+        # Run the extraction
         try:
-            if len(mod_prompt) > 0:
-                full_prompt += mod_prompt
-            if len(output_prompt) > 0:
-                full_prompt += output_prompt
-            else:
-                full_prompt += def_output_prompt
+            full_prompt = init_prompt + def_output_prompt
             eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
             os.chmod(str(output_clip_path), 0o777)
         except ffmpeg_python.Error as e:
