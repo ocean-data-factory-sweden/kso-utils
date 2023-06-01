@@ -1463,7 +1463,7 @@ def select_clip_length():
 
 
 class clip_modification_widget(widgets.VBox):
-    def __init__(self, gpu_available):
+    def __init__(self, gpu_available=False):
         """
         The function creates a widget that allows the user to select which modifications to run
         """
@@ -1519,15 +1519,12 @@ def select_modification(gpu_available):
             ,
             "Zoo_low_compression": {
                 "crf": "25",
-                "bv": "7",
             },
             "Zoo_medium_compression": {
                 "crf": "27",
-                "bv": "6",
             },
             "Zoo_high_compression": {
                 "crf": "30",
-                "bv": "5",
             },
             "Blur_sensitive_info": {
                 "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \

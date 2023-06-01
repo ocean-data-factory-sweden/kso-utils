@@ -194,9 +194,11 @@ def get_survey_name(survey_i):
     return survey_name
 
 
-def check_clip_size(clips_list: list):
+def check_clip_size(generated_clips):
     """
-    > This function takes a list of file paths and returns a dataframe with the file path and size of
+    > This function takes the pp.generated_clips, which is a dataframe that contains the information of all the movies that are generated.
+    it contains both the file paths of the extracted (non-modified) movies, and the path of the modified movies. 
+    this function returns a dataframe that contains all these file paths and their size. 
     each file. If the size is too large, we suggest compressing them as a first step.
 
     :param clips_list: list of file paths to the clips you want to check
@@ -205,9 +207,10 @@ def check_clip_size(clips_list: list):
     """
 
     # Get list of files with size
-    if clips_list is None:
+    if len(generated_clips) == 0:
         logging.error("No clips found.")
         return None
+    clips_list = list(generated_clips.clip_path) + list(generated_clips.modif_clip_path)
     files_with_size = [
         (file_path, os.path.getsize(file_path) / float(1 << 20))
         for file_path in clips_list
@@ -416,7 +419,7 @@ def extract_clips(
     else:
         # Set up input prompt
         init_prompt = f"ffmpeg_python.input('{movie_path}')"
-        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', crf=17, pix_fmt='yuv420p', vcodec='libx264')"
+        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', an, crf=17, pix_fmt='yuv420p', vcodec='libx264')"
 
         # Run the extraction
         try:

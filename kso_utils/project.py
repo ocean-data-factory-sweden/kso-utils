@@ -729,7 +729,6 @@ class ProjectProcessor:
                selected based on the number of clips and the length of each clip, defaults to False
         :type is_example: bool (optional)
         """
-        # t3_utils.create_clips
 
         if is_example:
             clip_selection = kso_widgets.select_random_clips(
