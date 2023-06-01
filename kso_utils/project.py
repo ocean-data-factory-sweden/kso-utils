@@ -567,7 +567,7 @@ class ProjectProcessor:
             movie_i=movie_name,
             is_example=is_example,
         )
-        clip_modification = kso_widgets.clip_modification_widget()
+        clip_modification = kso_widgets.clip_modification_widget(use_gpu)
 
         button = widgets.Button(
             description="Click to extract clips.",
