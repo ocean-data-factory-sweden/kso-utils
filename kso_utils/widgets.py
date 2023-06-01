@@ -2,7 +2,7 @@
 import logging
 import os
 import random
-import subprocess
+import datetime
 import pandas as pd
 import numpy as np
 import cv2
@@ -823,7 +823,6 @@ def open_csv(
 ######################################################################
 #####################Tutorial 2 widgets###############################
 ######################################################################
-
 
 def choose_new_videos_to_upload():
     """
