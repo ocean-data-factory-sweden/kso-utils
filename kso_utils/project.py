@@ -758,7 +758,6 @@ class ProjectProcessor:
                 db_info_dict=self.db_info,
                 clip_selection=clip_selection,
                 project=self.project,
-                modification_details={},
                 gpu_available=use_gpu,
                 pool_size=pool_size,
             )
