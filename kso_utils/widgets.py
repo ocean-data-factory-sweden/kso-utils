@@ -3,7 +3,6 @@ import logging
 import os
 import math
 import random
-import subprocess
 import datetime
 import pandas as pd
 import numpy as np
@@ -500,24 +499,6 @@ def select_deployment(missing_from_csv: pd.DataFrame):
         )
         display(deployment_widget)
         return deployment_widget
-
-
-def select_eventdate():
-    # Select the date
-    """
-    > This function creates a date picker widget that allows the user to select a date.
-
-    The function is called `select_eventdate()` and it returns a date picker widget.
-    """
-    date_widget = widgets.DatePicker(
-        description="Date of deployment:",
-        value=datetime.date.today(),
-        disabled=False,
-        layout=Layout(width="50%"),
-        style={"description_width": "initial"},
-    )
-    display(date_widget)
-    return date_widget
 
 
 def choose_new_videos_to_upload():
@@ -2251,47 +2232,6 @@ def extract_custom_frames(
         np.column_stack([input_movies, output_files, frames_to_extract]),
         columns=["movie_filename", "frame_path", "frame_number"],
     )
-
-
-# Function to specify the frame modification
-def select_modification():
-    # Widget to select the frame modification
-
-    frame_modifications = {
-        "Color_correction": {
-            "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
-                                        '0/0 0.525/0.451 1/1', \
-                                        '0/0 0.459/0.517 1/1')"
-        }
-        # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
-        ,
-        "Zoo_low_compression": {
-            "crf": "25",
-        },
-        "Zoo_medium_compression": {
-            "crf": "27",
-        },
-        "Zoo_high_compression": {
-            "crf": "30",
-        },
-        "Blur_sensitive_info": {
-            "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
-                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
-                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
-            "None": {},
-        },
-    }
-
-    select_modification_widget = widgets.Dropdown(
-        options=[(a, b) for a, b in frame_modifications.items()],
-        description="Select modification:",
-        ensure_option=True,
-        disabled=False,
-        style={"description_width": "initial"},
-    )
-
-    display(select_modification_widget)
-    return select_modification_widget
 
 
 def confirm_survey(db_info_dict: dict, survey_i):
