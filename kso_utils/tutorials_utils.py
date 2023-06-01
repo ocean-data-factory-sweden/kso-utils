@@ -207,29 +207,40 @@ def modify_clips(
             crf = df.filter(regex="crf$", axis=1).values[0][0]
         except:
             crf = 17
+            logging.info('no compression')
+        
+        # Build the ffmpeg command for GPU
+        ffmpeg_command =["ffmpeg",
+                        "-hwaccel",
+                        "cuda",
+                        "-hwaccel_output_format",
+                        "cuda",
+                        "-i",
+                        clip_i,
+                        "-threads",
+                        "4",
+                        "-c:a", # audio codec... 
+                        "copy", # copy, so no decoding-filtering-encoding operations will occur (for audio in this case)
+                        "-c:v", # video codec, same as -vcodec
+                        "h264_nvenc", # to use gpu in the video codec
+                        "-crf", # for the compression
+                        crf]
+        
+        try:
+            sens_info = df.filter(regex="sens_info$", axis=1).values[0][0]
+            ffmpeg_command += ["-vf", sens_info]
+        except:
+            logging.info('no sensitive info filter')
+        try:
+            col_corr = df.filter(regex="color_corr$", axis=1).values[0][0]
+            ffmpeg_command += ["-vf", col_corr]
+        except:
+            logging.info('no color correction')
+        
+        ffmpeg_command += [output_clip_path,]
 
-        subprocess.call(
-            [
-                "ffmpeg",
-                "-hwaccel",
-                "cuda",
-                "-hwaccel_output_format",
-                "cuda",
-                "-i",
-                clip_i,
-                "-threads",
-                "4",
-                "-c:a", # audio codec... 
-                "copy", # copy, so no decoding-filtering-encoding operations will occur (for audio in this case)
-                "-c:v", # video codec, same as -vcodec
-                "h264_nvenc", # to use gpu in the video codec
-                "-crf", # for the compression
-                crf,
-                #"-vf", # for the collor correction,
-                #"curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'",
-                output_clip_path,
-            ]
-        )
+        # run the ffmpeg with gpu
+        subprocess.call(ffmpeg_command)
 
     else:
         # Set up input prompt

@@ -1067,32 +1067,29 @@ def select_modification(gpu_available):
             },
         }
     
-        if gpu_available == True:
-            clip_modifications = {
-                "Color_correction": {
-                    "filter": "curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'"
-                }
-                # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
-                ,
-                "Zoo_low_compression": {
-                    "crf": "25",
-                    "bv": "7",
-                },
-                "Zoo_medium_compression": {
-                    "crf": "27",
-                    "bv": "6",
-                },
-                "Zoo_high_compression": {
-                    "crf": "30",
-                    "bv": "5",
-                },
-                "Blur_sensitive_info": { ## NOT POSSIBLE YET
-                    "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
-                                    ,thickness='fill').drawbox(0, 'ih*(95/100)', \
-                                    'iw', 'ih*(15/100)', color='black', thickness='fill')",
-                    "None": {},
-                },
+    if gpu_available == True:
+        clip_modifications = {
+            "Color_correction": {
+                "color_corr": "curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'"
             }
+            # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+            ,
+            "Zoo_low_compression": {
+                "crf": "25",
+                "bv": "7",
+            },
+            "Zoo_medium_compression": {
+                "crf": "27",
+                "bv": "6",
+            },
+            "Zoo_high_compression": {
+                "crf": "30",
+                "bv": "5",
+            },
+            "Blur_sensitive_info": {
+                "sens_info": "drawbox=enable=0:0:'iw':'ih*(15/100)'\color='black':\thickness='fill',drawbox=enable=0:'ih*(95/100)':'iw':'ih*(15/100)':\color='black':\thickness='fill'"
+            },
+        }
 
     select_modification_widget = widgets.Dropdown(
         options=[(a, b) for a, b in clip_modifications.items()],
