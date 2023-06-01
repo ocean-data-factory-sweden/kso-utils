@@ -1540,7 +1540,7 @@ def select_modification(gpu_available):
     if gpu_available == True:
         clip_modifications = {
             "Color_correction": {
-                "color_corr": "curves=r='0/0 0.396/0.67 1/1':g='0/0 0.525/0.451 1/1':b='0/0 0.459/0.517 1/1'"
+                "color_corr": 'curves=red="0/0 0.396/0.67 1/1":green="0/0 0.525/0.451 1/1":blue="0/0 0.459/0.517 1/1"'
             }
             # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
             ,
@@ -1557,7 +1557,7 @@ def select_modification(gpu_available):
                 "bv": "5",
             },
             "Blur_sensitive_info": {
-                "sens_info": "drawbox=enable=0:0:'iw':'ih*(15/100)'\color='black':\thickness='fill',drawbox=enable=0:'ih*(95/100)':'iw':'ih*(15/100)':\color='black':\thickness='fill'"
+                "sens_info": "drawbox=enable=0:0:'iw':'ih*(15/100)':color='black':thickness='fill',drawbox=enable=0:'ih*(95/100)':'iw':'ih*(15/100)':color='black':thickness='fill'"
             },
         }
 
