@@ -318,7 +318,6 @@ def extract_clips(
     clip_length: int,
     upl_second_i: int,
     output_clip_path: str,
-    modification_details: dict,
     gpu_available: bool,
 ):
     """
@@ -333,9 +332,6 @@ def extract_clips(
     :param clip_length: The length of the clip in seconds
     :param upl_second_i: The second in the video to start the clip
     :param output_clip_path: The path to the output clip
-    :param modification_details: a dictionary of dictionaries, where each dictionary contains the
-           details of a modification to be made to the video. The keys of the dictionary are the names of the
-           modifications, and the values are dictionaries containing the details of the modification.
     :param gpu_available: If you have a GPU, set this to True. If you don't, set it to False
     """
     if gpu_available:
@@ -1252,7 +1248,6 @@ def create_clips(
     movie_path: str,
     clip_selection,
     project: Project,
-    modification_details: dict,
     gpu_available: bool,
     pool_size: int = 4,
 ):
@@ -1264,10 +1259,9 @@ def create_clips(
     :param movie_path: the path to the movie you want to extract clips from
     :param clip_selection: a ClipSelection object
     :param project: the project object
-    :param modification_details: a dictionary with the following keys:
     :param gpu_available: True or False, depending on whether you have a GPU available to use
     :param pool_size: the number of threads to use to extract the clips, defaults to 4 (optional)
-    :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds, and clip_modification_details
+    :return: A dataframe with the clip_path, clip_filename, clip_length, upl_seconds
     """
 
     # Store the desired length of the clips
@@ -1357,12 +1351,8 @@ def create_clips(
             clip_length,
             row["upl_seconds"],
             row["clip_path"],
-            modification_details,
             gpu_available,
         )
-
-    # Add information on the modification of the clips
-    potential_start_df["clip_modification_details"] = str(modification_details)
 
     return potential_start_df
 
