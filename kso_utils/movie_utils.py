@@ -1,6 +1,7 @@
 # base imports
 import os
 import cv2
+import sqlite3
 import logging
 import subprocess
 import urllib
@@ -65,13 +66,13 @@ def get_fps_duration(movie_path: str):
     return fps, duration
 
 
-def get_movie_path(f_path: str, server_info: dict, project: Project):
+def get_movie_path(f_path: str, project: Project, server_connection: dict = None):
     """
     Function to get the path (or url) of a movie
 
     :param f_path: string with the original path of a movie
-    :param server_info: a dictionary containing the path to the database and the client to the server
     :param project: the project object
+    :param server_connection: a dictionary with the connection to the server
     :return: a string containing the path (or url) where the movie of interest can be access from
 
     """
@@ -80,47 +81,42 @@ def get_movie_path(f_path: str, server_info: dict, project: Project):
         movie_key = urllib.parse.unquote(f_path).split("/", 3)[3]
 
         # Generate presigned url
-        movie_url = server_info["client"].generate_presigned_url(
+        movie_url = server_connection["client"].generate_presigned_url(
             "get_object",
             Params={"Bucket": project.bucket, "Key": movie_key},
             ExpiresIn=86400,
         )
         return movie_url
 
-    elif project.server == "SNIC":
-        logging.error("Getting the path of the movies is still work in progress")
-        return f_path
-
     else:
+        logging.error(f"Returning the fpath {f_path}")
         return f_path
 
 
 def standarise_movie_format(
+    project: Project,
     movie_path: str,
     movie_filename: str,
     f_path: str,
-    db_info_dict: dict,
-    project: Project,
     gpu_available: bool = False,
 ):
     """
     This function reviews the movie metadata. If the movie is not in the correct format, frame rate or codec,
     it is converted using ffmpeg.
 
+    :param project: the project object
     :param movie_path: The local path- or url to the movie file you want to convert
     :type movie_path: str
     :param movie_filename: The filename of the movie file you want to convert
     :type movie_filename: str
     :param f_path: The server or storage path of the original movie you want to convert
     :type f_path: str
-    :param db_info_dict: a dictionary with the initial information of the project
-    :param project: the project object
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
     """
 
     from kso_utils.tutorials_utils import is_url
-    from kso_utils.server_utils import upload_movie_server
+    from kso_utils.server_utils import upload_file_server
 
     ##### Check movie format ######
     ext = Path(movie_filename).suffix
@@ -206,34 +202,40 @@ def standarise_movie_format(
         )
 
         # Upload the converted movie to the server
-        upload_movie_server(conv_mov_path, f_path, db_info_dict, project)
+        upload_file_server(movie_path=conv_mov_path, f_path=f_path, project=project)
 
     else:
         logging.info(f"{movie_filename} format is standard.")
 
 
-def retrieve_movie_info_from_server(project: Project, server_info: dict, db_connection):
+def retrieve_movie_info_from_server(
+    project: Project, db_connection: sqlite3.Connection, server_connection: dict
+):
     """
     This function uses the project information and the database information, and returns a dataframe with the
     movie information
 
     :param project: the project object
-    :param server_info: a dictionary containing the path to the database and the client to the server
-    :type server_info: dict
-    :param db_connection: a SQL3 connection to the db of the project
-    :return: A dataframe with the following columns (index, movie_id, fpath, spath, exists, filename_ext)
+    :param server_connection: a dictionary with the connection to the server
+    :param db_connection: SQL connection object
+    :return: A dataframe with the following columns (index, movie_id, fpath, exists, filename_ext)
 
     """
 
     from kso_utils.server_utils import get_snic_files, get_matching_s3_keys
 
-    if not server_info and not project.server == "LOCAL":
+    if not server_connection and not project.server == "LOCAL":
         raise ValueError(
             "There is no information to connect to the server with the movies."
         )
 
+    from kso_utils.db_utils import get_df_from_db_table
+
+    # Temporarily retrieve the movies_info
+    movies_df = get_df_from_db_table(conn=db_connection, table_name="movies")
+
     # Retrieve the list of local movies available
-    elif project.server == "LOCAL":
+    if project.server == "LOCAL":
         logging.info("Retrieving movies that are available locally")
         # Read the movie files from the movie_path folder
         local_files = os.listdir(project.movie_folder)
@@ -244,14 +246,14 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         ]
 
         # Save the list of movies as a pd df
-        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+        server_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     # Retrieve the list of movies available in AWS
     elif project.server == "AWS":
         logging.info("Retrieving movies that are available in AWS")
         # List all the movies available from the S3 bucket
         available_movies_list = get_matching_s3_keys(
-            client=server_info["client"],
+            client=server_connection["client"],
             bucket=project.bucket,
             suffix=get_movie_extensions(),
         )
@@ -263,19 +265,16 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         ]
 
         # Get the fpath(html) from the key
-        # server_df["spath"] = server_mov_list.apply(
+        # server_df["fpath"] = server_mov_list.apply(
         #     lambda x: "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
         #     + urllib.parse.quote(x, safe="://").replace("\\", "/")
         # )
 
         # Save the list of movies as a pd df
-        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+        server_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     # Retrieve the list of movies available in Wildlife.ai
     elif project.server == "TEMPLATE":
-        # Temporarily retrieve the movies_info
-        movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
-
         # Combine wildlife.ai storage and filenames of the movie examples
         available_movies_list = [
             "https://www.wildlife.ai/wp-content/uploads/2022/06/" + filename
@@ -283,13 +282,14 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         ]
 
         # Save the list of movies as a pd df
-        server_df = pd.Series(available_movies_list, name="spath").to_frame()
+        server_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     # Retrieve the list of movies available in SNIC
     elif project.server == "SNIC":
-        if "client" in server_info:
+        if "client" in server_connection:
             server_df = get_snic_files(
-                client=server_info["client"], folder=project.movie_folder
+                client=server_connection["client"],
+                folder=project.movie_folder,
             )
         else:
             logging.error("No database connection could be established.")
@@ -299,12 +299,7 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         raise ValueError("The server type you selected is not currently supported.")
 
     # Query info about the movie of interest
-    movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
     movies_df = movies_df.rename(columns={"id": "movie_id"})
-
-    # If full path is provided, separate into filename and full path
-    server_df["spath_full"] = server_df["spath"]
-    server_df["spath"] = server_df["spath"].apply(lambda x: Path(x).name, 1)
 
     # Find closest matching filename (may differ due to Swedish character encoding)
     parsed_url = urllib.parse.urlparse(movies_df["fpath"].iloc[0])
@@ -322,29 +317,17 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         parsed_url.scheme and parsed_url.netloc
     ):
         movies_df["fpath"] = movies_df["fpath"].apply(
-            lambda x: get_match(x, server_df["spath_full"].unique()),
+            lambda x: get_match(x, server_df["fpath"].unique()),
             1,
         )
-        # Merge the server path to the filepath
-        movies_df = movies_df.merge(
-            server_df,
-            left_on=["fpath"],
-            right_on=["spath_full"],
-            how="left",
-            indicator=True,
-        )
-    else:
-        movies_df["fpath"] = movies_df["fpath"].apply(
-            lambda x: get_match(x, server_df["spath"].unique()), 1
-        )
-        # Merge the server path to the filepath
-        movies_df = movies_df.merge(
-            server_df,
-            left_on=["fpath"],
-            right_on=["spath"],
-            how="left",
-            indicator=True,
-        )
+
+    # Merge the server path to the filepath
+    movies_df = movies_df.merge(
+        server_df,
+        on=["fpath"],
+        how="left",
+        indicator=True,
+    )
 
     # Check that movies can be mapped
     movies_df["exists"] = np.where(movies_df["_merge"] == "left_only", False, True)
@@ -356,13 +339,9 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     available_movies_df = movies_df[movies_df["exists"]].copy()
 
     # Create a filename with ext column
-    available_movies_df["filename_ext"] = available_movies_df["spath"].apply(
+    available_movies_df["filename_ext"] = available_movies_df["fpath"].apply(
         lambda x: x.split("/")[-1], 1
     )
-
-    # Add movie folder for SNIC
-    if project.server == "SNIC":
-        available_movies_df["spath"] = available_movies_df["spath_full"]
 
     logging.info(
         f"{available_movies_df.shape[0]} out of {len(movies_df)} movies are mapped from the server"
@@ -481,17 +460,17 @@ def convert_video(
 # Function to preview underwater movies
 def preview_movie(
     project: Project,
-    server_info: dict,
     available_movies_df: pd.DataFrame,
     movie_i: str,
+    server_connection: dict,
 ):
     """
     It takes a movie filename and returns a HTML object that can be displayed in the notebook
 
     :param project: the project object
-    :param server_info: a dictionary containing the server client information
     :param available_movies_df: a dataframe with all the movies in the database
     :param movie_i: the filename of the movie you want to preview
+    :param server_connection: a dictionary with the connection to the server
     :return: A tuple of two elements:
         1. HTML object
         2. Movie path
@@ -516,8 +495,8 @@ def preview_movie(
         if project.server == "SNIC":
             movie_path = get_movie_path(
                 project=project,
-                server_info=server_info,
-                f_path=movie_selected["spath"].values[0],
+                f_path=movie_selected["fpath"].values[0],
+                server_connection=server_connection,
             )
             url = (
                 "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
@@ -525,9 +504,9 @@ def preview_movie(
             )
         else:
             url = get_movie_path(
-                f_path=movie_selected["fpath"].values[0],
-                server_info=server_info,
                 project=project,
+                f_path=movie_selected["fpath"].values[0],
+                server_connection=server_connection,
             )
             movie_path = url
         html_code = f"""<html>
@@ -543,28 +522,35 @@ def preview_movie(
         return HTML(html_code), movie_path
 
 
-def check_movie_uploaded(project: Project, movie_i: str):
+def check_movie_uploaded(
+    project: Project, db_connection: sqlite3.Connection, movie_i: str
+):
     """
     This function takes in a movie name and a dictionary containing the path to the database and returns
     a boolean value indicating whether the movie has already been uploaded to Zooniverse
 
+    :param project: the project object
     :param movie_i: the name of the movie you want to check
     :type movie_i: str
-    :param db_info_dict: a dictionary containing the path to the database and the path to the folder containing the videos
-    :type db_info_dict: dict
+    :param db_connection: SQL connection object
     """
+    # Query info about the clip subjects uploaded to Zooniverse from the db
+    subjects_df = get_df_from_db_table(conn=db_connection, table_name="subjects")
 
-    # Create connection to db
-    from kso_utils.db_utils import create_connection
+    # Select only columns of interest
+    subjects_df = subjects_df[
+        [
+            "id",
+            "subject_type",
+            "filename",
+            "clip_start_time",
+            "clip_end_time",
+            "movie_id",
+        ]
+    ]
 
-    conn = create_connection(project.db_path)
-
-    # Query info about the clip subjects uploaded to Zooniverse
-    subjects_df = pd.read_sql_query(
-        "SELECT id, subject_type, filename, clip_start_time,"
-        "clip_end_time, movie_id FROM subjects WHERE subject_type='clip'",
-        conn,
-    )
+    # Select only clip subjects
+    subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
 
     # Save the video filenames of the clips uploaded to Zooniverse
     videos_uploaded = subjects_df.filename.dropna().unique()
@@ -582,7 +568,8 @@ def check_movie_uploaded(project: Project, movie_i: str):
 
 def get_species_frames(
     project: Project,
-    db_info_dict: dict,
+    db_connection: sqlite3.Connection,
+    server_connection: dict,
     agg_clips_df: pd.DataFrame,
     species_ids: list,
     n_frames_subject: int,
@@ -592,18 +579,24 @@ def get_species_frames(
     # that contains species of interest after the first time seen
 
     # Find classified clips that contain the species of interest
+    :param project: the project object
+    :param db_connection: SQL connection object
+    :param server_connection: a dictionary with the connection to the server
+    :param agg_clips_df: a df of the aggregated clips
+    :param species_ids: a list with ids of the species of interest,
+    :param n_frames_subject: an integer with the number of frames per subject
     """
 
     from kso_utils.zooniverse_utils import clean_label
-    from kso_utils.db_utils import create_connection
-
-    conn = create_connection(project.db_path)
 
     # Retrieve list of subjects
-    subjects_df = pd.read_sql_query(
-        "SELECT id, clip_start_time, movie_id FROM subjects WHERE subject_type='clip'",
-        conn,
-    )
+    subjects_df = get_df_from_db_table(conn=db_connection, table_name="subjects")
+
+    # Select only columns of interest
+    subjects_df = subjects_df[["id", "clip_start_time", "movie_id"]]
+
+    # Select only clip subjects
+    subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
 
     agg_clips_df["subject_ids"] = pd.to_numeric(
         agg_clips_df["subject_ids"], errors="coerce"
@@ -622,14 +615,14 @@ def get_species_frames(
         frames_df["clip_start_time"] + frames_df["first_seen"]
     )
 
-    server = project.server
-
-    if server in ["SNIC", "TEMPLATE"]:
-        movies_df = retrieve_movie_info_from_server(project, db_info_dict=db_info_dict)
-
+    if project.server in ["SNIC", "TEMPLATE"]:
+        movies_df = retrieve_movie_info_from_server(
+            project=project,
+            server_connection=server_connection,
+            db_connection=db_connection,
+        )
         # Include movies' filepath and fps to the df
         frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
-        frames_df["fpath"] = frames_df["spath"]
 
     if len(frames_df[~frames_df.exists]) > 0:
         logging.error(
@@ -646,12 +639,12 @@ def get_species_frames(
 
     ##### Add species_id info ####
     # Retrieve species info
-    species_df = pd.read_sql_query(
-        "SELECT id, label, scientificName FROM species",
-        conn,
-    )
+    species_df = get_df_from_db_table(conn=db_connection, table_name="species")
 
-    # Retrieve species info
+    # Select only columns of interest
+    species_df = species_df[["id", "label", "scientificName"]]
+
+    # Rename cols to match frames df cols
     species_df = species_df.rename(columns={"id": "species_id"})
 
     # Match format of species name to Zooniverse labels
@@ -692,12 +685,17 @@ def get_species_frames(
 # Function to extract selected frames from videos
 def extract_frames(
     project: Project,
-    db_info_dict: dict,
+    server_connection: dict,
     df: pd.DataFrame,
     frames_folder: str,
 ):
     """
     Extract frames and save them in chosen folder.
+    :param project: the project object
+    :param server_connection: a dictionary with the connection to the server
+    :param df: a dataframe of the frames to be extracted
+    :param frames_folder: a string with the path of the folder to store the frames
+
     """
 
     # Set the filename of the frames
@@ -718,7 +716,9 @@ def extract_frames(
         [os.chmod(root, 0o777) for root, dirs, files in os.walk(frames_folder)]
 
     for movie in df["fpath"].unique():
-        url = get_movie_path(project=project, db_info_dict=db_info_dict, f_path=movie)
+        url = get_movie_path(
+            f_path=movie, project=project, server_connection=server_connection
+        )
 
         if url is None:
             logging.error(f"Movie {movie} couldn't be found in the server.")
@@ -737,6 +737,9 @@ def extract_frames(
 def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
     """
     Function to get a frame from a movie
+    :param key_movie_df: a df with the information of the movie
+    :param url: a string with the url of the movie
+
     """
     # Read the movie on cv2 and prepare to extract frames
     cap = cv2.VideoCapture(url)
@@ -764,3 +767,161 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
 def get_movie_extensions():
     # Specify the formats of the movies to select
     return tuple(["wmv", "mpg", "mov", "avi", "mp4", "MOV", "MP4"])
+
+
+def check_movies_meta(
+    project: Project,
+    csv_paths: dict,
+    conn: sqlite3.Connection,
+    server_movies_csv: pd.DataFrame,
+    server_connection: dict,
+    review_method: str,
+    gpu_available: bool = False,
+):
+    """
+    > This function loads the csv with movies information, checks and updates missing info
+
+    :param project: the project object
+    :param conn: SQL connection object
+    :param server_movies_csv: a df with the information about the filepaths and "existance" of the movies
+    :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
+    :param server_connection: a dictionary with the connection to the server
+    :param review_method: The method used to review the movies
+    :param gpu_available: Boolean, whether or not a GPU is available
+    """
+
+    # Load the csv with movies information
+    df = pd.read_csv(csv_paths["local_movies_csv"])
+
+    if review_method.startswith("Basic"):
+        # Check if fps or duration is missing from any movie
+        if (
+            not df[["fps", "duration", "sampling_start", "sampling_end"]]
+            .isna()
+            .any()
+            .any()
+        ):
+            logging.info(
+                "There are no empty entries for fps, duration and sampling information"
+            )
+
+            return
+
+        else:
+            # Create a df with only those rows with missing fps/duration
+            df_missing = df[df["fps"].isna() | df["duration"].isna()].reset_index(
+                drop=True
+            )
+
+            # Drop original fpath to use the latest version (aka the one from server_movies_csv)
+            df_missing = df_missing.drop(columns=["fpath"])
+
+            ##### Select only movies that can be mapped ####
+            # Merge the missing fps/duration df with the available movies
+            df_missing = df_missing.merge(
+                server_movies_csv[["filename", "exists", "fpath"]],
+                on=["filename"],
+                how="left",
+            )
+
+            if df_missing.exists.isnull().values.any():
+                # Replace na with False
+                df_missing["exists"] = df_missing["exists"].fillna(False)
+
+                logging.info(
+                    f"Only # {df_missing[df_missing['exists']].shape[0]} out of"
+                    f"# {df_missing[~df_missing['exists']].shape[0]} movies with missing information are available."
+                    f" Proceeding to retrieve fps and duration info for only those {df_missing[df_missing['exists']].shape[0]} available movies."
+                )
+
+                # Select only available movies
+                df_missing = df_missing[df_missing["exists"]].reset_index(drop=True)
+
+            # Rename column to match the movie_path format
+            df_missing = df_missing.rename(
+                columns={
+                    "fpath": "movie_path",
+                }
+            )
+
+            logging.info("Getting the fps and duration of the movies")
+            # Read the movies and overwrite the existing fps and duration info
+            df_missing[["fps", "duration"]] = pd.DataFrame(
+                [
+                    get_fps_duration(i)
+                    for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])
+                ],
+                columns=["fps", "duration"],
+            )
+
+            # Add the missing info to the original df based on movie ids
+            df.set_index("movie_id", inplace=True)
+            df_missing.set_index("movie_id", inplace=True)
+            df.update(df_missing)
+            df.reset_index(drop=False, inplace=True)
+
+    else:
+        logging.info("Retrieving the paths to access the movies")
+        # Add a column with the path (or url) where the movies can be accessed from
+        df["movie_path"] = pd.Series(
+            [
+                get_movie_path(
+                    f_path=i, project=project, server_connection=server_connection
+                )
+                for i in tqdm(df["fpath"], total=df.shape[0])
+            ]
+        )
+        logging.info("Getting the fps and duration of the movies")
+        # Read the movies and overwrite the existing fps and duration info
+        df[["fps", "duration"]] = pd.DataFrame(
+            [get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])],
+            columns=["fps", "duration"],
+        )
+
+        logging.info("Standardising the format, frame rate and codec of the movies")
+
+        # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
+        [
+            standarise_movie_format(
+                movie_path=i,
+                movie_filename=j,
+                f_path=k,
+                project=project,
+                gpu_available=gpu_available,
+            )
+            for i, j, k in tqdm(
+                zip(df["movie_path"], df["filename"], df["fpath"]),
+                total=df.shape[0],
+            )
+        ]
+
+        # Drop unnecessary columns
+        df = df.drop(columns=["movie_path"])
+
+    # Fill out missing sampling start information
+    df.loc[df["sampling_start"].isna(), "sampling_start"] = 0.0
+
+    # Fill out missing sampling end information
+    df.loc[df["sampling_end"].isna(), "sampling_end"] = df["duration"]
+
+    # Prevent sampling end times longer than actual movies
+    if (df["sampling_end"] > df["duration"]).any():
+        mov_list = df[df["sampling_end"] > df["duration"]].filename.unique()
+        raise ValueError(
+            f"The sampling_end times of the following movies are longer than the actual movies {mov_list}"
+        )
+
+    # Save the updated df locally
+    df.to_csv(csv_paths["local_movies_csv"], index=False)
+    logging.info("The local movies.csv file has been updated")
+
+    from kso_utils.server_utils import update_csv_server
+
+    # Save the updated df in the server
+    update_csv_server(
+        project=project,
+        csv_paths=csv_paths,
+        server_connection=server_connection,
+        orig_csv="server_movies_csv",
+        updated_csv="local_movies_csv",
+    )

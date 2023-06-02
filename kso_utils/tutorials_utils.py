@@ -40,9 +40,9 @@ logging.getLogger().setLevel(logging.INFO)
 
 def log_meta_changes(
     project: Project,
-    db_info_dict: dict,
     meta_key: str,
     new_sheet_df: pd.DataFrame,
+    csv_paths: dict,
 ):
     """Records changes to csv files in log file (json format)"""
 
@@ -51,7 +51,7 @@ def log_meta_changes(
         "change_info": compare(
             {
                 int(k): v
-                for k, v in pd.read_csv(db_info_dict[meta_key]).to_dict("index").items()
+                for k, v in pd.read_csv(csv_paths[meta_key]).to_dict("index").items()
             },
             {int(k): v for k, v in new_sheet_df.to_dict("index").items()},
         ),
@@ -153,46 +153,6 @@ def is_url(url):
         return all([result.scheme, result.netloc])
     except ValueError:
         return False
-
-
-####################################################
-############### SURVEY FUNCTIONS ###################
-####################################################
-
-
-def progress_handler(progress_info):
-    logging.info("{:.2f}".format(progress_info["percentage"]))
-
-
-def get_survey_name(survey_i):
-    """
-    If the survey is new, save the responses for the new survey as a dataframe. If the survey is
-    existing, return the name of the survey
-
-    :param survey_i: the survey object
-    :return: The name of the survey
-    """
-    # If new survey, review details and save changes in survey csv server
-    if isinstance(survey_i.result, dict):
-        # Save the responses for the new survey as a dataframe
-        new_survey_row_dict = {
-            key: (
-                value.value
-                if hasattr(value, "value")
-                else value.result
-                if isinstance(value.result, int)
-                else value.result.value
-            )
-            for key, value in survey_i.result.items()
-        }
-        survey_name = new_survey_row_dict["SurveyName"]
-
-    # If existing survey print the info for the pre-existing survey
-    else:
-        # Return the name of the survey
-        survey_name = survey_i.result.value
-
-    return survey_name
 
 
 # Function to extract the videos
@@ -1360,206 +1320,6 @@ class WidgetMaker(widgets.VBox):
         return {n: org for n, org in zip(names, organisations)}
 
 
-def select_deployment(db_info_dict: dict, survey_i):
-    """
-    This function allows the user to select a deployment from a survey of interest
-
-    :param project: the name of the project
-    :param db_info_dict: a dictionary with the following keys:
-    :type db_info_dict: dict
-    :param survey_i: the index of the survey you want to download
-    """
-    # Load the csv with with sites and survey choices
-    choices_df = pd.read_csv(db_info_dict["local_choices_csv"])
-
-    # Read surveys csv
-    surveys_df = pd.read_csv(
-        db_info_dict["local_surveys_csv"], parse_dates=["SurveyStartDate"]
-    )
-
-    # Get the name of the survey
-    survey_name = get_survey_name(survey_i)
-
-    # Save the SurveyID that match the survey name
-    survey_row = surveys_df[surveys_df["SurveyName"] == survey_name].reset_index(
-        drop=True
-    )
-
-    # Save the year of the survey
-    #     survey_year = survey_row["SurveyStartDate"].values[0].strftime("%Y")
-    survey_year = survey_row["SurveyStartDate"].dt.year.values[0]
-
-    # Get prepopulated fields for the survey
-    survey_row[["ShortFolder"]] = choices_df[
-        choices_df["MarineReserve"] == survey_row.LinkToMarineReserve.values[0]
-    ][["ShortFolder"]].values[0]
-
-    # Save the "server filename" of the survey
-    short_marine_reserve = survey_row["ShortFolder"].values[0]
-
-    # Save the "server filename" of the survey
-    survey_server_name = short_marine_reserve + "-buv-" + str(survey_year) + "/"
-
-    # Retrieve deployments info from the survey of interest
-    deployments_server_name = db_info_dict["client"].list_objects(
-        Bucket=db_info_dict["bucket"], Prefix=survey_server_name, Delimiter="/"
-    )
-    # Convert info to dataframe
-    deployments_server_name = pd.DataFrame.from_dict(
-        deployments_server_name["CommonPrefixes"]
-    )
-
-    # Select only the name of the "deployment folder"
-    deployments_server_name_list = deployments_server_name.Prefix.str.split("/").str[1]
-
-    # Widget to select the deployment of interest
-    deployment_widget = widgets.SelectMultiple(
-        options=deployments_server_name_list,
-        description="New deployment:",
-        disabled=False,
-        layout=widgets.Layout(width="50%"),
-        style={"description_width": "initial"},
-    )
-    display(deployment_widget)
-    return deployment_widget, survey_row, survey_server_name
-
-
-def confirm_deployment_details(
-    db_info_dict: dict,
-    deployment_names: list,
-    survey_server_name: str,
-    survey_i,
-    deployment_info: list,
-    movie_files_server: str,
-    deployment_date: widgets.Widget,
-):
-    """
-    This function takes the deployment information and the survey information and returns a dataframe
-    with the deployment information
-
-    :param deployment_names: list of deployment names
-    :param survey_server_name: The name of the folder in the server where the survey is located
-    :param db_info_dict: a dictionary with the following keys:
-    :param survey_i: the survey name
-    :param deployment_info: a list of dictionaries with the deployment information
-    :param movie_files_server: the path to the folder with the movie files in the server
-    :param deployment_date: The date of the deployment
-    :return: The new_movie_row is a dataframe with the information of the new deployment.
-    """
-
-    for deployment_i in deployment_names:
-        # Save the deployment responses as a new row for the movies csv file
-        new_movie_row_dict = {
-            key: (
-                value.value
-                if hasattr(value, "value")
-                else value.result
-                if isinstance(value.result, int)
-                else value.result.value
-            )
-            for key, value in deployment_info[
-                deployment_names.index(deployment_i)
-            ].items()
-        }
-
-        new_movie_row = pd.DataFrame.from_records(new_movie_row_dict, index=[0])
-
-        # Read movies csv
-        movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-
-        # Get prepopulated fields for the movie deployment
-        # Add movie id
-        new_movie_row["movie_id"] = 1 + movies_df.movie_id.iloc[-1]
-
-        # Read surveys csv
-        surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
-
-        # Save the name of the survey
-        if isinstance(survey_i.result, dict):
-            # Load the ncsv with survey information
-            surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
-
-            # Save the SurveyID of the last survey added
-            new_movie_row["SurveyID"] = surveys_df.tail(1)["SurveyID"].values[0]
-
-            # Save the name of the survey
-            survey_name = surveys_df.tail(1)["SurveyName"].values[0]
-
-        else:
-            # Return the name of the survey
-            survey_name = survey_i.result.value
-
-            # Save the SurveyID that match the survey name
-            new_movie_row["SurveyID"] = surveys_df[
-                surveys_df["SurveyName"] == survey_name
-            ]["SurveyID"].values[0]
-
-        # Get the site information from the filename
-        site_deployment = "_".join(deployment_i.split("_")[:2])
-
-        # Specify the folder with files in the server
-        deployment_folder = survey_server_name + site_deployment
-
-        # Create temporary prefix (s3 path) for concatenated video
-        new_movie_row["prefix_conc"] = deployment_folder + "/" + deployment_i
-
-        # Select previously processed movies within the same survey
-        survey_movies_df = movies_df[
-            movies_df["SurveyID"] == new_movie_row["SurveyID"][0]
-        ].reset_index()
-
-        # Create unit id
-        if survey_movies_df.empty:
-            # Start unit_id in 0
-            new_movie_row["UnitID"] = surveys_df["SurveyID"].values[0] + "_0000"
-
-        else:
-            # Get the last unitID
-            last_unitID = str(
-                survey_movies_df.sort_values("UnitID").tail(1)["UnitID"].values[0]
-            )[-4:]
-
-            # Add one more to the last UnitID
-            next_unitID = str(int(last_unitID) + 1).zfill(4)
-
-            # Add one more to the last UnitID
-            new_movie_row["UnitID"] = (
-                surveys_df["SurveyID"].values[0] + "_" + next_unitID
-            )
-
-        # Estimate the fps and length info
-        # get_length does not currently exist
-        new_movie_row[["fps", "duration"]] = movie_utils.get_length(
-            deployment_i, os.getcwd()
-        )
-
-        # Specify location of the concat video
-        new_movie_row["concat_video"] = deployment_i
-
-        # Specify filename of the video
-        new_movie_row["filename"] = deployment_i
-
-        # Specify the site of the deployment
-        new_movie_row["SiteID"] = site_deployment
-
-        # Specify the date of the deployment
-        new_movie_row["EventDate"] = deployment_date.value
-
-        # Save the list of goprofiles
-        new_movie_row["go_pro_files"] = [movie_files_server]
-
-        # Extract year, month and day
-        new_movie_row["Year"] = new_movie_row["EventDate"][0].year
-        new_movie_row["Month"] = new_movie_row["EventDate"][0].month
-        new_movie_row["Day"] = new_movie_row["EventDate"][0].day
-
-        logging.info("The details of the new deployment are:")
-        for ind in new_movie_row.T.index:
-            logging.info(ind, "-->", new_movie_row.T[0][ind])
-
-        return new_movie_row
-
-
 def create_example_clips(
     project: Project,
     movie_i: str,
@@ -1575,8 +1335,6 @@ def create_example_clips(
     :type movie_i: str
     :param movie_path: the path to the movie
     :type movie_path: str
-    :param db_info_dict: a dictionary containing the information of the database
-    :type db_info_dict: dict
     :param project: the project object
     :param clip_selection: a dictionary with the following keys:
     :param pool_size: The number of parallel processes to run, defaults to 4 (optional)
@@ -1644,7 +1402,6 @@ def create_clips(
     available_movies_df: pd.DataFrame,
     movie_i: str,
     movie_path: str,
-    db_info_dict: dict,
     clip_selection,
     project: Project,
     modification_details: dict,
@@ -1657,7 +1414,6 @@ def create_clips(
     :param available_movies_df: the dataframe with the movies that are available for the project
     :param movie_i: the name of the movie you want to extract clips from
     :param movie_path: the path to the movie you want to extract clips from
-    :param db_info_dict: a dictionary with the database information
     :param clip_selection: a ClipSelection object
     :param project: the project object
     :param modification_details: a dictionary with the following keys:
