@@ -3,6 +3,7 @@ import os
 import sqlite3
 import logging
 import pandas as pd
+from pathlib import Path
 
 # util imports
 import kso_utils.db_starter.schema as schema
@@ -322,10 +323,7 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
             df = project.local_movies_csv
 
         # Reference movies with their respective sites
-        sites_df = pd.read_sql_query(
-            "SELECT id, siteName FROM sites", project.db_connection
-        )
-        sites_df = sites_df.rename(columns={"id": "site_id"})
+        sites_df = project.get_db_table("sites")[["id", "siteName"]].rename(columns={"id": "site_id"})
 
         # Merge movies and sites dfs
         df = pd.merge(df, sites_df, how="left", on="siteName")

@@ -99,7 +99,6 @@ def standarise_movie_format(
     movie_path: str,
     movie_filename: str,
     f_path: str,
-    db_info_dict: dict,
     project: Project,
     gpu_available: bool = False,
 ):
@@ -113,7 +112,6 @@ def standarise_movie_format(
     :type movie_filename: str
     :param f_path: The server or storage path of the original movie you want to convert
     :type f_path: str
-    :param db_info_dict: a dictionary with the initial information of the project
     :param project: the project object
     :param gpu_available: Boolean, whether or not a GPU is available
     :type gpu_available: bool
@@ -206,13 +204,17 @@ def standarise_movie_format(
         )
 
         # Upload the converted movie to the server
-        upload_movie_server(conv_mov_path, f_path, db_info_dict, project)
+        upload_movie_server(
+            movie_path=conv_mov_path,
+            f_path=f_path, 
+            project=project
+        )
 
     else:
         logging.info(f"{movie_filename} format is standard.")
 
 
-def retrieve_movie_info_from_server(project: Project, server_info: dict, db_connection):
+def retrieve_movie_info_from_server(project: Project, server_info: dict):
     """
     This function uses the project information and the database information, and returns a dataframe with the
     movie information
@@ -220,7 +222,6 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     :param project: the project object
     :param server_info: a dictionary containing the path to the database and the client to the server
     :type server_info: dict
-    :param db_connection: a SQL3 connection to the db of the project
     :return: A dataframe with the following columns (index, movie_id, fpath, spath, exists, filename_ext)
 
     """
@@ -274,7 +275,7 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
     # Retrieve the list of movies available in Wildlife.ai
     elif project.server == "TEMPLATE":
         # Temporarily retrieve the movies_info
-        movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
+        movies_df = project.get_db_table("movies")
 
         # Combine wildlife.ai storage and filenames of the movie examples
         available_movies_list = [
@@ -299,8 +300,7 @@ def retrieve_movie_info_from_server(project: Project, server_info: dict, db_conn
         raise ValueError("The server type you selected is not currently supported.")
 
     # Query info about the movie of interest
-    movies_df = pd.read_sql_query("SELECT * FROM movies", db_connection)
-    movies_df = movies_df.rename(columns={"id": "movie_id"})
+    movies_df = project.get_db_table("movies").rename(columns={"id": "movie_id"})
 
     # If full path is provided, separate into filename and full path
     server_df["spath_full"] = server_df["spath"]
@@ -550,8 +550,6 @@ def check_movie_uploaded(project: Project, movie_i: str):
 
     :param movie_i: the name of the movie you want to check
     :type movie_i: str
-    :param db_info_dict: a dictionary containing the path to the database and the path to the folder containing the videos
-    :type db_info_dict: dict
     """
 
     # Create connection to db

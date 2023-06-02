@@ -5,6 +5,7 @@ import glob
 import logging
 import asyncio
 import wandb
+import folium
 import numpy as np
 import pandas as pd
 import ipywidgets as widgets
@@ -19,6 +20,7 @@ from tqdm import tqdm
 from ast import literal_eval
 import imagesize
 import ipysheet
+from folium.plugins import MiniMap
 from IPython.display import display, clear_output
 from IPython.core.display import HTML
 
@@ -281,7 +283,6 @@ class ProjectProcessor:
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
             project=self.project,
             server_info=self.server_info,
-            db_connection=self.db_connection,
         )
 
         logging.info("Information of available movies has been retrieved")
@@ -514,7 +515,11 @@ class ProjectProcessor:
             # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
             [
                 movie_utils.standarise_movie_format(
-                    i, j, k, self.db_info, self.project, gpu_available
+                    movie_path=i,
+                    movie_filename=j,
+                    f_path=k,
+                    project=self.project,
+                    gpu_available=gpu_available,
                 )
                 for i, j, k in tqdm(
                     zip(df["movie_path"], df["filename"], df[col_fpath]),
@@ -1030,13 +1035,13 @@ class ProjectProcessor:
         class_df: pd.DataFrame,
     ):
         return zu_utils.get_classifications(
+            project=self,
             workflow_dict=workflow_dict,
             workflows_df=workflows_df,
             subj_type=subj_type,
             class_df=class_df,
-            db_path=self.project.db_path,
-        )
-
+        )    
+    
     def process_classifications(
         self, classifications_data, subject_type, agg_params, summary
     ):
@@ -1046,7 +1051,6 @@ class ProjectProcessor:
             subject_type=subject_type,
             agg_params=agg_params,
             summary=summary,
-            db_connection=self.db_connection,
         )
 
     def process_annotations(self):
@@ -1365,7 +1369,7 @@ class MLProjectProcessor(ProjectProcessor):
         self.run = self.modules["wandb"].init(
             entity=self.team_name,
             project="model-evaluations",
-            settings=self.modules["wandb"].Settings(start_method="thread"),
+            settings=self.modules["wandb"].Settings(start_method="fork"),
         )
         self.modules["detect"].run(
             weights=[
@@ -1386,7 +1390,9 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir.selected, wandb_log=True
+        )
         wandb.finish()
 
     def track_individuals(
@@ -1436,8 +1442,8 @@ class MLProjectProcessor(ProjectProcessor):
 
     def enhance_replace(self, run_folder: str):
         if self.model_type == 1:
-            os.rename(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
-            os.rename(f"{run_folder}/labels", f"{self.output_path}/labels")
+            os.move(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
+            os.move(f"{run_folder}/labels", f"{self.output_path}/labels")
         else:
             logging.error("This option is not supported for other model types.")
 

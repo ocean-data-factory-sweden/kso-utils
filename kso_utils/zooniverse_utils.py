@@ -28,7 +28,7 @@ import kso_utils.tutorials_utils as t_utils
 import kso_utils.movie_utils as movie_utils
 
 # Widget imports
-from IPython.display import display
+from IPython.display import HTML, display, clear_output
 import ipywidgets as widgets
 
 
@@ -375,11 +375,8 @@ def populate_subjects(
     db_utils.add_to_table(db_path, "subjects", [tuple(i) for i in subjects.values], 15)
 
     ##### Print how many subjects are in the db
-    # Create connection to db
-    conn = db_utils.create_connection(db_path)
-
     # Query id and subject type from the subjects table
-    subjects_df = pd.read_sql_query("SELECT id, subject_type FROM subjects", conn)
+    subjects_df = project.get_db_table("subjects")[["id", "subject_type"]]
     frame_subjs = subjects_df[subjects_df["subject_type"] == "frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"] == "clip"].shape[0]
 
@@ -408,10 +405,8 @@ def populate_agg_annotations(
     # Get the project-specific name of the database
     db_path = project.db_path
 
-    conn = db_utils.create_connection(db_path)
-
     # Query id and subject type from the subjects table
-    subjects_df = pd.read_sql_query("SELECT id, frame_exp_sp_id FROM subjects", conn)
+    subjects_df = project.get_db_table("subjects")[["id", "frame_exp_sp_id"]]
 
     # Combine annotation and subject information
     annotations_df = pd.merge(
@@ -423,12 +418,13 @@ def populate_agg_annotations(
         validate="many_to_one",
     )
 
+    # Retrieve species info from db
+    species_df = project.get_db_table("species")[["species_id", "label"]]
+    species_df = species_df.rename(columns={"id": "species_id"})
+
     # Update agg_annotations_clip table
     if subj_type == "clip":
-        # Set the columns in the right order
-        species_df = pd.read_sql_query(
-            "SELECT id as species_id, label FROM species", conn
-        )
+        # Set the columns in the right order        
         species_df["label"] = species_df["label"].apply(
             lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper()
         )
@@ -461,10 +457,7 @@ def populate_agg_annotations(
         # Select relevant columns
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
 
-        # Set the columns in the right order
-        species_df = pd.read_sql_query(
-            "SELECT id as species_id, label FROM species", conn
-        )
+        # Set the columns in the right order    
         species_df["label"] = species_df["label"].apply(
             lambda x: x[:-1] if x == "Blue mussels" else x
         )
@@ -477,7 +470,6 @@ def populate_agg_annotations(
         ].dropna()
 
         # Test table validity
-
         db_utils.test_table(
             annotations_df, "agg_annotations_frame", keys=["species_id"]
         )
@@ -1854,11 +1846,11 @@ def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
 
 
 def get_classifications(
+    project: Project,
     workflow_dict: dict,
     workflows_df: pd.DataFrame,
     subj_type: str,
     class_df: pd.DataFrame,
-    db_path: str,
 ):
     """
     It takes in a dictionary of workflows, a dataframe of workflows, the type of subject (frame or
@@ -1873,8 +1865,6 @@ def get_classifications(
     :type workflows_df: pd.DataFrame
     :param subj_type: "frame" or "clip"
     :param class_df: the dataframe of classifications from the database
-    :param db_path: the path to the database file
-    :param project: the name of the project on Zooniverse
     :return: A dataframe with the classifications for the specified project and workflow.
     """
 
@@ -1895,26 +1885,40 @@ def get_classifications(
     classes_df = pd.concat(classes)
 
     # Add information about the subject
-    # Create connection to db
-    conn = db_utils.create_connection(db_path)
-
+    # Query id and subject type from the subjects table
+    subjects_df = project.get_db_table("subjects")
+    
     if subj_type == "frame":
-        # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query(
-            "SELECT id, subject_type, \
-                                        https_location, filename, frame_number, movie_id FROM subjects \
-                                        WHERE subject_type=='frame'",
-            conn,
-        )
-
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"]=='frame']
+        
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id", 
+                "subject_type", 
+                "https_location", 
+                "filename", 
+                "frame_number", 
+                "movie_id"
+            ]
+        ]          
+        
     else:
-        # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query(
-            "SELECT id, subject_type, \
-                                        https_location, filename, clip_start_time, movie_id FROM subjects \
-                                        WHERE subject_type=='clip'",
-            conn,
-        )
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"]=='clip']
+        
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id", 
+                "subject_type", 
+                "https_location", 
+                "filename", 
+                "clip_start_time", 
+                "movie_id"
+            ]
+        ]                
 
     # Ensure id format matches classification's subject_id
     classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
@@ -1957,7 +1961,6 @@ def process_classifications(
     subject_type: str,
     agg_params: list,
     summary: bool = False,
-    db_connection=None,
 ):
     """
     It takes in a dataframe of classifications, a subject type (clip or frame), a list of
@@ -2003,25 +2006,41 @@ def process_classifications(
         return
 
     def get_classifications(classes_df, subject_type):
-        conn = db_connection
+        # Query id and subject type from the subjects table
+        subjects_df = project.get_db_table("subjects")
+        
         if subject_type == "frame":
-            # Query id and subject type from the subjects table
-            subjects_df = pd.read_sql_query(
-                "SELECT id, subject_type, \
-                                                https_location, filename, frame_number, movie_id FROM subjects \
-                                                WHERE subject_type=='frame'",
-                conn,
-            )
-
+            # Select only frame subjects
+            subjects_df = subjects_df[subjects_df["subject_type"]=='frame']
+            
+            # Select columns relevant for frame subjects
+            subjects_df = subjects_df[
+                [
+                    "id", 
+                    "subject_type", 
+                    "https_location", 
+                    "filename", 
+                    "frame_number", 
+                    "movie_id"
+                ]
+            ]          
+            
         else:
-            # Query id and subject type from the subjects table
-            subjects_df = pd.read_sql_query(
-                "SELECT id, subject_type, \
-                                                https_location, filename, clip_start_time, movie_id FROM subjects \
-                                                WHERE subject_type=='clip'",
-                conn,
-            )
-
+            # Select only frame subjects
+            subjects_df = subjects_df[subjects_df["subject_type"]=='clip']
+            
+            # Select columns relevant for frame subjects
+            subjects_df = subjects_df[
+                [
+                    "id", 
+                    "subject_type", 
+                    "https_location", 
+                    "filename", 
+                    "clip_start_time", 
+                    "movie_id"
+                ]
+            ]    
+            
         # Ensure id format matches classification's subject_id
         classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
         subjects_df["id"] = subjects_df["id"].astype("Int64")

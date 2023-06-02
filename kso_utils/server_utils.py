@@ -1,5 +1,7 @@
 # base imports
 import os
+import io
+import requests
 import pandas as pd
 import getpass
 import gdown
@@ -17,7 +19,7 @@ from pathlib import Path
 from paramiko import SFTPClient, SSHClient
 
 # util imports
-from kso_utils.project_utils import Project
+from kso_utils.project_utils import Project, find_project
 
 # Logging
 logging.basicConfig()
@@ -117,8 +119,24 @@ def download_init_csv(project: Project, init_keys: list, server_info: dict):
             )
 
     elif project.server == "TEMPLATE":
-        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-        download_gdrive(gdrive_id, project.csv_folder)
+        # Specify the url of the folder with csv files of the template project
+        url_input = f"https://drive.google.com/uc?&confirm=s5vl&id=1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+
+        # Specify the output of the file
+        zip_file = f"{project.csv_folder}.zip"
+
+        # Download the zip file
+        gdown.download(url_input, zip_file, quiet=False)
+
+        # Unzip the folder with the files
+        with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zip_ref.extractall(os.path.dirname(project.csv_folder))
+
+        # Remove the zipped file
+        os.remove(zip_file)
+
+        # Correct the file names by using correct encoding
+        fix_text_encoding(project.csv_folder)
 
     elif project.server in ["LOCAL", "SNIC"]:
         logging.info(
@@ -216,7 +234,7 @@ def update_csv_server(
 
 
 def upload_movie_server(
-    movie_path: str, f_path: str, db_info_dict: dict, project: Project
+    movie_path: str, f_path: str, project: Project
 ):
     """
     Takes the file path of a movie file and uploads it to the server.
@@ -225,7 +243,6 @@ def upload_movie_server(
     :type movie_path: str
     :param f_path: The server or storage path of the original movie you want to convert
     :type f_path: str
-    :param db_info_dict: a dictionary with the initial information of the project
     :param project: The filename of the movie file you want to convert
     :type movie_path: str
     """
@@ -980,31 +997,3 @@ def upload_concat_movie(server_info: dict, new_deployment_row: pd.DataFrame):
 
         # Remove temporary movie
         logging.info("Movies csv file succesfully updated in the server.")
-
-
-###################################
-# #######Google Drive functions#####
-# ##################################
-
-
-def download_gdrive(gdrive_id: str, folder_name: str):
-    # Specify the url of the file to download
-    url_input = f"https://drive.google.com/uc?&confirm=s5vl&id={gdrive_id}"
-
-    logging.info(f"Retrieving the file from {url_input}")
-
-    # Specify the output of the file
-    zip_file = f"{folder_name}.zip"
-
-    # Download the zip file
-    gdown.download(url_input, zip_file, quiet=False)
-
-    # Unzip the folder with the files
-    with zipfile.ZipFile(zip_file, "r") as zip_ref:
-        zip_ref.extractall(os.path.dirname(folder_name))
-
-    # Remove the zipped file
-    os.remove(zip_file)
-
-    # Correct the file names by using correct encoding
-    fix_text_encoding(folder_name)
