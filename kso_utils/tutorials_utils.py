@@ -378,21 +378,45 @@ def extract_clips(
         os.chmod(str(output_clip_path), 0o777)
 
     else:
+        
+        # Create clips without any modification
+        subprocess.call(
+            [
+                "ffmpeg",
+                "-ss",
+                str(upl_second_i),
+                "-t",
+                str(clip_length),
+                "-i",
+                movie_path,
+                "-an",  # removes the audio
+                "-c:a",
+                "copy",
+                "-c:v",
+                "libx264",
+                "-crf", # for the compression
+                "17", # visually no loss, but still compression so that it is quicker
+                str(output_clip_path),
+            ]
+        )
+        os.chmod(str(output_clip_path), 0o777)
+        
+        
         # Set up input prompt
-        init_prompt = f"ffmpeg_python.input('{movie_path}')"
-        def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', an, crf=17, pix_fmt='yuv420p', vcodec='libx264')"
+        # init_prompt = f"ffmpeg_python.input('{movie_path}')"
+        # def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', an, crf=17, pix_fmt='yuv420p', vcodec='libx264')"
 
-        # Run the extraction
-        try:
-            full_prompt = init_prompt + def_output_prompt
-            eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
-            os.chmod(str(output_clip_path), 0o777)
-        except ffmpeg_python.Error as e:
-            logging.info("stdout:", e.stdout.decode("utf8"))
-            logging.info("stderr:", e.stderr.decode("utf8"))
-            raise e
+        # # Run the extraction
+        # try:
+        #     full_prompt = init_prompt + def_output_prompt
+        #     eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
+        #     os.chmod(str(output_clip_path), 0o777)
+        # except ffmpeg_python.Error as e:
+        #     logging.info("stdout:", e.stdout.decode("utf8"))
+        #     logging.info("stderr:", e.stderr.decode("utf8"))
+        #     raise e
 
-        logging.info("Clips extracted successfully")
+    logging.info("Clips extracted successfully")
 
 
 def check_frame_size(frame_paths: list):
