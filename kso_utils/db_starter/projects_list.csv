@@ -6,5 +6,5 @@ SGU,9747,/tmp/sgu.db,SNIC,None,None,/mimer/NOBACKUP/groups/snic2021-6-9/db_start
 Medins,9747,/tmp/medins.db,SNIC,None,None,/mimer/NOBACKUP/groups/snic2021-6-9/db_starter/csv_Medins/,/mimer/NOBACKUP/groups/snic2021-6-9/project_movies/movies_Medins/,None,None
 GU,9747,/tmp/gu.db,SNIC,None,None,/mimer/NOBACKUP/groups/snic2021-6-9/db_starter/csv_GU/,/mimer/NOBACKUP/groups/snic2021-6-9/project_movies/movies_GU/concatenated/,None,None
 Sharklife,9747,/tmp/sharklife.db,SNIC,None,None,/mimer/NOBACKUP/groups/snic2021-6-9/db_starter/csv_Sharklife/,/mimer/NOBACKUP/groups/snic2021-6-9/project_movies/movies_Sharklife/,None,None
+CMPA_TEX,19165,cmpa_tex.db,AWS,thriving-earth-exchange,None,db_cmpa_csv,None,None,None
 model-registry,0,None,None,None,None,None,None,None,None
-Spyfish_BOPRC,14054,Spyfish_BOPRC.db,LOCAL,None,None,E:/SpyFish/BOPRC sites,Y:/,None,None
