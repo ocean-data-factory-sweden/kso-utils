@@ -2562,21 +2562,19 @@ def open_csv(
     range_start = int(df_range_rows.label[0])
     range_end = int(df_range_rows.label[1])
 
-    # Extract the first and last columns to display
-    if not len(df_range_columns.label) == 0:
-        column_start = str(df_range_columns.label[0])
-        column_end = str(df_range_columns.label[-1])
-    else:
-        column_start = df.columns[0]
-        column_end = df.columns[-1]
-
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
-    logging.info(f"Displaying {column_start} to {column_end}")
 
     # Filter the dataframe based on the selection: rows and columns
     df_filtered_row = df.filter(items=range(range_start, range_end), axis=0)
-    df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
+    if not len(df_range_columns.label) == 0:
+        df_filtered = df_filtered_row.filter(items=df_range_columns.label, axis=1)
+        # Display columns
+        logging.info(f"Displaying {df_range_columns.label}")
+    else:
+        df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
+        # Display columns
+        logging.info(f"Displaying {df.columns.tolist()}")
 
     # Load the df as ipysheet
     sheet = ipysheet.from_dataframe(df_filtered)

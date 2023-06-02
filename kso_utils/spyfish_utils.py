@@ -5,11 +5,9 @@ import logging
 import pandas as pd
 from tqdm import tqdm
 import subprocess
-from pathlib import Path
 
 # util imports
 from kso_utils.server_utils import (
-    get_matching_s3_keys,
     download_object_from_s3,
     upload_file_to_s3,
 )

@@ -5,7 +5,6 @@ import glob
 import logging
 import asyncio
 import wandb
-import folium
 import numpy as np
 import pandas as pd
 import ipywidgets as widgets
@@ -20,7 +19,6 @@ from tqdm import tqdm
 from ast import literal_eval
 import imagesize
 import ipysheet
-from folium.plugins import MiniMap
 from IPython.display import display, clear_output
 from IPython.core.display import HTML
 
@@ -1367,7 +1365,7 @@ class MLProjectProcessor(ProjectProcessor):
         self.run = self.modules["wandb"].init(
             entity=self.team_name,
             project="model-evaluations",
-            settings=self.modules["wandb"].Settings(start_method="fork"),
+            settings=self.modules["wandb"].Settings(start_method="thread"),
         )
         self.modules["detect"].run(
             weights=[
@@ -1388,9 +1386,7 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(
-            eval_dir.selected, wandb_log=True
-        )
+        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
         wandb.finish()
 
     def track_individuals(
@@ -1440,8 +1436,8 @@ class MLProjectProcessor(ProjectProcessor):
 
     def enhance_replace(self, run_folder: str):
         if self.model_type == 1:
-            os.move(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
-            os.move(f"{run_folder}/labels", f"{self.output_path}/labels")
+            os.rename(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
+            os.rename(f"{run_folder}/labels", f"{self.output_path}/labels")
         else:
             logging.error("This option is not supported for other model types.")
 

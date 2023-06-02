@@ -3,9 +3,7 @@
 import logging
 import pandas as pd
 import numpy as np
-from sklearn.cluster import DBSCAN
 from pathlib import Path
-from collections import Counter
 
 # util imports
 from kso_utils.project_utils import Project

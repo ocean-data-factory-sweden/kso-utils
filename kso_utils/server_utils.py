@@ -1,7 +1,5 @@
 # base imports
 import os
-import io
-import requests
 import pandas as pd
 import getpass
 import gdown
@@ -19,7 +17,7 @@ from pathlib import Path
 from paramiko import SFTPClient, SSHClient
 
 # util imports
-from kso_utils.project_utils import Project, find_project
+from kso_utils.project_utils import Project
 
 # Logging
 logging.basicConfig()
@@ -119,24 +117,8 @@ def download_init_csv(project: Project, init_keys: list, server_info: dict):
             )
 
     elif project.server == "TEMPLATE":
-        # Specify the url of the folder with csv files of the template project
-        url_input = f"https://drive.google.com/uc?&confirm=s5vl&id=1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-
-        # Specify the output of the file
-        zip_file = f"{project.csv_folder}.zip"
-
-        # Download the zip file
-        gdown.download(url_input, zip_file, quiet=False)
-
-        # Unzip the folder with the files
-        with zipfile.ZipFile(zip_file, "r") as zip_ref:
-            zip_ref.extractall(os.path.dirname(project.csv_folder))
-
-        # Remove the zipped file
-        os.remove(zip_file)
-
-        # Correct the file names by using correct encoding
-        fix_text_encoding(project.csv_folder)
+        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+        download_gdrive(gdrive_id, project.csv_folder)
 
     elif project.server in ["LOCAL", "SNIC"]:
         logging.info(
@@ -998,3 +980,31 @@ def upload_concat_movie(server_info: dict, new_deployment_row: pd.DataFrame):
 
         # Remove temporary movie
         logging.info("Movies csv file succesfully updated in the server.")
+
+
+###################################
+# #######Google Drive functions#####
+# ##################################
+
+
+def download_gdrive(gdrive_id: str, folder_name: str):
+    # Specify the url of the file to download
+    url_input = f"https://drive.google.com/uc?&confirm=s5vl&id={gdrive_id}"
+
+    logging.info(f"Retrieving the file from {url_input}")
+
+    # Specify the output of the file
+    zip_file = f"{folder_name}.zip"
+
+    # Download the zip file
+    gdown.download(url_input, zip_file, quiet=False)
+
+    # Unzip the folder with the files
+    with zipfile.ZipFile(zip_file, "r") as zip_ref:
+        zip_ref.extractall(os.path.dirname(folder_name))
+
+    # Remove the zipped file
+    os.remove(zip_file)
+
+    # Correct the file names by using correct encoding
+    fix_text_encoding(folder_name)
