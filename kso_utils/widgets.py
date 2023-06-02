@@ -1533,7 +1533,7 @@ def select_modification(gpu_available):
                 "None": {},
             },
         }
-    
+
     if gpu_available == True:
         clip_modifications = {
             "Color_correction": {

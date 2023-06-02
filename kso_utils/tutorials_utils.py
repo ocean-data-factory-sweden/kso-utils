@@ -197,8 +197,8 @@ def get_survey_name(survey_i):
 def check_clip_size(generated_clips):
     """
     > This function takes the pp.generated_clips, which is a dataframe that contains the information of all the movies that are generated.
-    it contains both the file paths of the extracted (non-modified) movies, and the path of the modified movies. 
-    this function returns a dataframe that contains all these file paths and their size. 
+    it contains both the file paths of the extracted (non-modified) movies, and the path of the modified movies.
+    this function returns a dataframe that contains all these file paths and their size.
     each file. If the size is too large, we suggest compressing them as a first step.
 
     :param clips_list: list of file paths to the clips you want to check
@@ -249,37 +249,41 @@ def modify_clips(
             crf = df.filter(regex="crf$", axis=1).values[0][0]
         except:
             crf = 17
-            logging.info('no compression')
-        
+            logging.info("no compression")
+
         # Build the ffmpeg command for GPU
-        ffmpeg_command =["ffmpeg",
-                        "-hwaccel",
-                        "cuda",
-                        "-hwaccel_output_format",
-                        "cuda",
-                        "-i",
-                        clip_i,
-                        "-threads",
-                        "4",
-                        "-c:a", # audio codec... 
-                        "copy", # copy, so no decoding-filtering-encoding operations will occur (for audio in this case)
-                        "-c:v", # video codec, same as -vcodec
-                        "h264_nvenc", # to use gpu in the video codec
-                        "-crf", # for the compression
-                        crf]
-        
+        ffmpeg_command = [
+            "ffmpeg",
+            "-hwaccel",
+            "cuda",
+            "-hwaccel_output_format",
+            "cuda",
+            "-i",
+            clip_i,
+            "-threads",
+            "4",
+            "-c:a",  # audio codec...
+            "copy",  # copy, so no decoding-filtering-encoding operations will occur (for audio in this case)
+            "-c:v",  # video codec, same as -vcodec
+            "h264_nvenc",  # to use gpu in the video codec
+            "-crf",  # for the compression
+            crf,
+        ]
+
         try:
             sens_info = df.filter(regex="sens_info$", axis=1).values[0][0]
             ffmpeg_command += ["-vf", sens_info]
         except:
-            logging.info('no sensitive info filter')
+            logging.info("no sensitive info filter")
         try:
             col_corr = df.filter(regex="color_corr$", axis=1).values[0][0]
             ffmpeg_command += ["-vf", col_corr]
         except:
-            logging.info('no color correction')
-        
-        ffmpeg_command += [output_clip_path,]
+            logging.info("no color correction")
+
+        ffmpeg_command += [
+            output_clip_path,
+        ]
 
         # run the ffmpeg with gpu
         subprocess.call(ffmpeg_command)
@@ -409,15 +413,14 @@ def extract_clips(
                 "copy",
                 "-c:v",
                 "h264_nvenc",
-                "-crf", # for the compression
-                "17", # visually no loss, but still compression so that it is quicker
+                "-crf",  # for the compression
+                "17",  # visually no loss, but still compression so that it is quicker
                 str(output_clip_path),
             ]
         )
         os.chmod(str(output_clip_path), 0o777)
 
     else:
-        
         # Create clips without any modification
         subprocess.call(
             [
@@ -433,14 +436,13 @@ def extract_clips(
                 "copy",
                 "-c:v",
                 "libx264",
-                "-crf", # for the compression
-                "17", # visually no loss, but still compression so that it is quicker
+                "-crf",  # for the compression
+                "17",  # visually no loss, but still compression so that it is quicker
                 str(output_clip_path),
             ]
         )
         os.chmod(str(output_clip_path), 0o777)
-        
-        
+
         # Set up input prompt
         # init_prompt = f"ffmpeg_python.input('{movie_path}')"
         # def_output_prompt = f".output('{str(output_clip_path)}', ss={str(upl_second_i)}, t={str(clip_length)}, movflags='+faststart', an, crf=17, pix_fmt='yuv420p', vcodec='libx264')"
