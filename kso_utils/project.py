@@ -1,4 +1,4 @@
-# base imports
+# base impkrts
 import os
 import sys
 import glob
@@ -45,8 +45,8 @@ class ProjectProcessor:
         self.project = project
         self.db_connection = None
         self.init_keys = ["movies", "species", "photos", "surveys", "sites"]
-        self.server_info = {}
-        self.db_info = {}
+        self.server_connection = {}
+        self.csv_paths = {}
         self.zoo_info = {}
         self.annotation_engine = None
         self.annotations = pd.DataFrame()
@@ -57,7 +57,7 @@ class ProjectProcessor:
         self.modules = g_utils.import_modules([])
 
         # Get server details and connect to server
-        self.get_server_info()
+        self.connect_to_server()
 
         # Map initial csv files
         self.map_init_csv()
@@ -85,13 +85,13 @@ class ProjectProcessor:
         return list(self.__dict__.keys())
 
     # Functions to initiate the project
-    def get_server_info(self):
+    def connect_to_server(self):
         """
         It connects to the server and returns the server info
-        :return: The server_info is added to the ProjectProcessor class.
+        :return: The server_connection is added to the ProjectProcessor class.
         """
         try:
-            self.server_info = server_utils.connect_to_server(self.project)
+            self.server_connection = server_utils.connect_to_server(self.project)
         except BaseException as e:
             logging.error(f"Server connection could not be established. Details {e}")
             return
@@ -112,8 +112,8 @@ class ProjectProcessor:
             ]
 
         # Download csv files from the server if needed and store their server path
-        self.db_info = server_utils.download_init_csv(
-            self.project, self.init_keys, self.server_info
+        self.csv_paths = server_utils.download_init_csv(
+            self.project, self.init_keys, self.server_connection
         )
 
         # Store the paths of the local csv files
@@ -121,7 +121,7 @@ class ProjectProcessor:
 
     def load_meta(self):
         """
-        It loads the metadata from the relevant local csv files into the `db_info` dictionary
+        It loads the metadata from the relevant local csv files into the `csv_paths` dictionary
         """
         # Retrieve a list with all the csv files in the folder with initival csvs
         local_files = os.listdir(self.project.csv_folder)
@@ -136,7 +136,7 @@ class ProjectProcessor:
             if any(local_csv_files in file for local_csv_files in self.init_keys)
         ]
 
-        # Store the paths of the local csv files of interest into the "db_info" dictionary
+        # Store the paths of the local csv files of interest into the "csv_paths" dictionary
         for local_csv in local_csvs_db:
             # Specify the key of the csv
             init_key = [key for key in self.init_keys if key in local_csv][0]
@@ -145,10 +145,10 @@ class ProjectProcessor:
             csv_key = str("local_" + init_key + "_csv")
 
             # Store the path of the csv file
-            self.db_info[csv_key] = Path(self.project.csv_folder, local_csv)
+            self.csv_paths[csv_key] = Path(self.project.csv_folder, local_csv)
 
             # Read the local csv files into a pd df
-            setattr(self, csv_key, pd.read_csv(self.db_info[csv_key]))
+            setattr(self, csv_key, pd.read_csv(self.csv_paths[csv_key]))
 
     def setup_db(self):
         """
@@ -162,14 +162,23 @@ class ProjectProcessor:
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
-        # Store the paths of the local_csvs
-        local_csvs = [
-            str(file) for file in list(self.db_info.keys()) if "local" in str(file)
-        ]
+        # Select only attributes of the propjectprocessor that are df of local csvs
+        # (sorted in reverse alphabetically to load sites before movies)
+        local_dfs = sorted(
+            [str(file) for file in list(self.keys()) if "local" in str(file)],
+            reverse=True,
+        )
 
         # Populate the db with initial info from the local_csvs
-        # (sorted reverselly alphabetically to load sites before movies)
-        [db_utils.populate_db(self, i) for i in sorted(local_csvs, reverse=True)]
+        [
+            db_utils.populate_db(
+                project=self.project,
+                conn=self.db_connection,
+                local_df=getattr(self, i),
+                init_key=i.split("_", 2)[1],
+            )
+            for i in local_dfs
+        ]
 
     # General functions to interact with in jupyter notebooks
     def get_db_table(self, table_name, interactive: bool = False):
@@ -181,20 +190,10 @@ class ProjectProcessor:
         :param interactive: A boolean which displays the table as HTML
         :return: A dataframe
         """
-        if self.db_connection is not None:
-            cursor = self.db_connection.cursor()
-        else:
-            return
-        # Get column names
-        cursor.execute(f"SELECT * FROM {table_name}")
-        rows = cursor.fetchall()
 
-        # Get column names
-        cursor.execute(f"PRAGMA table_info('{table_name}')")
-        columns = [col[1] for col in cursor.fetchall()]
-
-        # Create a DataFrame from the data
-        df = pd.DataFrame(rows, columns=columns)
+        df = db_utils.get_df_from_db_table(
+            conn=self.db_connection, table_name=table_name
+        )
 
         if interactive:
             html = f"<div style='height:300px;overflow:auto'>{df.to_html(index=False)}</div>"
@@ -260,12 +259,12 @@ class ProjectProcessor:
                 subjects_series = self.zoo_info["subjects"].copy()
 
             # Safely remove subjects table
-            db_utils.drop_table(self.project.db_path, table_name="subjects")
+            db_utils.drop_table(conn=self.db_connection, table_name="subjects")
 
             if len(subjects_series) > 0:
                 # Fill or re-fill subjects table
                 zu_utils.populate_subjects(
-                    subjects_series, self.project, self.project.db_path
+                    subjects_series, project=self.project, conn=self.db_connection
                 )
             else:
                 logging.error(
@@ -280,8 +279,8 @@ class ProjectProcessor:
         """
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
             project=self.project,
-            server_info=self.server_info,
             db_connection=self.db_connection,
+            server_connection=self.server_connection,
         )
 
         logging.info("Information of available movies has been retrieved")
@@ -293,7 +292,7 @@ class ProjectProcessor:
         :param filepath: The path to the movie file
         :return: The movie path.
         """
-        return movie_utils.get_movie_path(filepath, self.db_info, self.project)
+        return movie_utils.get_movie_path(filepath, self)
 
     # t1
 
@@ -307,7 +306,7 @@ class ProjectProcessor:
         :return: meta_df, range_rows, range_columns
         """
         meta_df, range_rows, range_columns = kso_widgets.select_sheet_range(
-            db_info_dict=self.db_info, orig_csv=f"local_{meta_key}_csv"
+            project=self, orig_csv=f"local_{meta_key}_csv", csv_paths=self.csv_paths
         )
         return meta_df, range_rows, range_columns
 
@@ -337,7 +336,7 @@ class ProjectProcessor:
         :return: A dataframe with the changes highlighted.
         """
         highlight_changes, sheet_df = kso_widgets.display_changes(
-            self.db_info, isheet=sheet, df_filtered=df_filtered
+            isheet=sheet, df_filtered=df_filtered
         )
         display(highlight_changes)
         return sheet_df
@@ -348,38 +347,41 @@ class ProjectProcessor:
         meta_name: str,
     ):
         return kso_widgets.update_meta(
-            self.project,
-            self.db_info,
+            project=self.project,
+            conn=self.db_connection,
             sheet_df=sheet_df,
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
+            csv_paths=self.csv_paths,
         )
 
     def map_sites(self):
-        return kso_widgets.map_sites(project=self.project, db_info_dict=self.db_info)
+        return kso_widgets.map_sites(project=self.project, csv_paths=self.csv_paths)
 
     def preview_media(self):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
-        function `f` that takes in three arguments: `project`, `db_info`, and `server_movies_csv`. The
+        function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
         function `f` is an asynchronous function that takes in the value of the `movie_selected` widget
         and displays the movie preview
         """
         movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, server_info, server_movies_csv):
+        async def f(project, server_connection, server_movies_csv):
             x = await kso_widgets.single_wait_for_change(movie_selected, "value")
             html, movie_path = movie_utils.preview_movie(
                 project=project,
-                server_info=server_info,
                 available_movies_df=server_movies_csv,
                 movie_i=x,
+                server_connection=server_connection,
             )
             display(html)
             self.movie_selected = x
             self.movie_path = movie_path
 
-        asyncio.create_task(f(self.project, self.server_info, self.server_movies_csv))
+        asyncio.create_task(
+            f(self.project, self.server_connection, self.server_movies_csv)
+        )
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -412,146 +414,20 @@ class ProjectProcessor:
         :param gpu_available: Boolean, whether or not a GPU is available
         """
 
-        # Load the csv with movies information
-        df = pd.read_csv(self.db_info["local_movies_csv"])
-
-        # Get project-specific column names
-        col_names = db_utils.get_col_names(self.project, "local_movies_csv")
-
-        # Set project-specific column names of interest
-        col_fps = col_names["fps"]
-        col_duration = col_names["duration"]
-        col_sampling_start = col_names["sampling_start"]
-        col_sampling_end = col_names["sampling_end"]
-        col_fpath = col_names["fpath"]
-
-        if review_method.startswith("Basic"):
-            # Check if fps or duration is missing from any movie
-            if (
-                not df[[col_fps, col_duration, col_sampling_start, col_sampling_end]]
-                .isna()
-                .any()
-                .any()
-            ):
-                logging.info(
-                    "There are no empty entries for fps, duration and sampling information"
-                )
-
-            else:
-                # Create a df with only those rows with missing fps/duration
-                df_missing = df[
-                    df[col_fps].isna() | df[col_duration].isna()
-                ].reset_index(drop=True)
-
-                ##### Select only movies that can be mapped ####
-                # Merge the missing fps/duration df with the available movies
-                df_missing = df_missing.merge(
-                    self.server_movies_csv[["filename", "exists", "spath"]],
-                    on=["filename"],
-                    how="left",
-                )
-
-                if df_missing.exists.isnull().values.any():
-                    # Replace na with False
-                    df_missing["exists"] = df_missing["exists"].fillna(False)
-
-                    logging.info(
-                        f"Only # {df_missing[df_missing['exists']].shape[0]} out of"
-                        f"# {df_missing[~df_missing['exists']].shape[0]} movies with missing information are available."
-                        f" Proceeding to retrieve fps and duration info for only those {df_missing[df_missing['exists']].shape[0]} available movies."
-                    )
-
-                    # Select only available movies
-                    df_missing = df_missing[df_missing["exists"]].reset_index(drop=True)
-
-                # Rename column to match the movie_path format
-                df_missing = df_missing.rename(
-                    columns={
-                        "spath": "movie_path",
-                    }
-                )
-
-                logging.info("Getting the fps and duration of the movies")
-                # Read the movies and overwrite the existing fps and duration info
-                df_missing[[col_fps, col_duration]] = pd.DataFrame(
-                    [
-                        movie_utils.get_fps_duration(i)
-                        for i in tqdm(
-                            df_missing["movie_path"], total=df_missing.shape[0]
-                        )
-                    ],
-                    columns=[col_fps, col_duration],
-                )
-
-                # Add the missing info to the original df based on movie ids
-                df.set_index("movie_id", inplace=True)
-                df_missing.set_index("movie_id", inplace=True)
-                df.update(df_missing)
-                df.reset_index(drop=False, inplace=True)
-
-        else:
-            logging.info("Retrieving the paths to access the movies")
-            # Add a column with the path (or url) where the movies can be accessed from
-            df["movie_path"] = pd.Series(
-                [
-                    movie_utils.get_movie_path(i, self.db_info, self.project)
-                    for i in tqdm(df[col_fpath], total=df.shape[0])
-                ]
-            )
-
-            logging.info("Getting the fps and duration of the movies")
-            # Read the movies and overwrite the existing fps and duration info
-            df[[col_fps, col_duration]] = pd.DataFrame(
-                [
-                    movie_utils.get_fps_duration(i)
-                    for i in tqdm(df["movie_path"], total=df.shape[0])
-                ],
-                columns=[col_fps, col_duration],
-            )
-
-            logging.info("Standardising the format, frame rate and codec of the movies")
-
-            # Convert movies to the right format, frame rate or codec and upload them to the project's server/storage
-            [
-                movie_utils.standarise_movie_format(
-                    i, j, k, self.db_info, self.project, gpu_available
-                )
-                for i, j, k in tqdm(
-                    zip(df["movie_path"], df["filename"], df[col_fpath]),
-                    total=df.shape[0],
-                )
-            ]
-
-            # Drop unnecessary columns
-            df = df.drop(columns=["movie_path"])
-
-        # Fill out missing sampling start information
-        df.loc[df[col_sampling_start].isna(), col_sampling_start] = 0.0
-
-        # Fill out missing sampling end information
-        df.loc[df[col_sampling_end].isna(), col_sampling_end] = df[col_duration]
-
-        # Prevent sampling end times longer than actual movies
-        if (df[col_sampling_end] > df[col_duration]).any():
-            mov_list = df[df[col_sampling_end] > df[col_duration]].filename.unique()
-            raise ValueError(
-                f"The sampling_end times of the following movies are longer than the actual movies {mov_list}"
-            )
-
-        # Save the updated df locally
-        df.to_csv(self.db_info["local_movies_csv"], index=False)
-        logging.info("The local movies.csv file has been updated")
-
-        # Save the updated df in the server
-        server_utils.update_csv_server(
+        movie_utils.check_movies_meta(
             project=self.project,
-            db_info_dict=self.db_info,
-            orig_csv="server_movies_csv",
-            updated_csv="local_movies_csv",
+            csv_paths=self.csv_paths,
+            server_movies_csv=self.server_movies_csv,
+            conn=self.db_connection,
+            server_connection=self.server_connection,
+            review_method=review_method,
+            gpu_available=gpu_available,
         )
 
     def check_species_meta(self):
-        return db_utils.check_species_meta(self.project, self.db_info)
+        return db_utils.check_species_meta(
+            csv_paths=self.csv_paths, db_connection=self.db_connection
+        )
 
     def check_sites_meta(self):
         # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
@@ -563,14 +439,13 @@ class ProjectProcessor:
         It uploads the new movies to the SNIC server and creates new rows to be updated
         with movie metadata and saved into movies.csv
 
-        :param db_info_dict: a dictionary with the following keys:
         :param movie_list: list of new movies that are to be added to movies.csv
         """
         # Get number of new movies to be added
         movie_folder = self.project.movie_folder
         number_of_movies = len(movie_list)
         # Get current movies
-        movies_df = pd.read_csv(self.db_info["local_movies_csv"])
+        movies_df = pd.read_csv(self.csv_paths["local_movies_csv"])
         # Set up a new row for each new movie
         new_movie_rows_sheet = ipysheet.sheet(
             rows=number_of_movies,
@@ -610,7 +485,7 @@ class ProjectProcessor:
 
                 if self.project.server == "SNIC":
                     server_utils.upload_object_to_snic(
-                        self.db_info["sftp_client"],
+                        self.server_connection["sftp_client"],
                         str(processed_video_path),
                         str(remote_fpath),
                     )
@@ -664,7 +539,7 @@ class ProjectProcessor:
             )
 
             def on_button_clicked2(b):
-                movies_df = pd.read_csv(self.db_info["local_movies_csv"])
+                movies_df = pd.read_csv(self.csv_paths["local_movies_csv"])
                 new_movie_rows_df = ipysheet.to_dataframe(new_sheet)
                 self.local_movies_csv = pd.concat(
                     [movies_df, new_movie_rows_df], ignore_index=True
@@ -675,9 +550,9 @@ class ProjectProcessor:
             display(button2)
 
         button.on_click(on_button_clicked)
-        # t2_utils.upload_new_movies_to_snic
-        # t2_utils.update_csv
-        # t2_utils.sync_server_csv
+
+        # TO BE COMPLETED with Chloudina
+        # upload new movies and update csvs
         display(button)
 
     def add_sites(self):
@@ -753,7 +628,6 @@ class ProjectProcessor:
                 available_movies_df=self.server_movies_csv,
                 movie_i=movie_name,
                 movie_path=movie_path,
-                db_info_dict=self.db_info,
                 clip_selection=clip_selection,
                 project=self.project,
                 modification_details={},
@@ -880,7 +754,9 @@ class ProjectProcessor:
                     * len(self.frames_to_upload_df)
                 )
                 self.frames_to_upload_df = self.frames_to_upload_df.merge(
-                    self.get_db_table("movies").rename(columns={"id": "movie_id"}),
+                    db_utils.get_df_from_db_table(self.db_connection, "movies").rename(
+                        columns={"id": "movie_id"}
+                    ),
                     how="left",
                     left_on="movie_filename",
                     right_on="filename",
@@ -938,7 +814,6 @@ class ProjectProcessor:
             self.frames_to_upload_df = zu_utils.get_frames(
                 project=self.project,
                 zoo_info_dict=self.zoo_info,
-                db_info_dict=self.db_info,
                 species_names=species_list.value,
                 n_frames_subject=n_frames_subject,
                 subsample_up_to=subsample_up_to,
@@ -973,10 +848,15 @@ class ProjectProcessor:
         elif subject_type == "frame":
             species_list = []
             upload_df = zu_utils.set_zoo_frame_metadata(
-                upload_data, species_list, self.project, self.db_info
+                project=self.project,
+                df=upload_data,
+                species_list=species_list,
+                csv_paths=self.csv_paths,
             )
             zu_utils.upload_frames_to_zooniverse(
-                upload_df, species_list, self.db_info, self.project
+                project=self.project,
+                upload_to_zoo=upload_df,
+                species_list=species_list,
             )
 
     # t5, t6, t7
@@ -1030,11 +910,11 @@ class ProjectProcessor:
         class_df: pd.DataFrame,
     ):
         return zu_utils.get_classifications(
+            project=self,
             workflow_dict=workflow_dict,
             workflows_df=workflows_df,
             subj_type=subj_type,
             class_df=class_df,
-            db_path=self.project.db_path,
         )
 
     def process_classifications(
@@ -1042,11 +922,11 @@ class ProjectProcessor:
     ):
         return zu_utils.process_classifications(
             project=self.project,
+            conn=self.db_connection,
             classifications_data=classifications_data,
             subject_type=subject_type,
             agg_params=agg_params,
             summary=summary,
-            db_connection=self.db_connection,
         )
 
     def process_annotations(self):
@@ -1056,7 +936,7 @@ class ProjectProcessor:
     def format_to_gbif(self, agg_df: pd.DataFrame, subject_type: str):
         return zu_utils.format_to_gbif_occurence(
             project=self.project,
-            db_info_dict=self.db_info,
+            csv_paths=self.csv_paths,
             zoo_info_dict=self.zoo_info,
             df=agg_df,
             classified_by="citizen_scientists",
@@ -1165,7 +1045,8 @@ class MLProjectProcessor(ProjectProcessor):
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
                 project=self.project,
-                db_info_dict=self.db_info,
+                server_connection=self.server_connection,
+                db_connection=self.db_connection,
                 out_path=out_path,
                 perc_test=perc_test,
                 class_list=self.species_of_interest,
@@ -1386,7 +1267,9 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir, wandb_log=True
+        )
         wandb.finish()
 
     def track_individuals(
