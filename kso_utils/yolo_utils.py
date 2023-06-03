@@ -306,7 +306,6 @@ def split_frames(data_path: str, perc_test: float):
 
 def frame_aggregation(
     project: Project,
-    db_info_dict: dict,
     out_path: str,
     perc_test: float,
     class_list: list,
@@ -324,8 +323,6 @@ def frame_aggregation(
     boxes for the specified species
 
     :param project: the project object
-    :param db_info_dict: a dictionary containing the path to the database and the database name
-    :type db_info_dict: dict
     :param out_path: the path to the folder where you want to save the dataset
     :type out_path: str
     :param perc_test: The percentage of frames that will be used for testing
@@ -464,7 +461,7 @@ def frame_aggregation(
     from kso_utils.movie_utils import retrieve_movie_info_from_server
 
     movie_df = retrieve_movie_info_from_server(
-        project=project, db_info_dict=db_info_dict
+        project=project
     )
 
     # If at least one movie is linked to the project
@@ -504,7 +501,7 @@ def frame_aggregation(
         from kso_utils.server_utils import get_movie_url
 
         train_rows["movie_path"] = train_rows["movie_path"].apply(
-            lambda x: get_movie_url(project, db_info_dict, x)
+            lambda x: get_movie_url(project, x)
         )
 
         # Read each movie for efficient frame access

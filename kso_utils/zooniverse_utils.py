@@ -230,7 +230,7 @@ def extract_metadata(subj_df: pd.DataFrame):
 
 
 def populate_subjects(
-    subjects: pd.DataFrame, project: project_utils.Project, db_path: str
+    subjects: pd.DataFrame, project: project_utils.Project
 ):
     """
     Populate the subjects table with the subject metadata
@@ -238,7 +238,6 @@ def populate_subjects(
     :param subjects: the subjects dataframe
     :param project_path: The path to the projects.csv file
     :param project_name: The name of the Zooniverse project
-    :param db_path: the path to the database
     """
 
     from kso_utils.koster_utils import process_koster_subjects
@@ -247,6 +246,7 @@ def populate_subjects(
     project_name = project.Project_name
     server = project.server
     movie_folder = project.movie_folder
+    db_path = project.project.db_path
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
@@ -533,44 +533,6 @@ def process_clips_template(annotations, row_class_id, rows_list: list):
                 rows_list.append(choice_i)
 
     return rows_list
-
-
-def retrieve__populate_zoo_info(
-    project: project_utils.Project,
-    db_info_dict: dict,
-    zoo_project: Project,
-    zoo_info: list,
-    generate_export: bool = False,
-):
-    """
-    It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database
-    with the information
-
-    :param project: the project you want to retrieve information for
-    :param db_info_dict: a dictionary containing the path to the database and the name of the database
-    :param zoo_project: The name of the Zooniverse project you created
-    :param zoo_info: a list containing the information of the Zooniverse project you would like to retrieve
-    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
-
-    :return: The zoo_info_dict is being returned.
-    """
-
-    if zoo_project is None:
-        logging.error(
-            "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
-        )
-    else:
-        # Retrieve and store the information of subjects uploaded to zooniverse
-        zoo_info_dict = retrieve_zoo_info(
-            project, zoo_project, zoo_info, generate_export
-        )
-
-        # Populate the sql with subjects uploaded to Zooniverse
-        if "db_path" in db_info_dict:
-            populate_subjects(zoo_info_dict["subjects"], project, project.db_path)
-        else:
-            logging.info("No database path found. Subjects have not been added to db")
-        return zoo_info_dict
 
 
 def set_zoo_clip_metadata(
@@ -1177,7 +1139,6 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(
     project: Project,
-    db_info_dict: dict,
     zoo_info_dict: dict,
     species_names: list,
     n_frames_subject=3,
@@ -1274,11 +1235,10 @@ def get_frames(
 
             # Get df of frames to be extracted
             frame_df = movie_utils.get_species_frames(
-                project,
-                db_info_dict,
-                sp_agg_clips_df,
-                species_ids,
-                n_frames_subject,
+                project=project,
+                agg_clips_df=sp_agg_clips_df,
+                species_ids=species_ids,
+                n_frames_subject=n_frames_subject,
             )
 
             # Check the frames haven't been uploaded to Zooniverse
@@ -1293,7 +1253,9 @@ def get_frames(
             else:
                 frames_folder = "_".join(species_names_zoo) + "_frames/"
             chooser.df = movie_utils.extract_frames(
-                project, db_info_dict, frame_df, frames_folder
+                project=project, 
+                df=frame_df, 
+                frames_folder=frames_folder
             )
 
         # Register callback function
@@ -1304,13 +1266,12 @@ def get_frames(
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
-def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
+def set_zoo_frame_metadata(project, df, species_list: list):
     """
     It takes a dataframe of clips or frames, and adds metadata about the site and project to it
 
     :param df: the dataframe with the media to upload
     :param project: the project object
-    :param db_info_dict: a dictionary with information about the project
     :return: upload_to_zoo, sitename, created_on
     """
     project_name = project.Project_name
@@ -1346,7 +1307,7 @@ def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
     elif project_name == "Spyfish_Aotearoa":
         from kso_utils.spyfish_utils import spyfish_subject_metadata
 
-        upload_to_zoo = spyfish_subject_metadata(df, db_info_dict)
+        upload_to_zoo = spyfish_subject_metadata(df, project)
     else:
         logging.error("This project is not a supported Zooniverse project.")
 
@@ -1626,7 +1587,6 @@ def modify_frames(
 
 def format_to_gbif_occurence(
     project: Project,
-    db_info_dict: dict,
     zoo_info_dict: dict,
     df: pd.DataFrame,
     classified_by: str,
@@ -1637,7 +1597,6 @@ def format_to_gbif_occurence(
     :param df: the dataframe containing the aggregated classifications
     :param classified_by: the entity who classified the object of interest, either "citizen_scientists", "biologists" or "ml_algorithms"
     :param subject_type: str,
-    :param db_info_dict: a dictionary containing the path to the database and the database name
     :param project: the project object
     :param zoo_info_dict: dictionary with the workflow/subjects/classifications retrieved from Zooniverse project
     :return: a df of species occurrences to publish in GBIF/OBIS.
@@ -1672,9 +1631,9 @@ def format_to_gbif_occurence(
         movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
 
         # Add survey information as part of the movie info if spyfish
-        if "local_surveys_csv" in db_info_dict.keys():
+        if "local_surveys_csv" in project.db_info.keys():
             # Read info about the movies
-            movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
+            movies_csv = pd.read_csv(project.db_info["local_movies_csv"])
 
             # Select only movie ids and survey ids
             movies_csv = movies_csv[["movie_id", "SurveyID"]]
@@ -1686,7 +1645,7 @@ def format_to_gbif_occurence(
 
             # Read info about the surveys
             surveys_df = pd.read_csv(
-                db_info_dict["local_surveys_csv"], parse_dates=["SurveyStartDate"]
+                project.db_info["local_surveys_csv"], parse_dates=["SurveyStartDate"]
             )
 
             # Combine the movie_id and survey information

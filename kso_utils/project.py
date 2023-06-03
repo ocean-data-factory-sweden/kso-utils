@@ -267,7 +267,7 @@ class ProjectProcessor:
             if len(subjects_series) > 0:
                 # Fill or re-fill subjects table
                 zu_utils.populate_subjects(
-                    subjects_series, self.project, self.project.db_path
+                    subjects_series, self
                 )
             else:
                 logging.error(
@@ -281,8 +281,7 @@ class ProjectProcessor:
         This function checks what movies from the movies csv are available
         """
         self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
-            project=self.project,
-            server_info=self.server_info,
+            project=self
         )
 
         logging.info("Information of available movies has been retrieved")
@@ -294,7 +293,7 @@ class ProjectProcessor:
         :param filepath: The path to the movie file
         :return: The movie path.
         """
-        return movie_utils.get_movie_path(filepath, self.db_info, self.project)
+        return movie_utils.get_movie_path(filepath, self)
 
     # t1
 
@@ -308,7 +307,7 @@ class ProjectProcessor:
         :return: meta_df, range_rows, range_columns
         """
         meta_df, range_rows, range_columns = kso_widgets.select_sheet_range(
-            db_info_dict=self.db_info, orig_csv=f"local_{meta_key}_csv"
+            project=self, orig_csv=f"local_{meta_key}_csv"
         )
         return meta_df, range_rows, range_columns
 
@@ -338,7 +337,7 @@ class ProjectProcessor:
         :return: A dataframe with the changes highlighted.
         """
         highlight_changes, sheet_df = kso_widgets.display_changes(
-            self.db_info, isheet=sheet, df_filtered=df_filtered
+          isheet=sheet, df_filtered=df_filtered
         )
         display(highlight_changes)
         return sheet_df
@@ -349,15 +348,14 @@ class ProjectProcessor:
         meta_name: str,
     ):
         return kso_widgets.update_meta(
-            self.project,
-            self.db_info,
+            project=self,
             sheet_df=sheet_df,
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
         )
 
     def map_sites(self):
-        return kso_widgets.map_sites(project=self.project, db_info_dict=self.db_info)
+        return kso_widgets.map_sites(project=self)
 
     def preview_media(self):
         """
@@ -372,7 +370,6 @@ class ProjectProcessor:
             x = await kso_widgets.single_wait_for_change(movie_selected, "value")
             html, movie_path = movie_utils.preview_movie(
                 project=project,
-                server_info=server_info,
                 available_movies_df=server_movies_csv,
                 movie_i=x,
             )
@@ -495,7 +492,7 @@ class ProjectProcessor:
             # Add a column with the path (or url) where the movies can be accessed from
             df["movie_path"] = pd.Series(
                 [
-                    movie_utils.get_movie_path(i, self.db_info, self.project)
+                    movie_utils.get_movie_path(i, self)
                     for i in tqdm(df[col_fpath], total=df.shape[0])
                 ]
             )
@@ -549,14 +546,13 @@ class ProjectProcessor:
 
         # Save the updated df in the server
         server_utils.update_csv_server(
-            project=self.project,
-            db_info_dict=self.db_info,
+            project=self,
             orig_csv="server_movies_csv",
             updated_csv="local_movies_csv",
         )
 
     def check_species_meta(self):
-        return db_utils.check_species_meta(self.project, self.db_info)
+        return db_utils.check_species_meta(self)
 
     def check_sites_meta(self):
         # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
@@ -568,7 +564,6 @@ class ProjectProcessor:
         It uploads the new movies to the SNIC server and creates new rows to be updated
         with movie metadata and saved into movies.csv
 
-        :param db_info_dict: a dictionary with the following keys:
         :param movie_list: list of new movies that are to be added to movies.csv
         """
         # Get number of new movies to be added
@@ -680,9 +675,9 @@ class ProjectProcessor:
             display(button2)
 
         button.on_click(on_button_clicked)
-        # t2_utils.upload_new_movies_to_snic
-        # t2_utils.update_csv
-        # t2_utils.sync_server_csv
+        
+        # TO BE COMPLETED with Chloudina
+        # upload new movies and update csvs
         display(button)
 
     def add_sites(self):
@@ -758,7 +753,6 @@ class ProjectProcessor:
                 available_movies_df=self.server_movies_csv,
                 movie_i=movie_name,
                 movie_path=movie_path,
-                db_info_dict=self.db_info,
                 clip_selection=clip_selection,
                 project=self.project,
                 modification_details={},
@@ -943,7 +937,6 @@ class ProjectProcessor:
             self.frames_to_upload_df = zu_utils.get_frames(
                 project=self.project,
                 zoo_info_dict=self.zoo_info,
-                db_info_dict=self.db_info,
                 species_names=species_list.value,
                 n_frames_subject=n_frames_subject,
                 subsample_up_to=subsample_up_to,
@@ -1060,7 +1053,6 @@ class ProjectProcessor:
     def format_to_gbif(self, agg_df: pd.DataFrame, subject_type: str):
         return zu_utils.format_to_gbif_occurence(
             project=self.project,
-            db_info_dict=self.db_info,
             zoo_info_dict=self.zoo_info,
             df=agg_df,
             classified_by="citizen_scientists",
@@ -1169,7 +1161,6 @@ class MLProjectProcessor(ProjectProcessor):
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
                 project=self.project,
-                db_info_dict=self.db_info,
                 out_path=out_path,
                 perc_test=perc_test,
                 class_list=self.species_of_interest,

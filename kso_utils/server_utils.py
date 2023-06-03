@@ -176,20 +176,18 @@ def get_ml_data(project: Project):
 
 
 def update_csv_server(
-    project: Project, server_info: dict, orig_csv: str, updated_csv: str
+    project: Project, orig_csv: str, updated_csv: str
 ):
     """
     > This function updates the original csv file with the updated csv file in the server
 
     :param project: the project object
-    :param server_info: a dictionary containing the path to the database and the client to the server
-    :type db_info_dict: dict
     :param orig_csv: the original csv file name
     :type orig_csv: str
     :param updated_csv: the updated csv file
     :type updated_csv: str
     """
-    server = project.server
+    server = project.project.server
 
     # TODO: add changes in a log file
 
@@ -197,10 +195,10 @@ def update_csv_server(
         logging.info("Updating csv file in AWS server")
         # Update csv to AWS
         upload_file_to_s3(
-            server_info["client"],
-            bucket=db_info_dict["bucket"],
-            key=str(db_info_dict[orig_csv]),
-            filename=str(db_info_dict[updated_csv]),
+            project.server_info["client"],
+            bucket=project.project.bucket,
+            key=str(project.db_info[orig_csv]),
+            filename=str(project.db_info[updated_csv]),
         )
 
     elif server == "TEMPLATE":
@@ -219,7 +217,7 @@ def update_csv_server(
         local_fpath = f"{snic_path}/tmp_dir/local_dir_dev/" + updated_csv
         remote_fpath = f"{snic_path}/tmp_dir/server_dir_dev/" + orig_csv
         upload_object_to_snic(
-            sftp_client=db_info_dict["sftp_client"],
+            sftp_client=project.server_info["sftp_client"],
             local_fpath=local_fpath,
             remote_fpath=remote_fpath,
         )
@@ -635,365 +633,3 @@ def fix_text_encoding(folder_name):
         old_dir = ftfy.fix_text(dirpath[:index]) + dirpath[index:]
         new_dir = ftfy.fix_text(dirpath)
         os.rename(old_dir, new_dir)
-
-
-def update_new_deployments(
-    db_info_dict: dict, deployment_selected: widgets.Widget, event_date: widgets.Widget
-):
-    """
-    It takes a deployment, downloads all the movies from that deployment, concatenates them, uploads the
-    concatenated video to the S3 bucket, and deletes the raw movies from the S3 bucket
-
-    :param deployment_selected: the deployment you want to concatenate
-    :param db_info_dict: a dictionary with the following keys:
-    :param event_date: the date of the event you want to concatenate
-    """
-    from kso_utils.movie_utils import get_movie_extensions
-
-    for deployment_i in deployment_selected.value:
-        logging.info(
-            f"Starting to concatenate {deployment_i} out of {len(deployment_selected.value)} deployments selected"
-        )
-
-        # Get a dataframe of movies from the deployment
-        movies_s3_pd = get_matching_s3_keys(
-            project.server_info["client"],
-            db_info_dict["bucket"],
-            prefix=deployment_i,
-            suffix=get_movie_extensions(),
-        )
-
-        # Create a list of the list of movies inside the deployment selected
-        movie_files_server = movies_s3_pd.Key.unique().tolist()
-
-        if len(movie_files_server) < 2:
-            logging.info(
-                f"Deployment {deployment_i} will not be concatenated because it only has {movies_s3_pd.Key.unique()}"
-            )
-        else:
-            # Concatenate the files if multiple
-            logging.info(f"The files {movie_files_server} will be concatenated")
-
-            # Start text file and list to keep track of the videos to concatenate
-            textfile_name = "a_file.txt"
-            textfile = open(textfile_name, "w")
-            video_list = []
-
-            for movie_i in sorted(movie_files_server):
-                # Specify the temporary output of the go pro file
-                movie_i_output = movie_i.split("/")[-1]
-
-                # Download the files from the S3 bucket
-                if not os.path.exists(movie_i_output):
-                    download_object_from_s3(
-                        client=project.server_info["client"],
-                        bucket=db_info_dict["bucket"],
-                        key=movie_i,
-                        filename=movie_i_output,
-                    )
-                # Keep track of the videos to concatenate
-                textfile.write("file '" + movie_i_output + "'" + "\n")
-                video_list.append(movie_i_output)
-            textfile.close()
-
-            # Save eventdate as str
-            EventDate_str = event_date.value.strftime("%d_%m_%Y")
-
-            # Specify the name of the concatenated video
-            filename = deployment_i.split("/")[-1] + "_" + EventDate_str + ".MP4"
-
-            # Concatenate the files
-            if not os.path.exists(filename):
-                logging.info("Concatenating ", filename)
-
-                # Concatenate the videos
-                subprocess.call(
-                    [
-                        "ffmpeg",
-                        "-f",
-                        "concat",
-                        "-safe",
-                        "0",
-                        "-i",
-                        "a_file.txt",
-                        "-c:a",
-                        "copy",
-                        "-c:v",
-                        "h264",
-                        "-crf",
-                        "22",
-                        filename,
-                    ]
-                )
-
-            # Upload the concatenated video to the S3
-            upload_file_to_s3(
-                project.server_info["client"],
-                bucket=db_info_dict["bucket"],
-                key=deployment_i + "/" + filename,
-                filename=filename,
-            )
-
-            logging.info(f"{filename} successfully uploaded to {deployment_i}")
-
-            # Delete the raw videos downloaded from the S3 bucket
-            for f in video_list:
-                os.remove(f)
-
-            # Delete the text file
-            os.remove(textfile_name)
-
-            # Delete the concat video
-            os.remove(filename)
-
-            # Delete the movies from the S3 bucket
-            for movie_i in sorted(movie_files_server):
-                delete_file_from_s3(
-                    client=project.server_info["client"],
-                    bucket=db_info_dict["bucket"],
-                    key=movie_i,
-                )
-
-
-def check_deployment(
-    db_info_dict: dict,
-    deployment_selected: widgets.Widget,
-    deployment_date: widgets.Widget,
-    survey_server_name: str,
-    survey_i,
-):
-    """
-    This function checks if the deployment selected by the user is already in the database. If it is, it
-    will raise an error. If it is not, it will return the deployment filenames
-
-    :param deployment_selected: a list of the deployment names selected by the user
-    :param deployment_date: the date of the deployment
-    :param survey_server_name: The name of the survey in the server
-    :param db_info_dict: a dictionary containing the following keys:
-    :param survey_i: the index of the survey you want to upload to
-    :return: A list of deployment filenames
-    """
-    # Ensure at least one deployment has been selected
-    if not deployment_selected.value:
-        logging.error("Please select a deployment.")
-        raise
-
-    # Get list of movies available in server from that survey
-    deployments_in_server_df = get_matching_s3_keys(
-        project.server_info["client"], db_info_dict["bucket"], prefix=survey_server_name
-    )
-
-    # Get a list of the movies in the server
-    files_in_server = deployments_in_server_df.Key.str.split("/").str[-1].to_list()
-    from kso_utils.movie_utils import get_movie_extensions
-
-    deployments_in_server = [
-        file for file in files_in_server if file[-3:] in get_movie_extensions()
-    ]
-
-    # Read surveys csv
-    surveys_df = pd.read_csv(
-        db_info_dict["local_surveys_csv"], parse_dates=["SurveyStartDate"]
-    )
-
-    # Get the name of the survey
-    from kso_utils.tutorials_utils import get_survey_name
-
-    survey_name = get_survey_name(survey_i)
-
-    # Save the SurveyID that match the survey name
-    SurveyID = surveys_df[surveys_df["SurveyName"] == survey_name].SurveyID.to_list()[0]
-
-    # Read movie.csv info
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-
-    # Get a list of deployment names from the csv of the survey of interest
-    deployment_in_csv = movies_df[movies_df["SurveyID"] == SurveyID].filename.to_list()
-
-    # Save eventdate as str
-    EventDate_str = deployment_date.value.strftime("%d_%m_%Y")
-
-    deployment_filenames = []
-    for deployment_i in deployment_selected.value:
-        # Specify the name of the deployment
-        deployment_name = deployment_i + "_" + EventDate_str
-
-        if deployment_name in deployment_in_csv:
-            logging.error(
-                f"Deployment {deployment_name} already exist in the csv file reselect new deployments before going any further!"
-            )
-            raise
-
-        # Specify the filename of the deployment
-        filename = deployment_name + ".MP4"
-
-        if filename in deployments_in_server:
-            logging.error(
-                f"Deployment {deployment_name} already exist in the server reselect new deployments before going any further!"
-            )
-            raise
-
-        else:
-            deployment_filenames = deployment_filenames + [filename]
-    logging.info(
-        "There is no existing information in the database for",
-        deployment_filenames,
-        "You can continue uploading the information.",
-    )
-
-    return deployment_filenames
-
-
-def update_new_deployments(
-    server_info: dict,
-    deployment_filenames: list,
-    survey_server_name: str,
-    deployment_date: widgets.Widget,
-):
-    """
-    It takes a list of filenames, a dictionary with the database information, the name of the server,
-    and the date of the deployment, and it returns a list of the movies in the server
-
-    :param deployment_filenames: a list of the filenames of the videos you want to concatenate
-    :param server_info: a dictionary containing the path to the database and the client to the server
-    :param survey_server_name: the name of the folder in the server where the survey is stored
-    :param deployment_date: the date of the deployment
-    :return: A list of the movies in the server
-    """
-    for deployment_i in deployment_filenames:
-        # Save eventdate as str
-        EventDate_str = deployment_date.value.strftime("%d_%m_%Y")
-
-        # Get the site information from the filename
-        site_deployment = deployment_i.replace("_" + EventDate_str + ".MP4", "")
-        logging.info(site_deployment)
-
-        # Specify the folder with files in the server
-        deployment_folder = survey_server_name + site_deployment
-
-        # Retrieve files info from the deployment folder of interest
-        deployments_files = get_matching_s3_keys(
-            server_info["client"],
-            db_info_dict["bucket"],
-            prefix=deployment_folder,
-        )
-        # Get a list of the movies in the server
-        files_server = deployments_files.Key.to_list()
-        from kso_utils.movie_utils import get_movie_extensions
-
-        movie_files_server = [
-            file for file in files_server if file[-3:] in get_movie_extensions()
-        ]
-
-        # Concatenate the files if multiple
-        if len(movie_files_server) > 1:
-            logging.info("The files", movie_files_server, "will be concatenated")
-
-            # Save filepaths in a text file
-            textfile = open("a_file.txt", "w")
-
-            for movie_i in sorted(movie_files_server):
-                temp_i = movie_i.split("/")[2]
-                download_object_from_s3(
-                    client=project.server_info["client"],
-                    bucket=db_info_dict["bucket"],
-                    key=movie_i,
-                    filename=temp_i,
-                )
-
-                textfile.write("file '" + temp_i + "'" + "\n")
-            textfile.close()
-
-            if not os.path.exists(deployment_i):
-                logging.info("Concatenating ", deployment_i)
-
-                # Concatenate the videos
-                subprocess.call(
-                    [
-                        "ffmpeg",
-                        "-f",
-                        "concat",
-                        "-safe",
-                        "0",
-                        "-i",
-                        "a_file.txt",
-                        "-c",
-                        "copy",
-                        deployment_i,
-                    ]
-                )
-
-                logging.info(deployment_i, "concatenated successfully")
-
-        # Change the filename if only one file
-        else:
-            logging.info("WIP")
-
-        return movie_files_server
-
-
-def upload_concat_movie(server_info: dict, new_deployment_row: pd.DataFrame):
-    """
-    It uploads the concatenated video to the server and updates the movies csv file with the new
-    information
-
-    :param server_info: a dictionary containing the path to the database and the client to the server
-    :param new_deployment_row: new deployment dataframe with the information of the new deployment
-    """
-
-    # Save to new deployment row df
-    new_deployment_row["LinkToVideoFile"] = (
-        "http://marine-buv.s3.ap-southeast-2.amazonaws.com/"
-        + new_deployment_row["prefix_conc"][0]
-    )
-
-    # Remove temporary prefix for concatenated video and local path to concat_video
-    new_movie_row = new_deployment_row.drop(["prefix_conc", "concat_video"], axis=1)
-
-    # Load the csv with movies information
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
-
-    # Check the columns are the same
-    diff_columns = list(
-        set(movies_df.columns.sort_values().values)
-        - set(new_movie_row.columns.sort_values().values)
-    )
-
-    if len(diff_columns) > 0:
-        logging.error(
-            f"The {diff_columns} columns are missing from the information for the new deployment."
-        )
-        raise
-
-    else:
-        logging.info(
-            "Uploading the concatenated movie to the server.",
-            new_deployment_row["prefix_conc"][0],
-        )
-
-        # Upload movie to the s3 bucket
-        upload_file_to_s3(
-            client=server_info["client"],
-            bucket=db_info_dict["bucket"],
-            key=new_deployment_row["prefix_conc"][0],
-            filename=new_deployment_row["concat_video"][0],
-        )
-
-        logging.info("Movie uploaded to", new_deployment_row["LinkToVideoFile"])
-
-        # Add the new row to the movies df
-        movies_df = movies_df.append(new_movie_row, ignore_index=True)
-
-        # Save the updated df locally
-        movies_df.to_csv(db_info_dict["local_movies_csv"], index=False)
-
-        # Save the updated df in the server
-        upload_file_to_s3(
-            server_info["client"],
-            bucket=db_info_dict["bucket"],
-            key=db_info_dict["server_movies_csv"],
-            filename=str(db_info_dict["local_movies_csv"]),
-        )
-
-        # Remove temporary movie
-        logging.info("Movies csv file succesfully updated in the server.")

@@ -542,20 +542,18 @@ def get_col_names(project: project_utils.Project, local_csv: str):
         raise ValueError("The local csv doesn't have a table match in the schema")
 
 
-def check_species_meta(project: project_utils.Project, db_info_dict: dict):
+def check_species_meta(project: project_utils.Project):
     """
     > The function `check_species_meta` loads the csv with species information and checks if it is empty
 
-    :param db_info_dict: a dictionary with the following keys:
-    :param project: The project name
+    ::param project: The project object
     """
     # Load the csv with movies information
-    species_df = pd.read_csv(db_info_dict["local_species_csv"])
+    species_df = pd.read_csv(project.db_info['local_species_csv'])
 
-    # Retrieve the names of the basic columns in the sql db
-    conn = create_connection(project.db_path)
-    data = conn.execute("SELECT * FROM species")
-    field_names = [i[0] for i in data.description]
+    # Retrieve the names of the basic columns in the sql db    
+    data = project.get_db_table("species")
+    field_names = data.columns.values.tolist()
 
     # Select the basic fields for the db check
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]

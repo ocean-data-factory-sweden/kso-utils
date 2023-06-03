@@ -1,16 +1,8 @@
 # base imports
 import os
-import boto3
 import logging
 import pandas as pd
-from tqdm import tqdm
-import subprocess
 
-# util imports
-from kso_utils.server_utils import (
-    download_object_from_s3,
-    upload_file_to_s3,
-)
 
 # Logging
 logging.basicConfig()
@@ -54,38 +46,6 @@ def get_spyfish_col_names(table_name: str):
 
     else:
         raise ValueError("The table for Spyfish doesn't match the schema tables")
-
-
-def add_fps_length_spyfish(
-    df: pd.DataFrame, miss_par_df: pd.DataFrame, client: boto3.client
-):
-    """
-    It downloads the movie locally, gets the fps and duration, and then deletes the movie
-
-    :param df: the dataframe containing the movies
-    :param miss_par_df: a dataframe containing the movies that are missing fps and duration
-    :param client: the boto3 client
-    :return: The dataframe with the fps and duration added.
-    """
-
-    # Loop through each movie missing fps and duration
-    for index, row in tqdm(miss_par_df.iterrows(), total=miss_par_df.shape[0]):
-        if not os.path.exists(row["filename"]):
-            # Download the movie locally
-            download_object_from_s3(
-                client,
-                bucket="marine-buv",
-                key=row["Key"],
-                filename=row["filename"],
-            )
-
-        # Set the fps and duration of the movie
-        df.at[index, "fps"], df.at[index, "duration"] = get_length(row["filename"])
-
-        # Delete the downloaded movie
-        os.remove(row["filename"])
-
-    return df
 
 
 def process_spyfish_sites(sites_df: pd.DataFrame):
@@ -135,109 +95,6 @@ def process_spyfish_movies(movies_df: pd.DataFrame):
 
     return movies_df
 
-
-# Function to download go pro videos, concatenate them and upload the concatenated videos to aws
-def concatenate_videos(df: pd.DataFrame, session: boto3.Session):
-    """
-    It takes a dataframe with the following columns:
-
-    - bucket
-    - prefix
-    - filename
-    - go_pro_files
-
-    It downloads the go pro videos from the S3 bucket, concatenates them, and uploads the concatenated
-    video to the S3 bucket
-
-    :param df: the dataframe with the information about the videos to concatenate
-    :type df: pd.DataFrame
-    :param session: the boto3 session object
-    """
-
-    # Loop through each survey to find out the raw videos recorded with the GoPros
-    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
-        # Select the go pro videos from the "i" survey to concatenate
-        list1 = row["go_pro_files"].split(";")
-        list_go_pro = [row["prefix"] + "/" + s for s in list1]
-
-        # Start text file and list to keep track of the videos to concatenate
-        textfile_name = "a_file.txt"
-        textfile = open(textfile_name, "w")
-        video_list = []
-
-        logging.info("Downloading", len(list_go_pro), "videos")
-
-        # Download each go pro video from the S3 bucket
-        for go_pro_i in tqdm(list_go_pro, total=len(list_go_pro)):
-            # Specify the temporary output of the go pro file
-            go_pro_output = go_pro_i.split("/")[-1]
-
-            # Download the files from the S3 bucket
-            if not os.path.exists(go_pro_output):
-                download_object_from_s3(
-                    session,
-                    bucket=row["bucket"],
-                    key=go_pro_i,
-                    filename=go_pro_output,
-                )
-
-                # client.download_file(bucket_i, go_pro_i, go_pro_output)
-
-            # Keep track of the videos to concatenate
-            textfile.write("file '" + go_pro_output + "'" + "\n")
-            video_list.append(go_pro_output)
-
-        textfile.close()
-
-        concat_video = row["filename"]
-
-        if not os.path.exists(concat_video):
-            logging.info("Concatenating ", concat_video)
-
-            # Concatenate the videos
-            subprocess.call(
-                [
-                    "ffmpeg",
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    "a_file.txt",
-                    "-c",
-                    "copy",
-                    # "-an",#removes the audio
-                    concat_video,
-                ]
-            )
-
-        logging.info(concat_video, "concatenated successfully")
-
-        # Upload the concatenated video to the S3
-        s3_destination = row["prefix"] + "/" + concat_video
-        upload_file_to_s3(
-            session,
-            bucket=row["bucket"],
-            key=s3_destination,
-            filename=concat_video,
-        )
-
-        logging.info(concat_video, "successfully uploaded to", s3_destination)
-
-        # Delete the raw videos downloaded from the S3 bucket
-        for f in video_list:
-            os.remove(f)
-
-        # Delete the text file
-        os.remove(textfile_name)
-
-        # Update the fps and length info
-        # get_length(concat_video)
-
-        # Delete the concat video
-        os.remove(concat_video)
-
-        logging.info("Temporary files and videos removed")
 
 
 def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
@@ -371,62 +228,28 @@ def process_clips_spyfish(annotations, row_class_id, rows_list: list):
     return rows_list
 
 
-# def get_spyfish_choices(server_dict: dict, db_initial_info: dict, db_csv_info: str):
-#     """
-#     > This function downloads the csv with the sites and survey choices from the server and saves it
-#     locally
-
-#     :param server_dict: a dictionary containing the server information
-#     :param db_initial_info: a dictionary with the following keys:
-#     :param db_csv_info: the local path to the folder where the csv files will be downloaded
-#     :return: The db_initial_info dictionary with the server and local paths of the choices csv
-#     """
-#     # Get the server path of the csv with sites and survey choices
-#     server_choices_csv = get_matching_s3_keys(
-#         server_dict["client"],
-#         db_initial_info["bucket"],
-#         prefix=db_initial_info["key"] + "/" + "choices",
-#     )["Key"][0]
-
-#     # Specify the local path for the csv
-#     local_choices_csv = str(Path(db_csv_info, Path(server_choices_csv).name))
-
-#     # Download the csv
-#     download_object_from_s3(
-#         server_dict["client"],
-#         bucket=db_initial_info["bucket"],
-#         key=server_choices_csv,
-#         filename=local_choices_csv,
-#     )
-
-#     db_initial_info["server_choices_csv"] = server_choices_csv
-#     db_initial_info["local_choices_csv"] = Path(local_choices_csv)
-
-#     return db_initial_info
-
-
-def spyfish_subject_metadata(df: pd.DataFrame, db_info_dict: dict):
+def spyfish_subject_metadata(df: pd.DataFrame, project):
     """
     It takes a dataframe of subject metadata and returns a dataframe of subject metadata that is ready
     to be uploaded to Zooniverse
 
     :param df: the dataframe of all the detections
-    :param db_info_dict: a dictionary containing the following keys:
+    :param project: the project object
     :return: A dataframe with the columns of interest for uploading to Zooniverse.
     """
 
     # Get extra movie information
-    movies_df = pd.read_csv(db_info_dict["local_movies_csv"])
+    movies_df = pd.read_csv(project.db_info["local_movies_csv"])
 
     df = df.merge(movies_df.drop(columns=["filename"]), how="left", on="movie_id")
 
     # Get extra survey information
-    surveys_df = pd.read_csv(db_info_dict["local_surveys_csv"])
+    surveys_df = pd.read_csv(project.db_info["local_surveys_csv"])
 
     df = df.merge(surveys_df, how="left", on="SurveyID")
 
     # Get extra site information
-    sites_df = pd.read_csv(db_info_dict["local_sites_csv"])
+    sites_df = pd.read_csv(project.db_info["local_sites_csv"])
 
     df = df.merge(
         sites_df.drop(columns=["LinkToMarineReserve"]), how="left", on="SiteID"
