@@ -323,7 +323,9 @@ def process_test_csv(project: project_utils.Project, local_csv: str):
             df = project.local_movies_csv
 
         # Reference movies with their respective sites
-        sites_df = project.get_db_table("sites")[["id", "siteName"]].rename(columns={"id": "site_id"})
+        sites_df = project.get_db_table("sites")[["id", "siteName"]].rename(
+            columns={"id": "site_id"}
+        )
 
         # Merge movies and sites dfs
         df = pd.merge(df, sites_df, how="left", on="siteName")
@@ -549,9 +551,9 @@ def check_species_meta(project: project_utils.Project):
     ::param project: The project object
     """
     # Load the csv with movies information
-    species_df = pd.read_csv(project.db_info['local_species_csv'])
+    species_df = pd.read_csv(project.db_info["local_species_csv"])
 
-    # Retrieve the names of the basic columns in the sql db    
+    # Retrieve the names of the basic columns in the sql db
     data = project.get_db_table("species")
     field_names = data.columns.values.tolist()
 

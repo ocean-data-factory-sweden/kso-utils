@@ -203,11 +203,7 @@ def standarise_movie_format(
         )
 
         # Upload the converted movie to the server
-        upload_movie_server(
-            movie_path=conv_mov_path,
-            f_path=f_path, 
-            project=project
-        )
+        upload_movie_server(movie_path=conv_mov_path, f_path=f_path, project=project)
 
     else:
         logging.info(f"{movie_filename} format is standard.")
@@ -287,7 +283,8 @@ def retrieve_movie_info_from_server(project: Project):
     elif project.project.server == "SNIC":
         if "client" in project.server_info:
             server_df = get_snic_files(
-                client=project.server_info["client"], folder=project.project.movie_folder
+                client=project.server_info["client"],
+                folder=project.project.movie_folder,
             )
         else:
             logging.error("No database connection could be established.")
@@ -546,9 +543,18 @@ def check_movie_uploaded(project: Project, movie_i: str):
     :type movie_i: str
     """
     # Query info about the clip subjects uploaded to Zooniverse
-    subjects_df = project.get_db_table("subjects")[["id", "subject_type", "filename", "clip_start_time", "clip_end_time", "movie_id"]]
+    subjects_df = project.get_db_table("subjects")[
+        [
+            "id",
+            "subject_type",
+            "filename",
+            "clip_start_time",
+            "clip_end_time",
+            "movie_id",
+        ]
+    ]
 
-    subjects_df = subjects_df[subjects_df["subject_type"]=='clip']       
+    subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
 
     # Save the video filenames of the clips uploaded to Zooniverse
     videos_uploaded = subjects_df.filename.dropna().unique()
@@ -584,8 +590,10 @@ def get_species_frames(
     from kso_utils.zooniverse_utils import clean_label
 
     # Retrieve list of subjects
-    subjects_df = project.get_db_table("subjects")[["id", "clip_start_time", "movie_id"]]
-    subjects_df = subjects_df[subjects_df['subject_type']=='clip']
+    subjects_df = project.get_db_table("subjects")[
+        ["id", "clip_start_time", "movie_id"]
+    ]
+    subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
 
     agg_clips_df["subject_ids"] = pd.to_numeric(
         agg_clips_df["subject_ids"], errors="coerce"
@@ -628,7 +636,7 @@ def get_species_frames(
 
     ##### Add species_id info ####
     # Retrieve species info
-    species_df = project.get_db_table("subjects")[["id", "label", "scientificName"]]      
+    species_df = project.get_db_table("subjects")[["id", "label", "scientificName"]]
     species_df = species_df.rename(columns={"id": "species_id"})
 
     # Match format of species name to Zooniverse labels
@@ -719,7 +727,7 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
     Function to get a frame from a movie
     :param key_movie_df: a df with the information of the movie
     :param url: a string with the url of the movie
-    
+
     """
     # Read the movie on cv2 and prepare to extract frames
     cap = cv2.VideoCapture(url)
@@ -760,11 +768,12 @@ def check_movies_meta(
     :param review_method: The method used to review the movies
     :param gpu_available: Boolean, whether or not a GPU is available
     """
-    
+
     # Load the csv with movies information
     df = pd.read_csv(project.db_info["local_movies_csv"])
 
     from kso_utils.db_utils import get_col_names
+
     # Get project-specific column names
     col_names = get_col_names(project.project, "local_movies_csv")
 
@@ -789,9 +798,9 @@ def check_movies_meta(
 
         else:
             # Create a df with only those rows with missing fps/duration
-            df_missing = df[
-                df[col_fps].isna() | df[col_duration].isna()
-            ].reset_index(drop=True)
+            df_missing = df[df[col_fps].isna() | df[col_duration].isna()].reset_index(
+                drop=True
+            )
 
             ##### Select only movies that can be mapped ####
             # Merge the missing fps/duration df with the available movies
@@ -826,9 +835,7 @@ def check_movies_meta(
             df_missing[[col_fps, col_duration]] = pd.DataFrame(
                 [
                     get_fps_duration(i)
-                    for i in tqdm(
-                        df_missing["movie_path"], total=df_missing.shape[0]
-                    )
+                    for i in tqdm(df_missing["movie_path"], total=df_missing.shape[0])
                 ],
                 columns=[col_fps, col_duration],
             )
@@ -843,19 +850,13 @@ def check_movies_meta(
         logging.info("Retrieving the paths to access the movies")
         # Add a column with the path (or url) where the movies can be accessed from
         df["movie_path"] = pd.Series(
-            [
-                get_movie_path(i, project)
-                for i in tqdm(df[col_fpath], total=df.shape[0])
-            ]
+            [get_movie_path(i, project) for i in tqdm(df[col_fpath], total=df.shape[0])]
         )
 
         logging.info("Getting the fps and duration of the movies")
         # Read the movies and overwrite the existing fps and duration info
         df[[col_fps, col_duration]] = pd.DataFrame(
-            [
-                get_fps_duration(i)
-                for i in tqdm(df["movie_path"], total=df.shape[0])
-            ],
+            [get_fps_duration(i) for i in tqdm(df["movie_path"], total=df.shape[0])],
             columns=[col_fps, col_duration],
         )
 
@@ -897,6 +898,7 @@ def check_movies_meta(
     logging.info("The local movies.csv file has been updated")
 
     from kso_utils.server_utils import update_csv_server
+
     # Save the updated df in the server
     update_csv_server(
         project=project,

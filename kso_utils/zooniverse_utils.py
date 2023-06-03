@@ -229,9 +229,7 @@ def extract_metadata(subj_df: pd.DataFrame):
     return subj_df, meta_df
 
 
-def populate_subjects(
-    subjects: pd.DataFrame, project: project_utils.Project
-):
+def populate_subjects(subjects: pd.DataFrame, project: project_utils.Project):
     """
     Populate the subjects table with the subject metadata
 
@@ -424,7 +422,7 @@ def populate_agg_annotations(
 
     # Update agg_annotations_clip table
     if subj_type == "clip":
-        # Set the columns in the right order        
+        # Set the columns in the right order
         species_df["label"] = species_df["label"].apply(
             lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper()
         )
@@ -457,7 +455,7 @@ def populate_agg_annotations(
         # Select relevant columns
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
 
-        # Set the columns in the right order    
+        # Set the columns in the right order
         species_df["label"] = species_df["label"].apply(
             lambda x: x[:-1] if x == "Blue mussels" else x
         )
@@ -1253,9 +1251,7 @@ def get_frames(
             else:
                 frames_folder = "_".join(species_names_zoo) + "_frames/"
             chooser.df = movie_utils.extract_frames(
-                project=project, 
-                df=frame_df, 
-                frames_folder=frames_folder
+                project=project, df=frame_df, frames_folder=frames_folder
             )
 
         # Register callback function
@@ -1846,38 +1842,38 @@ def get_classifications(
     # Add information about the subject
     # Query id and subject type from the subjects table
     subjects_df = project.get_db_table("subjects")
-    
+
     if subj_type == "frame":
         # Select only frame subjects
-        subjects_df = subjects_df[subjects_df["subject_type"]=='frame']
-        
+        subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
         # Select columns relevant for frame subjects
         subjects_df = subjects_df[
             [
-                "id", 
-                "subject_type", 
-                "https_location", 
-                "filename", 
-                "frame_number", 
-                "movie_id"
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "frame_number",
+                "movie_id",
             ]
-        ]          
-        
+        ]
+
     else:
         # Select only frame subjects
-        subjects_df = subjects_df[subjects_df["subject_type"]=='clip']
-        
+        subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
         # Select columns relevant for frame subjects
         subjects_df = subjects_df[
             [
-                "id", 
-                "subject_type", 
-                "https_location", 
-                "filename", 
-                "clip_start_time", 
-                "movie_id"
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "clip_start_time",
+                "movie_id",
             ]
-        ]                
+        ]
 
     # Ensure id format matches classification's subject_id
     classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
@@ -1967,39 +1963,39 @@ def process_classifications(
     def get_classifications(classes_df, subject_type):
         # Query id and subject type from the subjects table
         subjects_df = project.get_db_table("subjects")
-        
+
         if subject_type == "frame":
             # Select only frame subjects
-            subjects_df = subjects_df[subjects_df["subject_type"]=='frame']
-            
+            subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
             # Select columns relevant for frame subjects
             subjects_df = subjects_df[
                 [
-                    "id", 
-                    "subject_type", 
-                    "https_location", 
-                    "filename", 
-                    "frame_number", 
-                    "movie_id"
+                    "id",
+                    "subject_type",
+                    "https_location",
+                    "filename",
+                    "frame_number",
+                    "movie_id",
                 ]
-            ]          
-            
+            ]
+
         else:
             # Select only frame subjects
-            subjects_df = subjects_df[subjects_df["subject_type"]=='clip']
-            
+            subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
             # Select columns relevant for frame subjects
             subjects_df = subjects_df[
                 [
-                    "id", 
-                    "subject_type", 
-                    "https_location", 
-                    "filename", 
-                    "clip_start_time", 
-                    "movie_id"
+                    "id",
+                    "subject_type",
+                    "https_location",
+                    "filename",
+                    "clip_start_time",
+                    "movie_id",
                 ]
-            ]    
-            
+            ]
+
         # Ensure id format matches classification's subject_id
         classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
         subjects_df["id"] = subjects_df["id"].astype("Int64")

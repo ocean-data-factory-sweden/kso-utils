@@ -266,9 +266,7 @@ class ProjectProcessor:
 
             if len(subjects_series) > 0:
                 # Fill or re-fill subjects table
-                zu_utils.populate_subjects(
-                    subjects_series, self
-                )
+                zu_utils.populate_subjects(subjects_series, self)
             else:
                 logging.error(
                     "No subjects to populate database from the workflows selected."
@@ -337,7 +335,7 @@ class ProjectProcessor:
         :return: A dataframe with the changes highlighted.
         """
         highlight_changes, sheet_df = kso_widgets.display_changes(
-          isheet=sheet, df_filtered=df_filtered
+            isheet=sheet, df_filtered=df_filtered
         )
         display(highlight_changes)
         return sheet_df
@@ -411,9 +409,7 @@ class ProjectProcessor:
         """
 
         movie_utils.check_movies_meta(
-        project=self,
-        review_method=review_method,
-        gpu_available=gpu_available
+            project=self, review_method=review_method, gpu_available=gpu_available
         )
 
     def check_species_meta(self):
@@ -540,7 +536,7 @@ class ProjectProcessor:
             display(button2)
 
         button.on_click(on_button_clicked)
-        
+
         # TO BE COMPLETED with Chloudina
         # upload new movies and update csvs
         display(button)
@@ -898,8 +894,8 @@ class ProjectProcessor:
             workflows_df=workflows_df,
             subj_type=subj_type,
             class_df=class_df,
-        )    
-    
+        )
+
     def process_classifications(
         self, classifications_data, subject_type, agg_params, summary
     ):
