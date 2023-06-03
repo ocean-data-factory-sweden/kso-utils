@@ -175,9 +175,7 @@ def get_ml_data(project: Project):
         logging.info("No prepared data to be downloaded.")
 
 
-def update_csv_server(
-    project: Project, orig_csv: str, updated_csv: str
-):
+def update_csv_server(project: Project, orig_csv: str, updated_csv: str):
     """
     > This function updates the original csv file with the updated csv file in the server
 
@@ -231,9 +229,7 @@ def update_csv_server(
         )
 
 
-def upload_movie_server(
-    movie_path: str, f_path: str, project: Project
-):
+def upload_movie_server(movie_path: str, f_path: str, project: Project):
     """
     Takes the file path of a movie file and uploads it to the server.
 

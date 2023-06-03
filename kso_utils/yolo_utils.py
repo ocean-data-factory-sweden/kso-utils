@@ -460,9 +460,7 @@ def frame_aggregation(
     # Get movie info from server
     from kso_utils.movie_utils import retrieve_movie_info_from_server
 
-    movie_df = retrieve_movie_info_from_server(
-        project=project
-    )
+    movie_df = retrieve_movie_info_from_server(project=project)
 
     # If at least one movie is linked to the project
     logging.info(f"There are {len(movie_df)} movies")

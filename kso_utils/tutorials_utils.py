@@ -49,7 +49,9 @@ def log_meta_changes(
         "change_info": compare(
             {
                 int(k): v
-                for k, v in pd.read_csv(project.db_info[meta_key]).to_dict("index").items()
+                for k, v in pd.read_csv(project.db_info[meta_key])
+                .to_dict("index")
+                .items()
             },
             {int(k): v for k, v in new_sheet_df.to_dict("index").items()},
         ),
@@ -151,6 +153,7 @@ def is_url(url):
         return all([result.scheme, result.netloc])
     except ValueError:
         return False
+
 
 # Function to extract the videos
 def extract_example_clips(
@@ -1315,6 +1318,7 @@ class WidgetMaker(widgets.VBox):
             names.append(list(init_dict.values())[i])
             organisations.append(list(init_dict.values())[i + 1])
         return {n: org for n, org in zip(names, organisations)}
+
 
 def create_example_clips(
     project: Project,

@@ -34,6 +34,7 @@ logging.getLogger().setLevel(logging.INFO)
 ############Functions for interactive widgets#########################
 ######################################################################
 
+
 # Function to update widget based on user interaction (eg. click)
 def wait_for_change(widget1: widgets.Widget, widget2: widgets.Widget):
     future = asyncio.Future()
@@ -58,9 +59,11 @@ def single_wait_for_change(widget, value):
     widget.observe(getvalue, value)
     return future
 
+
 ######################################################################
 #####################Tutorial widgets#################################
 ######################################################################
+
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     """
@@ -85,7 +88,7 @@ def select_random_clips(project: Project, movie_i: str):
 
     :param project: the project object
     :param movie_i: the name of the movie of interest
-    :type movie_i: str    
+    :type movie_i: str
     :return: A dictionary with the starting points of the clips and the length of the clips.
     """
     # Create connection to db
@@ -941,13 +944,12 @@ def choose_workflows(workflows_df: pd.DataFrame):
     return workflow_name, subj_type, workflow_version
 
 
-def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame
-):
+def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
     """
     It takes the dataframe from the ipysheet and compares it to the dataframe from the local csv file.
     If there are any differences, it highlights them and returns the dataframe with the changes
     highlighted
-    
+
     :param isheet: The ipysheet object that contains the data
     :param sites_df_filtered: a pandas dataframe with information of a range of sites
     :return: A tuple with the highlighted changes and the sheet_df
@@ -994,7 +996,7 @@ def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame
 
 def select_sheet_range(project: Project, orig_csv: str):
     """
-    > This function loads the csv file of interest into a pandas dataframe and enables users 
+    > This function loads the csv file of interest into a pandas dataframe and enables users
     to pick a range of rows and columns to display
 
     :param project: the project object
@@ -1144,6 +1146,7 @@ def select_modification():
 
     display(select_modification_widget)
     return select_modification_widget
+
 
 def update_meta(
     project: Project,

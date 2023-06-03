@@ -96,7 +96,6 @@ def process_spyfish_movies(movies_df: pd.DataFrame):
     return movies_df
 
 
-
 def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     """
     It takes a dataframe of subjects and a path to the database, and returns a dataframe of subjects
