@@ -1097,7 +1097,7 @@ class MLProjectProcessor(ProjectProcessor):
             g_utils.import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
 
-        self.team_name = self.get_team_name()
+        self.team_name = "koster"
 
         model_selected = t_utils.choose_model_type()
 
