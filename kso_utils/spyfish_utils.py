@@ -122,7 +122,7 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     subjects["#Subject_type"] = subjects["#Subject_type"].fillna(
         subjects["subject_type"]
     )
-    subjects["subject_type"] = subjects["Subject_type"].fillna(
+    subjects["subject_type"] = subjects["subject_type"].fillna(
         subjects["#Subject_type"]
     )
 
