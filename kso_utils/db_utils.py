@@ -7,7 +7,8 @@ from pathlib import Path
 
 # util imports
 import kso_utils.db_starter.schema as schema
-import kso_utils.project_utils as project_utils
+from kso_utils.project_utils import Project
+
 
 # Logging
 logging.basicConfig()
@@ -33,10 +34,13 @@ def create_connection(db_file: str):
     return conn
 
 
-def drop_table(db_file: str, table_name: str):
-    # Connecting to sqlite
-    conn = sqlite3.connect(db_file)
+def drop_table(conn: sqlite3.Connection, table_name: str):
+    """
+    Safely remove a table from a Sql db
 
+    :param conn: the Connection object
+    :param table_name: table of interest
+    """
     # Creating a cursor object using the cursor() method
     cursor = conn.cursor()
 
@@ -102,12 +106,13 @@ def execute_sql(conn: sqlite3.Connection, sql: str):
         logging.error(e)
 
 
-def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
+def add_to_table(
+    conn: sqlite3.Connection, table_name: str, values: list, num_fields: int
+):
     """
     This function adds multiple rows of data to a specified table in a SQLite database.
 
-    :param db_path: The path to the SQLite database file
-    :type db_path: str
+    :param conn: SQL connection object
     :param table_name: The name of the table in the database where the values will be added
     :type table_name: str
     :param values: The `values` parameter is a list of tuples, where each tuple represents a row of data
@@ -119,7 +124,6 @@ def add_to_table(db_path: str, table_name: str, values: list, num_fields: int):
     correct number of values are being inserted into the table
     :type num_fields: int
     """
-    conn = create_connection(db_path)
 
     try:
         insert_many(
@@ -158,6 +162,34 @@ def test_table(df: pd.DataFrame, table_name: str, keys: list = ["id"]):
             f"The table {table_name} has invalid entries, please ensure that all columns are non-zero"
         )
         logging.error(f"The invalid entries are {df[df[keys].isnull().any(axis=1)]}")
+
+
+def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
+    """
+    This function connects to a specific table from the sql database
+    and returns it as a pd DataFrame.
+
+    :param conn: SQL connection object
+    :param table_name: The name of the table you want to get from the database
+    :return: A dataframe
+    """
+
+    if conn is not None:
+        cursor = conn.cursor()
+    else:
+        return
+    # Get column names
+    cursor.execute(f"SELECT * FROM {table_name}")
+    rows = cursor.fetchall()
+
+    # Get column names
+    cursor.execute(f"PRAGMA table_info('{table_name}')")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    # Create a DataFrame from the data
+    df = pd.DataFrame(rows, columns=columns)
+
+    return df
 
 
 def get_id(
@@ -206,16 +238,14 @@ def get_id(
     return id_value
 
 
-def get_column_names_db(db_path: str, table_i: str):
+def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     """
     > This function returns the "column" names of the sql table of interest
 
-    :param db_path: path of the database file
+    :param conn: SQL connection object
     :param table_i: a string of the name of the table of interest
     :return: A list of column names of the table of interest
     """
-    # Connect to the db
-    conn = create_connection(db_path)
 
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
@@ -253,309 +283,145 @@ def create_db(db_path: str):
         return "Database creation failure"
 
 
-def populate_db(project: project_utils.Project, local_csv: str):
+def populate_db(
+    conn: sqlite3.Connection, project: Project, local_df: pd.DataFrame, init_key=str
+):
     """
     > This function processes and tests the initial csv files compatibility with sql db
     and populates the table of interest
 
-    :param db_initial_info: The dictionary containing the initial database information
-    :param local_csv: a string of the names of the local csv to populate from
+    :param conn: SQL connection object
+    :param project: The project object
+    :param local_df: a dataframe with the information of the local csv to populate from
+    :param init_key: a string of the initial key of the local csv and the name of the db table to populate
     """
 
     # Process the csv of interest and tests for compatibility with sql table
-    csv_i, df = process_test_csv(project=project, local_csv=local_csv)
+    local_df = process_test_csv(
+        conn=conn, project=project, local_df=local_df, init_key=init_key
+    )
 
     # Only populate the tables if df is not empty
-    if not df.empty:
+    if not local_df.empty:
         # Add values of the processed csv to the sql table of interest
         add_to_table(
-            project.project.db_path,
-            csv_i,
-            [tuple(i) for i in df.values],
-            len(df.columns),
+            conn=conn,
+            table_name=init_key,
+            values=[tuple(i) for i in local_df.values],
+            num_fields=len(local_df.columns),
         )
 
 
-def process_test_csv(project: project_utils.Project, local_csv: str):
+def process_test_csv(
+    conn: sqlite3.Connection, project: Project, local_df: pd.DataFrame, init_key=str
+):
     """
-    > This function process a csv of interest and tests for compatibility with the respective sql table of interest
-    :param project: The project object
-    :param local_csv: a string of the names of the local csv to populate from
-    :return: a string of the category of interest and the processed dataframe
+    > This function process a csv of interest and tests for compatibility with the
+    respective sql table of interest
 
+    :param conn: SQL connection object
+    :param project: The project object
+    :param local_df: a dataframe with the information of the local csv to populate from
+    :param init_key: a string corresponding to the name of the initial key of the local csv
+    :return: a string of the category of interest and the processed dataframe
     """
     from kso_utils.spyfish_utils import process_spyfish_sites, process_spyfish_movies
     from kso_utils.koster_utils import process_koster_movies_csv
     from kso_utils.sgu_utils import process_sgu_photos_csv
 
     # Save the category of interest and process the df
-    if "sites" in local_csv:
-        # Specify the category of interest
-        csv_i = "sites"
-
+    if init_key == "sites":
         # Specify the id of the df of interest
         field_names = ["site_id"]
 
-        # Check if the project is the Spyfish Aotearoa
-        if project.project.Project_name == "Spyfish_Aotearoa":
+        # Modify the local_df if Spyfish Aotearoa
+        if project.Project_name == "Spyfish_Aotearoa":
             # Rename columns to match schema fields
-            df = process_spyfish_sites(project.local_sites_csv)
+            local_df = process_spyfish_sites(local_df)
 
-        else:
-            df = project.local_sites_csv
-
-    elif "movies" in local_csv:
-        # Specify the category of interest
-        csv_i = "movies"
-
+    elif init_key == "movies":
         # Specify the id of the df of interest
         field_names = ["movie_id"]
 
-        # Check if the project is the Spyfish Aotearoa
-        if project.project.Project_name == "Spyfish_Aotearoa":
-            df = process_spyfish_movies(project.local_movies_csv)
+        # Modify the local_df if Spyfish Aotearoa
+        if project.Project_name == "Spyfish_Aotearoa":
+            local_df = process_spyfish_movies(local_df)
 
-        # Check if the project is the KSO
-        elif project.project.Project_name == "Koster_Seafloor_Obs":
-            df = process_koster_movies_csv(project.local_movies_csv)
-
-        else:
-            df = project.local_movies_csv
+        # Modify the local_df if Koster
+        if project.Project_name == "Koster_Seafloor_Obs":
+            local_df = process_koster_movies_csv(local_df)
 
         # Reference movies with their respective sites
-        sites_df = project.get_db_table("sites")[["id", "siteName"]].rename(
+        sites_df = get_df_from_db_table(conn, "sites")[["id", "siteName"]].rename(
             columns={"id": "site_id"}
         )
 
-        # Merge movies and sites dfs
-        df = pd.merge(df, sites_df, how="left", on="siteName")
+        # Merge local (aka movies) and sites dfs
+        local_df = pd.merge(local_df, sites_df, how="left", on="siteName")
 
         # Prevent column_name error
-        df = df.rename(columns={"Author": "author"})
+        if "author" not in local_df.columns:
+            local_df = local_df.rename(columns={"Author": "author"})
 
         # Select only those fields of interest
-        if "fpath" not in df.columns:
-            df["fpath"] = df["filename"]
+        if "fpath" not in local_df.columns:
+            local_df["fpath"] = local_df["filename"]
 
-    elif "species" in local_csv:
-        # Specify the category of interest
-        csv_i = "species"
-
+    elif init_key == "species":
         # Specify the id of the df of interest
         field_names = ["species_id"]
 
         # Rename columns to match sql fields
-        df = project.local_species_csv.rename(columns={"commonName": "label"})
+        local_df = local_df.rename(columns={"commonName": "label"})
 
-    elif "photos" in local_csv:
-        # Check if the project is the SGU
-        if project.project.Project_name == "SGU":
-            # Process the local photos df
-            df = process_sgu_photos_csv(project)
-        else:
-            df = project.local_photos_csv
-
-        # Specify the category of interest
-        csv_i = "photos"
-
+    elif init_key == "photos":
         # Specify the id of the df of interest
         field_names = ["ID"]
 
+        # Check if the project is the SGU
+        if project.Project_name == "SGU":
+            # Process the local photos df
+            local_df = process_sgu_photos_csv(project)
+
     else:
         logging.error(
-            f"{local_csv} has not been processed because the db schema does not have a table for it"
+            f"{init_key} has not been processed because the db schema does not have a table for it"
         )
 
         # create an Empty DataFrame object
-        df = pd.DataFrame()
+        local_df = pd.DataFrame()
 
-        # Specify the category of interest
-        csv_i = "other_category"
-
-        return csv_i, df
+        return local_df
 
     # Add the names of the basic columns in the sql db
-    field_names = field_names + get_column_names_db(project.project.db_path, csv_i)
+    field_names = field_names + get_column_names_db(conn, init_key)
     field_names.remove("id")
 
     # Select relevant fields
-    df = df[[c for c in field_names if c in df.columns]]
+    local_df = local_df[[c for c in field_names if c in local_df.columns]]
 
     # Roadblock to prevent empty rows in id_columns
-    test_table(df, csv_i, [df.columns[0]])
+    test_table(local_df, init_key, [local_df.columns[0]])
 
-    return csv_i, df
-
-
-#### Rarely used functions
+    return local_df
 
 
-def find_duplicated_clips(conn: sqlite3.Connection):
-    """
-    This function finds duplicated clips in a database and returns a count of how many times each clip
-    has been uploaded.
-
-    :param conn: The parameter `conn` is a connection object to a SQLite database
-    :type conn: sqlite3.Connection
-    :return: a Pandas Series object that contains the count of how many times each duplicated clip has
-    been uploaded. The count is grouped by the number of times a clip has been uploaded.
-    """
-    # Retrieve the information of all the clips uploaded
-    subjects_df = pd.read_sql_query(
-        "SELECT id, movie_id, clip_start_time, clip_end_time FROM subjects WHERE subject_type='clip'",
-        conn,
-    )
-
-    # Find clips uploaded more than once
-    duplicated_subjects_df = subjects_df[
-        subjects_df.duplicated(
-            ["movie_id", "clip_start_time", "clip_end_time"], keep=False
-        )
-    ]
-
-    # Count how many time each clip has been uploaded
-    times_uploaded_df = (
-        duplicated_subjects_df.groupby(["movie_id", "clip_start_time"], as_index=False)
-        .size()
-        .to_frame("times")
-    )
-
-    return times_uploaded_df["times"].value_counts()
-
-
-def get_movies_id(df: pd.DataFrame, db_path: str):
-    """
-    This function retrieves movie IDs based on movie filenames from a database and merges them with a
-    given DataFrame.
-
-    :param df: A pandas DataFrame containing information about movie filenames and clip subjects
-    :type df: pd.DataFrame
-    :param db_path: The path to the database file
-    :type db_path: str
-    :return: a pandas DataFrame with the movie_ids added to the input DataFrame based on matching movie
-    filenames with the movies table in a SQLite database. The function drops the movie_filename column
-    before returning the DataFrame.
-    """
-    # Create connection to db
-    conn = create_connection(db_path)
-
-    # Query id and filenames from the movies table
-    movies_df = pd.read_sql_query("SELECT id, filename FROM movies", conn)
-    movies_df = movies_df.rename(
-        columns={"id": "movie_id", "filename": "movie_filename"}
-    )
-
-    # Check all the movies have a unique ID
-    df_unique = df.movie_filename.unique()
-    movies_df_unique = movies_df.movie_filename.unique()
-    diff_filenames = set(df_unique).difference(movies_df_unique)
-
-    if diff_filenames:
-        raise ValueError(
-            f"There are clip subjects that don't have movie_id. The movie filenames are {diff_filenames}"
-        )
-
-    # Reference the manually uploaded subjects with the movies table
-    df = pd.merge(df, movies_df, how="left", on="movie_filename")
-
-    # Drop the movie_filename column
-    df = df.drop(columns=["movie_filename"])
-
-    return df
-
-
-def get_col_names(project: project_utils.Project, local_csv: str):
-    """Return a dictionary with the project-specific column names of a csv of interest
-    This function helps matching the schema format without modifying the column names of the original csv.
-
-    :param project: The project object
-    :param local_csv: a string of the name of the local csv of interest
-    :return: a dictionary with the names of the columns
-    """
-
-    # Get project-specific server info
-    project_name = project.Project_name
-
-    if "sites" in local_csv:
-        # Get spyfish specific column names
-        if project_name == "Spyfish_Aotearoa":
-            from kso_utils.spyfish_utils import get_spyfish_col_names
-
-            col_names_sites = get_spyfish_col_names("sites")
-
-        else:
-            # Save the column names of interest in a dict
-            col_names_sites = {
-                "siteName": "siteName",
-                "decimalLatitude": "decimalLatitude",
-                "decimalLongitude": "decimalLongitude",
-                "geodeticDatum": "geodeticDatum",
-                "countryCode": "countryCode",
-            }
-
-        return col_names_sites
-
-    if "movies" in local_csv:
-        # Get spyfish specific column names
-        if project_name == "Spyfish_Aotearoa":
-            col_names_movies = get_spyfish_col_names("movies")
-
-        elif project_name == "Koster_Seafloor_Obs":
-            # Save the column names of interest in a dict
-            col_names_movies = {
-                "filename": "filename",
-                "created_on": "created_on",
-                "fps": "fps",
-                "duration": "duration",
-                "sampling_start": "SamplingStart",
-                "sampling_end": "SamplingEnd",
-                "author": "Author",
-                "site_id": "site_id",
-                "fpath": "fpath",
-            }
-
-        else:
-            # Save the column names of interest in a dict
-            col_names_movies = {
-                "filename": "filename",
-                "created_on": "created_on",
-                "fps": "fps",
-                "duration": "duration",
-                "sampling_start": "sampling_start",
-                "sampling_end": "sampling_end",
-                "author": "author",
-                "site_id": "site_id",
-                "fpath": "fpath",
-            }
-
-        return col_names_movies
-
-    if "species" in local_csv:
-        # Save the column names of interest in a dict
-        col_names_species = {
-            "label": "label",
-            "scientificName": "scientificName",
-            "taxonRank": "taxonRank",
-            "kingdom": "kingdom",
-        }
-        return col_names_species
-
-    else:
-        raise ValueError("The local csv doesn't have a table match in the schema")
-
-
-def check_species_meta(project: project_utils.Project):
+def check_species_meta(
+    csv_paths: dict,
+    db_connection: sqlite3.Connection,
+):
     """
     > The function `check_species_meta` loads the csv with species information and checks if it is empty
 
-    ::param project: The project object
+    :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
+    :param db_connection: SQL connection object
     """
+
     # Load the csv with movies information
-    species_df = pd.read_csv(project.db_info["local_species_csv"])
+    species_df = pd.read_csv(csv_paths["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    data = project.get_db_table("species")
-    field_names = data.columns.values.tolist()
+    field_names = get_column_names_db(db_connection, "species")
 
     # Select the basic fields for the db check
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]

@@ -7,6 +7,7 @@ import cv2 as cv
 import numpy as np
 import re
 import pims
+import sqlite3
 import shutil
 import yaml
 import PIL
@@ -306,6 +307,8 @@ def split_frames(data_path: str, perc_test: float):
 
 def frame_aggregation(
     project: Project,
+    server_connection: dict,
+    db_connection: sqlite3.Connection,
     out_path: str,
     perc_test: float,
     class_list: list,
@@ -323,6 +326,8 @@ def frame_aggregation(
     boxes for the specified species
 
     :param project: the project object
+    :param server_connection: a dictionary with the connection to the server
+    :param db_connection: SQL connection object
     :param out_path: the path to the folder where you want to save the dataset
     :type out_path: str
     :param perc_test: The percentage of frames that will be used for testing
@@ -460,7 +465,11 @@ def frame_aggregation(
     # Get movie info from server
     from kso_utils.movie_utils import retrieve_movie_info_from_server
 
-    movie_df = retrieve_movie_info_from_server(project=project)
+    movie_df = retrieve_movie_info_from_server(
+        project=project,
+        server_connection=server_connection,
+        db_connection=db_connection,
+    )
 
     # If at least one movie is linked to the project
     logging.info(f"There are {len(movie_df)} movies")

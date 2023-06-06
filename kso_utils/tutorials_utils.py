@@ -41,6 +41,7 @@ def log_meta_changes(
     project: Project,
     meta_key: str,
     new_sheet_df: pd.DataFrame,
+    csv_paths: dict,
 ):
     """Records changes to csv files in log file (json format)"""
 
@@ -49,9 +50,7 @@ def log_meta_changes(
         "change_info": compare(
             {
                 int(k): v
-                for k, v in pd.read_csv(project.db_info[meta_key])
-                .to_dict("index")
-                .items()
+                for k, v in pd.read_csv(csv_paths[meta_key]).to_dict("index").items()
             },
             {int(k): v for k, v in new_sheet_df.to_dict("index").items()},
         ),
@@ -63,7 +62,7 @@ def log_meta_changes(
 
     else:
         try:
-            with open(Path(project.project.csv_folder, "change_log.json"), "r+") as f:
+            with open(Path(project.csv_folder, "change_log.json"), "r+") as f:
                 try:
                     existing_data = json.load(f)
                 except json.decoder.JSONDecodeError:
@@ -72,7 +71,7 @@ def log_meta_changes(
                 f.seek(0)
                 json.dump(existing_data, f)
         except FileNotFoundError:
-            with open(Path(project.project.csv_folder, "change_log.json"), "w") as f:
+            with open(Path(project.csv_folder, "change_log.json"), "w") as f:
                 json.dump([diff], f)
         logging.info(
             f"Changelog updated at: {Path(project.csv_folder, 'change_log.json')}"

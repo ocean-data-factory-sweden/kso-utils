@@ -2,6 +2,7 @@
 import logging
 import os
 import math
+import sqlite3
 import random
 import subprocess
 import datetime
@@ -236,15 +237,16 @@ def choose_species(project: Project):
     return w
 
 
-def map_sites(project: Project):
+def map_sites(project: Project, csv_paths: dict):
     """
     > This function takes a dictionary of database information and a project object as input, and
     returns a map of the sites in the database
 
     :param project: The project object
+    :param csv_paths: a dictionary with the paths of the csv files used to initiate te db
     :return: A map with all the sites plotted on it.
     """
-    if project.project.server in ["SNIC", "LOCAL"]:
+    if project.server in ["SNIC", "LOCAL"]:
         # Set initial location to Gothenburg
         init_location = [57.708870, 11.974560]
 
@@ -256,7 +258,7 @@ def map_sites(project: Project):
     kso_map = folium.Map(location=init_location, width=900, height=600)
 
     # Read the csv file with site information
-    sites_df = pd.read_csv(project.db_info["local_sites_csv"])
+    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
     # Combine information of interest into a list to display for each site
     sites_df["site_info"] = sites_df.values.tolist()
@@ -994,19 +996,20 @@ def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
         return highlight_changes, sheet_df
 
 
-def select_sheet_range(project: Project, orig_csv: str):
+def select_sheet_range(project: Project, csv_paths: dict, orig_csv: str):
     """
     > This function loads the csv file of interest into a pandas dataframe and enables users
     to pick a range of rows and columns to display
 
     :param project: the project object
+    :param csv_paths: a dictionary with the paths of the csv files used to initiate the db
     :param orig_csv: the original csv file name
     :type orig_csv: str
     :return: A dataframe with the sites information
     """
 
     # Load the csv with the information of interest
-    df = pd.read_csv(project.db_info[orig_csv])
+    df = pd.read_csv(csv_paths[orig_csv])
 
     df_range_rows = widgets.SelectionRangeSlider(
         options=range(0, len(df.index) + 1),
@@ -1150,9 +1153,11 @@ def select_modification():
 
 def update_meta(
     project: Project,
+    conn: sqlite3.Connection,
     sheet_df: pd.DataFrame,
     df: pd.DataFrame,
     meta_name: str,
+    csv_paths: dict,
 ):
     """
     `update_meta` takes a new table, a meta name, and updates the local and server meta files
@@ -1202,9 +1207,8 @@ def update_meta(
             df_orig.reset_index(drop=False, inplace=True)
 
             # Process the csv of interest and tests for compatibility with sql table
-            csv_i, df_to_db = process_test_csv(
-                project=project,
-                local_csv=str(project.db_info["local_" + meta_name + "_csv"]),
+            df_to_db = process_test_csv(
+                conn=conn, project=project, local_df=df_orig, init_key=meta_name
             )
 
             # Log changes locally
@@ -1212,13 +1216,14 @@ def update_meta(
                 project=project,
                 meta_key="local_" + meta_name + "_csv",
                 new_sheet_df=sheet_df,
+                csv_paths=csv_paths,
             )
 
             # Save the updated df locally
-            df_orig.to_csv(project.db_info["local_" + meta_name + "_csv"], index=False)
+            df_orig.to_csv(csv_paths["local_" + meta_name + "_csv"], index=False)
             logging.info("The local csv file has been updated")
 
-            if project.project.server == "AWS":
+            if project.server == "AWS":
                 # Save the updated df in the server
                 update_csv_server(
                     project=project,

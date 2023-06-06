@@ -1,7 +1,5 @@
 # base imports
 import os
-import io
-import requests
 import pandas as pd
 import getpass
 import gdown
@@ -11,15 +9,12 @@ import paramiko
 import logging
 import sys
 import ftfy
-import urllib
-import subprocess
-import ipywidgets as widgets
 from tqdm import tqdm
 from pathlib import Path
 from paramiko import SFTPClient, SSHClient
 
 # util imports
-from kso_utils.project_utils import Project, find_project
+from kso_utils.project_utils import Project
 
 # Logging
 logging.basicConfig()
@@ -45,7 +40,7 @@ def connect_to_server(project: Project):
         return {}
 
     # Create an empty dictionary to host the server connections
-    server_info = {}
+    server_connection = {}
 
     if project.server == "AWS":
         # Connect to AWS as a client
@@ -60,24 +55,24 @@ def connect_to_server(project: Project):
         client = "Wildlife.ai"
 
     else:
-        server_info = {}
+        server_connection = {}
 
     if "client" in vars():
-        server_info["client"] = client
+        server_connection["client"] = client
 
     if "sftp_client" in vars():
-        server_info["sftp_client"] = sftp_client
+        server_connection["sftp_client"] = sftp_client
 
-    return server_info
+    return server_connection
 
 
-def download_init_csv(project: Project, init_keys: list, server_info: dict):
+def download_init_csv(project: Project, init_keys: list, server_connection: dict):
     """
     > This function connects to the server of the project and downloads the csv files of interest
 
     :param project: the project object
     :param init_keys: list of potential names of the csv files
-    :param server_info: A dictionary with the client and sftp_client
+    :param server_connection: A dictionary with the client and sftp_client
     :return: A dictionary with the server paths of the csv files
     """
 
@@ -87,7 +82,7 @@ def download_init_csv(project: Project, init_keys: list, server_info: dict):
     if project.server == "AWS":
         # Retrieve a list with all the csv files in the folder with initival csvs
         server_csv_files = get_matching_s3_keys(
-            client=server_info["client"],
+            client=server_connection["client"],
             bucket=project.bucket,
             suffix="csv",
         )
@@ -112,7 +107,7 @@ def download_init_csv(project: Project, init_keys: list, server_info: dict):
 
             # Download the csv
             download_object_from_s3(
-                client=server_info["client"],
+                client=server_connection["client"],
                 bucket=project.bucket,
                 key=server_csv,
                 filename=local_i_csv,
@@ -175,36 +170,40 @@ def get_ml_data(project: Project):
         logging.info("No prepared data to be downloaded.")
 
 
-def update_csv_server(project: Project, orig_csv: str, updated_csv: str):
+def update_csv_server(
+    project: Project,
+    csv_paths: dict,
+    server_connection: dict,
+    orig_csv: str,
+    updated_csv: str,
+):
     """
     > This function updates the original csv file with the updated csv file in the server
 
     :param project: the project object
+    :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
+    :param server_connection: a dictionary with the connection to the server
     :param orig_csv: the original csv file name
     :type orig_csv: str
     :param updated_csv: the updated csv file
     :type updated_csv: str
     """
-    server = project.project.server
-
-    # TODO: add changes in a log file
-
-    if server == "AWS":
+    if project.server == "AWS":
         logging.info("Updating csv file in AWS server")
         # Update csv to AWS
         upload_file_to_s3(
-            project.server_info["client"],
-            bucket=project.project.bucket,
-            key=str(project.db_info[orig_csv]),
-            filename=str(project.db_info[updated_csv]),
+            client=server_connection["client"],
+            bucket=project.bucket,
+            key=str(csv_paths[orig_csv]),
+            filename=str(csv_paths[updated_csv]),
         )
 
-    elif server == "TEMPLATE":
+    elif project.server == "TEMPLATE":
         logging.error(
             f"{orig_csv} couldn't be updated. Check writing permisions to the server."
         )
 
-    elif server == "SNIC":
+    elif project.server == "SNIC":
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         # TODO: orig_csv and updated_csv as filenames, create full path for upload_object_to_snic with project.csv_folder.
@@ -215,7 +214,7 @@ def update_csv_server(project: Project, orig_csv: str, updated_csv: str):
         local_fpath = f"{snic_path}/tmp_dir/local_dir_dev/" + updated_csv
         remote_fpath = f"{snic_path}/tmp_dir/server_dir_dev/" + orig_csv
         upload_object_to_snic(
-            sftp_client=project.server_info["sftp_client"],
+            sftp_client=server_connection["sftp_client"],
             local_fpath=local_fpath,
             remote_fpath=remote_fpath,
         )
@@ -229,21 +228,23 @@ def update_csv_server(project: Project, orig_csv: str, updated_csv: str):
         )
 
 
-def upload_movie_server(movie_path: str, f_path: str, project: Project):
+def upload_file_server(project: Project, movie_path: str, f_path: str):
     """
-    Takes the file path of a movie file and uploads it to the server.
+    Takes the file path of a file and uploads/saves it to the server.
 
+    :param project: the project object
     :param movie_path: The local path to the movie file you want to upload
     :type movie_path: str
-    :param f_path: The server or storage path of the original movie you want to convert
+    :param f_path: The server or storage path of the movie you want to upload to
     :type f_path: str
-    :param project: The filename of the movie file you want to convert
-    :type movie_path: str
+
     """
     if project.server == "AWS":
         # Retrieve the key of the movie of interest
         f_path_key = f_path.split("/").str[:2].str.join("/")
-        logging.info(f_path_key)
+        logging.info(
+            f"{f_path_key} not uploaded to the server. Uploading to AWS is a WIP"
+        )
 
     elif project.server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
@@ -256,23 +257,6 @@ def upload_movie_server(movie_path: str, f_path: str, project: Project):
 
     else:
         raise ValueError("Specify the server of the project in the project_list.csv.")
-
-
-def get_movie_url(project: Project, server_dict: dict, f_path: str):
-    """
-    Function to get the url of the movie
-    """
-    server = project.server
-    if server == "AWS":
-        movie_key = urllib.parse.unquote(f_path).split("/", 3)[3]
-        movie_url = server_dict["client"].generate_presigned_url(
-            "get_object",
-            Params={"Bucket": project.bucket, "Key": movie_key},
-            ExpiresIn=86400,
-        )
-        return movie_url
-    else:
-        return f_path
 
 
 #####################
@@ -472,17 +456,6 @@ def delete_file_from_s3(client: boto3.client, *, bucket: str, key: str):
     :type key: str
     """
     client.delete_object(Bucket=bucket, Key=key)
-
-
-# def retrieve_s3_buckets_info(client, bucket, suffix):
-
-#     # Select the relevant bucket
-#     s3_keys = [obj["Key"] for obj in get_matching_s3_objects(client=client, bucket=bucket, suffix=suffix)]
-
-#     # Set the contents as pandas dataframe
-#     contents_s3_pd = pd.DataFrame(s3_keys)
-
-#     return contents_s3_pd
 
 
 ##############################

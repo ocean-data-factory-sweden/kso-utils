@@ -1,5 +1,6 @@
 # base imports
 import os
+import sqlite3
 import logging
 import pandas as pd
 
@@ -96,7 +97,7 @@ def process_spyfish_movies(movies_df: pd.DataFrame):
     return movies_df
 
 
-def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
+def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Connection):
     """
     It takes a dataframe of subjects and a path to the database, and returns a dataframe of subjects
     with the following columns:
@@ -108,12 +109,11 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     - Merging "#Subject_type" and "Subject_type" columns to "subject_type"
     - Renaming columns to match the db format
     - Calculating the clip_end_time
-    - Creating a connection to the db
     - Matching 'ScientificName' to species id and save as column "frame_exp_sp_id"
     - Matching site code to name from movies sql and get movie_id to save it as "movie_id"
 
     :param subjects: the dataframe of subjects to be processed
-    :param db_path: the path to the database you want to upload to
+    :param db_connection: SQL connection object
     :return: A dataframe with the columns:
         - filename, clip_start_time,clip_end_time,frame_number,subject_type,ScientificName,frame_exp_sp_id,movie_id
     """
@@ -138,14 +138,13 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     # Calculate the clip_end_time
     subjects["clip_end_time"] = subjects["clip_start_time"] + subjects["#clip_length"]
 
-    # Create connection to db
-    from kso_utils.db_utils import create_connection
-
-    conn = create_connection(db_path)
+    from kso_utils.db_utils import get_df_from_db_table
 
     ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
     # Query id and sci. names from the species table
-    species_df = pd.read_sql_query("SELECT id, scientificName FROM species", conn)
+    species_df = get_df_from_db_table(db_connection, "species")[
+        ["id", "scientificName"]
+    ]
 
     # Rename columns to match subject df
     species_df = species_df.rename(
@@ -162,7 +161,7 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
 
     ##### Match site code to name from movies sql and get movie_id to save it as "movie_id"
     # Query id and filenames from the movies table
-    movies_df = pd.read_sql_query("SELECT id, filename FROM movies", conn)
+    movies_df = get_df_from_db_table(db_connection, "movies")[["id", "filename"]]
 
     # Rename columns to match subject df
     movies_df = movies_df.rename(columns={"id": "movie_id"})
@@ -227,28 +226,28 @@ def process_clips_spyfish(annotations, row_class_id, rows_list: list):
     return rows_list
 
 
-def spyfish_subject_metadata(df: pd.DataFrame, project):
+def spyfish_subject_metadata(df: pd.DataFrame, csv_paths: dict):
     """
     It takes a dataframe of subject metadata and returns a dataframe of subject metadata that is ready
     to be uploaded to Zooniverse
 
     :param df: the dataframe of all the detections
-    :param project: the project object
+    :param csv_paths: the project object
     :return: A dataframe with the columns of interest for uploading to Zooniverse.
     """
 
     # Get extra movie information
-    movies_df = pd.read_csv(project.db_info["local_movies_csv"])
+    movies_df = pd.read_csv(csv_paths["local_movies_csv"])
 
     df = df.merge(movies_df.drop(columns=["filename"]), how="left", on="movie_id")
 
     # Get extra survey information
-    surveys_df = pd.read_csv(project.db_info["local_surveys_csv"])
+    surveys_df = pd.read_csv(csv_paths["local_surveys_csv"])
 
     df = df.merge(surveys_df, how="left", on="SurveyID")
 
     # Get extra site information
-    sites_df = pd.read_csv(project.db_info["local_sites_csv"])
+    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
     df = df.merge(
         sites_df.drop(columns=["LinkToMarineReserve"]), how="left", on="SiteID"
