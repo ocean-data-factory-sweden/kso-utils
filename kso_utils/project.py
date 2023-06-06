@@ -349,6 +349,7 @@ class ProjectProcessor:
         return kso_widgets.update_meta(
             project=self.project,
             conn=self.db_connection,
+            server_connection=self.server_connection,
             sheet_df=sheet_df,
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
@@ -656,7 +657,9 @@ class ProjectProcessor:
         :param movie_name: The name of the movie you want to check if it's uploaded
         :type movie_name: str
         """
-        movie_utils.check_movie_uploaded(self.project, movie_i=movie_name)
+        movie_utils.check_movie_uploaded(
+            project=self.project, db_connection=self.db_connection, movie_i=movie_name
+        )
 
     def generate_zu_frames(self):
         """
