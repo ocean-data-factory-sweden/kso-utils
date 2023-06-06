@@ -332,12 +332,14 @@ def map_sites(project: Project, csv_paths: dict):
     return kso_map
 
 
-def choose_project(projects_csv: str = "../kso_utils/db_starter/projects_list.csv"):
+def choose_project(
+    projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv",
+):
     """
     > This function takes a csv file with a list of projects and returns a dropdown menu with the
     projects listed
 
-    :param projects_csv: str = "../kso_utils/db_starter/projects_list.csv", defaults to ../kso_utils/db_starter/projects_list.csv
+    :param projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv", defaults to ../kso_utils/db_starter/projects_list.csv
     :type projects_csv: str (optional)
     :return: A dropdown widget with the project names as options.
     """
@@ -1023,7 +1025,9 @@ def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
         )
 
         # Rearrange columns to have them next to each other
-        df_final = df_all.swaplevel(axis="columns")[df_filtered.columns[1:]]
+        df_final = df_all.swaplevel(axis="columns")[
+            [x for x in df_filtered.columns if x != id_col]
+        ]
 
         # Create a function to highlight the changes
         def highlight_diff(data, color="yellow"):
@@ -1199,6 +1203,7 @@ def select_modification():
 def update_meta(
     project: Project,
     conn: sqlite3.Connection,
+    server_connection: dict,
     sheet_df: pd.DataFrame,
     df: pd.DataFrame,
     meta_name: str,
@@ -1272,6 +1277,8 @@ def update_meta(
                 # Save the updated df in the server
                 update_csv_server(
                     project=project,
+                    csv_paths=csv_paths,
+                    server_connection=server_connection,
                     orig_csv="server_" + meta_name + "_csv",
                     updated_csv="local_" + meta_name + "_csv",
                 )

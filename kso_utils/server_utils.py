@@ -212,23 +212,30 @@ def update_csv_server(
         )
 
 
-def upload_file_server(project: Project, movie_path: str, f_path: str):
+def upload_file_server(
+    project: Project, server_connection: dict, conv_mov_path: str, f_path: str
+):
     """
     Takes the file path of a file and uploads/saves it to the server.
 
     :param project: the project object
-    :param movie_path: The local path to the movie file you want to upload
-    :type movie_path: str
+    :param conv_mov_path: The local path to the converted movie file you want to upload
+    :type conv_mov_path: str
     :param f_path: The server or storage path of the movie you want to upload to
     :type f_path: str
 
     """
     if project.server == "AWS":
-        # Retrieve the key of the movie of interest
-        f_path_key = f_path.split("/").str[:2].str.join("/")
-        logging.info(
-            f"{f_path_key} not uploaded to the server. Uploading to AWS is a WIP"
+        logging.info("Uploading movie to AWS server")
+        # Update csv to AWS
+        upload_file_to_s3(
+            client=server_connection["client"],
+            bucket=project.bucket,
+            key=f_path,
+            filename=conv_mov_path,
         )
+
+        logging.info(f"{f_path} standarised and uploaded to the server.")
 
     elif project.server == "TEMPLATE":
         logging.error(f"{movie_path} not uploaded to the server as project is template")
