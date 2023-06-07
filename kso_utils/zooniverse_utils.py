@@ -929,7 +929,7 @@ def aggregate_classifications(
             f"{agg_iua} "
         )
         # Process the raw classifications
-        raw_class_df = process_frames(df, project.Project_name)
+        raw_class_df = process_frames(df)
 
         # Aggregate frames based on their labels
         agg_labels_df = aggregate_labels(raw_class_df, agg_users, min_users)
@@ -988,7 +988,7 @@ def aggregate_classifications(
 
             # Filter bboxes using IOU metric (essentially a consensus metric)
             # Keep only bboxes where mean overlap exceeds this threshold
-            from kso_utils.koster_utils import filter_bboxes
+            from kso_utils.frame_utils import filter_bboxes
 
             indices, new_group = filter_bboxes(
                 total_users=total_users,
