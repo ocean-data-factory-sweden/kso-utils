@@ -3,6 +3,7 @@ import os
 import boto3
 import logging
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 import subprocess
 
@@ -269,6 +270,13 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_path: str):
     subjects["subject_type"] = subjects["subject_type"].fillna(
         subjects["#Subject_type"]
     )
+
+    # Create columns to match schema if they don't exist
+    subjects["upl_seconds"] = subjects.get("upl_seconds", np.nan)
+    subjects["#VideoFilename"] = subjects.get("#VideoFilename", np.nan)
+    subjects["#frame_number"] = subjects.get("#frame_number", np.nan)
+    subjects["#clip_length"] = subjects.get("#clip_length", np.nan)
+    subjects["movie_id"] = subjects.get("movie_id", np.nan)
 
     # Rename columns to match the db format
     subjects = subjects.rename(
