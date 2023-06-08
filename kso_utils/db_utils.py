@@ -344,7 +344,7 @@ def process_test_csv(
         field_names = ["movie_id"]
 
         # Modify the local_df if Spyfish Aotearoa
-        if project.Project_name == "Spyfish_Aotearoa":
+        if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
             local_df = process_spyfish_movies(local_df)
 
         # Modify the local_df if Koster
@@ -363,7 +363,7 @@ def process_test_csv(
         if "author" not in local_df.columns:
             local_df = local_df.rename(columns={"Author": "author"})
 
-        # Select only those fields of interest
+        # Use the filename to set the fpath if it doesn't exist
         if "fpath" not in local_df.columns:
             local_df["fpath"] = local_df["filename"]
 
@@ -392,6 +392,10 @@ def process_test_csv(
         local_df = pd.DataFrame()
 
         return local_df
+
+    # Rename any columns that start with a capitalise letter to match db schema
+    cols = local_df.columns
+    local_df.columns = [word[0].lower() + word[1:] for word in cols]
 
     # Add the names of the basic columns in the sql db
     field_names = field_names + get_column_names_db(conn, init_key)
