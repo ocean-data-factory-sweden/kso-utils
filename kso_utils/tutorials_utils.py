@@ -23,8 +23,9 @@ from PIL import Image as PILImage, ImageDraw
 
 # widget imports
 from tqdm import tqdm
-import ipywidgets as widgets
+from jupyter_bbox_widget import BBoxWidget
 from IPython.display import HTML, display, clear_output
+import ipywidgets as widgets
 
 # Util imports
 from kso_utils.project_utils import Project
@@ -903,7 +904,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     "label": species_list[int(s[0])],
                 }
             )
-    w_bbox = widgets.BBoxWidget(image=encode_image(image), classes=species_list)
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
