@@ -180,28 +180,6 @@ class ProjectProcessor:
             for i in local_dfs
         ]
 
-    # General functions to interact with in jupyter notebooks
-    def get_db_table(self, table_name, interactive: bool = False):
-        """
-        It takes a table name as an argument, connects to the database, gets the column names, gets the
-        data, and returns a DataFrame or an interactive view of the table using HTML.
-
-        :param table_name: The name of the table you want to get from the database
-        :param interactive: A boolean which displays the table as HTML
-        :return: A dataframe
-        """
-
-        df = db_utils.get_df_from_db_table(
-            conn=self.db_connection, table_name=table_name
-        )
-
-        if interactive:
-            html = f"<div style='height:300px;overflow:auto'>{df.to_html(index=False)}</div>"
-
-            # Display the HTML
-            display(HTML(html))
-        else:
-            return df
 
     def choose_workflows(self, generate_export: bool = False):
         self.set_zoo_info(generate_export=generate_export)
