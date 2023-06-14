@@ -503,7 +503,7 @@ def frame_aggregation(
         # Get movie path on the server
         train_rows["movie_path"] = train_rows.merge(
             movie_df, left_on="movie_id", right_on="id", how="left"
-        )["spath"]
+        )["fpath"]
 
         from kso_utils.server_utils import get_movie_url
 
