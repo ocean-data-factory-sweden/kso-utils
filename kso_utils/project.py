@@ -284,7 +284,7 @@ class ProjectProcessor:
         :return: meta_df, range_rows, range_columns
         """
         meta_df, range_rows, range_columns = kso_widgets.select_sheet_range(
-            project=self, orig_csv=f"local_{meta_key}_csv", csv_paths=self.csv_paths
+            project=self.project, orig_csv=f"local_{meta_key}_csv", csv_paths=self.csv_paths
         )
         return meta_df, range_rows, range_columns
 
@@ -891,7 +891,7 @@ class ProjectProcessor:
         class_df: pd.DataFrame,
     ):
         return zu_utils.get_classifications(
-            project=self,
+            project=self.project,
             workflow_dict=workflow_dict,
             workflows_df=workflows_df,
             subj_type=subj_type,
