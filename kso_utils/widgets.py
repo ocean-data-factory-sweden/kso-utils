@@ -80,6 +80,51 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     display(fc)
     return fc
 
+def choose_footage(
+    project: Project, 
+    server_info: dict, 
+    db_connection,
+    start_path: str = ".", 
+    folder_type: str = ""
+):
+    """
+    > This function enables users to select movies for ML purposes.
+
+    :param project: the project object
+    :param server_connection: a dictionary with the connection to the server
+    :param db_connection: SQL connection object
+    :param start_path: a string with the path of the origin for the folder
+    :param folder_type: a string with the names of the type of folder required
+    :return: A path of the folder of interest
+    """
+    if project.server == "AWS":
+        available_movies_df = movie_utils.retrieve_movie_info_from_server(
+            project=project, 
+            server_info=server_info,
+            db_connection=db_connection
+        )
+        movie_dict = {
+            name: movie_utils.get_movie_path(f_path, project, server_connection)
+            for name, f_path in available_movies_df[["filename", "fpath"]].values
+        }
+        movie_widget = widgets.SelectMultiple(
+            options=[(name, movie) for name, movie in movie_dict.items()],
+            description="Select movie(s):",
+            ensure_option=False,
+            disabled=False,
+            layout=widgets.Layout(width="50%"),
+            style={"description_width": "initial"},
+        )
+
+        display(movie_widget)
+        return movie_widget
+
+    else:
+        # Specify the output folder
+        fc = FileChooser(start_path)
+        fc.title = f"Choose location of {folder_type}"
+        display(fc)
+        return fc
 
 def select_random_clips(project: Project, movie_i: str):
     """
