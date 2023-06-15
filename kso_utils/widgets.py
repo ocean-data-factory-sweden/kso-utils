@@ -80,7 +80,6 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     display(fc)
     return fc
 
-
 def choose_footage(
     project: Project,
     server_info: dict,
@@ -124,7 +123,6 @@ def choose_footage(
         fc.title = f"Choose location of {folder_type}"
         display(fc)
         return fc
-
 
 def select_random_clips(project: Project, movie_i: str):
     """
