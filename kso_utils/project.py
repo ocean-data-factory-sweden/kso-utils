@@ -180,7 +180,6 @@ class ProjectProcessor:
             for i in local_dfs
         ]
 
-
     def choose_workflows(self, generate_export: bool = False):
         self.set_zoo_info(generate_export=generate_export)
         self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
@@ -284,7 +283,9 @@ class ProjectProcessor:
         :return: meta_df, range_rows, range_columns
         """
         meta_df, range_rows, range_columns = kso_widgets.select_sheet_range(
-            project=self.project, orig_csv=f"local_{meta_key}_csv", csv_paths=self.csv_paths
+            project=self.project,
+            orig_csv=f"local_{meta_key}_csv",
+            csv_paths=self.csv_paths,
         )
         return meta_df, range_rows, range_columns
 
