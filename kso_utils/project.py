@@ -187,7 +187,7 @@ class ProjectProcessor:
 
     def set_zoo_info(self, generate_export: bool = False, zoo_cred=False):
         """
-        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
         This is used in the automatic tests in gitlab called autotests.py.
         when it is set to False, then the credentials are retrieved from the interacitve widget.
 
@@ -209,11 +209,11 @@ class ProjectProcessor:
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
-        
-        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
         This is used in the automatic tests in gitlab called autotests.py.
         when it is set to False, then the credentials are retrieved from the interacitve widget.
-        
+
         :return: The zoo_info is being returned.
         """
         if hasattr(self.project, "db_path"):
@@ -605,7 +605,7 @@ class ProjectProcessor:
             )
 
         clip_modification = kso_widgets.clip_modification_widget()
-        
+
         button = widgets.Button(
             description="Click to extract clips.",
             disabled=False,
@@ -1260,9 +1260,7 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(
-            eval_dir, wandb_log=True
-        )
+        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
         wandb.finish()
 
     def track_individuals(

@@ -50,15 +50,15 @@ class AuthenticationError(Exception):
 def connect_zoo_project(project: Project, zoo_cred=False):
     """
     It takes a project name as input, and returns a Zooniverse project object
-    
-    zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+
+    zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
     This is used in the automatic tests in gitlab called autotests.py.
     when it is set to False, then the credentials are retrieved from the interacitve widget.
 
     :param project: the KSO project you are working
     :return: A Zooniverse project object.
     """
-    if zoo_cred==False:
+    if zoo_cred == False:
         # Save your Zooniverse user name and password.
         zoo_user, zoo_pass = zoo_credentials()
     else:
