@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 # base imports
 import logging
+import sqlite3
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
 # util imports
 from kso_utils.project_utils import Project
-from kso_utils.zooniverse_utils import extract_metadata
+
 
 # Logging
 logging.basicConfig()
@@ -32,6 +33,8 @@ def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
     """
     # Select automatically uploaded frames
     auto_subjects_df = subjects_df[(subjects_df["created_at"] > auto_date)]
+
+    from kso_utils.zooniverse_utils import extract_metadata
 
     # Extract metadata from automatically uploaded subjects
     auto_subjects_df, auto_subjects_meta = extract_metadata(auto_subjects_df)
@@ -195,21 +198,57 @@ def clean_duplicated_subjects(subjects: pd.DataFrame, project: Project):
     return subjects
 
 
-def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
+def get_movies_id(df: pd.DataFrame, conn: sqlite3.Connection):
+    """
+    This function retrieves movie IDs based on movie filenames from a database and merges them with a
+    given DataFrame.
+
+    :param df: A pandas DataFrame containing information about movie filenames and clip subjects
+    :type df: pd.DataFrame
+    :param conn: SQL connection object
+    :return: a pandas DataFrame with the movie_ids added to the input DataFrame based on matching movie
+    filenames with the movies table in a SQLite database. The function drops the movie_filename column
+    before returning the DataFrame.
+    """
+    from kso_utils.db_utils import get_df_from_db_table
+
+    # Query id and filenames from the movies table
+    movies_df = get_df_from_db_table(conn, "movies")[["id", "filename"]]
+    movies_df = movies_df.rename(
+        columns={"id": "movie_id", "filename": "movie_filename"}
+    )
+
+    # Check all the movies have a unique ID
+    df_unique = df.movie_filename.unique()
+    movies_df_unique = movies_df.movie_filename.unique()
+    diff_filenames = set(df_unique).difference(movies_df_unique)
+
+    if diff_filenames:
+        raise ValueError(
+            f"There are clip subjects that don't have movie_id. The movie filenames are {diff_filenames}"
+        )
+
+    # Reference the manually uploaded subjects with the movies table
+    df = pd.merge(df, movies_df, how="left", on="movie_filename")
+
+    # Drop the movie_filename column
+    df = df.drop(columns=["movie_filename"])
+
+    return df
+
+
+def process_koster_subjects(subjects: pd.DataFrame, conn: sqlite3.Connection):
     """
     This function takes in a dataframe of subjects and a path to the database and returns a dataframe of
     subjects with updated metadata
 
     :param subjects: the dataframe of subjects from the database
     :type subjects: pd.DataFrame
-    :param db_path: the path to the database
-    :type db_path: str
+    :param conn: SQL connection object
     :return: A dataframe with all the subjects that have been uploaded to the database.
     """
 
     ## Set the date when the metadata of subjects uploaded matches/doesn't match schema.py requirements
-    from kso_utils.db_utils import get_movies_id
-
     # Specify the date when the metadata of subjects uploaded matches schema.py
     auto_date = "2020-05-29 00:00:00 UTC"
 
@@ -228,7 +267,7 @@ def process_koster_subjects(subjects: pd.DataFrame, db_path: str):
     )
 
     # Include movie_ids to the metadata
-    manual_subjects_df = get_movies_id(manual_subjects_df, db_path)
+    manual_subjects_df = get_movies_id(manual_subjects_df, conn=conn)
 
     # Combine all uploaded subjects
     subjects = pd.merge(manual_subjects_df, auto_subjects_df, how="outer")

@@ -12,17 +12,17 @@ import numpy as np
 import gdown
 import datetime
 import ffmpeg
+import sqlite3
 import shutil
 from tqdm import tqdm
-from panoptes_client import Project, Panoptes, panoptes, Subject, SubjectSet
+from panoptes_client import Panoptes, panoptes, Subject, SubjectSet
+from panoptes_client import Project as zooProject
 from ast import literal_eval
 from ipyfilechooser import FileChooser
 from pathlib import Path
 
 # util imports
-
-
-import kso_utils.project_utils as project_utils
+from kso_utils.project_utils import Project
 import kso_utils.db_utils as db_utils
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.movie_utils as movie_utils
@@ -47,11 +47,11 @@ class AuthenticationError(Exception):
     pass
 
 
-def connect_zoo_project(project: project_utils.Project):
+def connect_zoo_project(project: Project):
     """
     It takes a project name as input, and returns a Zooniverse project object
 
-    :param project: the project you want to connect to
+    :param project: the KSO project you are working
     :return: A Zooniverse project object.
     """
     # Save your Zooniverse user name and password.
@@ -61,11 +61,11 @@ def connect_zoo_project(project: project_utils.Project):
     project_n = project.Zooniverse_number
 
     # Connect to the Zooniverse project
-    project = auth_session(zoo_user, zoo_pass, project_n)
+    zoo_project = auth_session(zoo_user, zoo_pass, project_n)
 
     logging.info("Connected to Zooniverse")
 
-    return project
+    return zoo_project
 
 
 # Function to authenticate to Zooniverse
@@ -88,7 +88,7 @@ def auth_session(username: str, password: str, project_n: int):
 
     # Specify the project number of the koster lab
     try:
-        project = Project(int(float(project_n)))
+        project = zooProject(int(float(project_n)))
         return project
     except Exception as e:
         logging.error(e)
@@ -96,8 +96,8 @@ def auth_session(username: str, password: str, project_n: int):
 
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(
-    project: project_utils.Project,
-    zoo_project: Project,
+    project: Project,
+    zoo_project: zooProject,
     zoo_info: str,
     generate_export: bool = False,
 ):
@@ -105,7 +105,7 @@ def retrieve_zoo_info(
     This function retrieves the information of interest from Zooniverse and saves it as a pandas data
     frame
 
-    :param project: the project object
+    :param project: the kso project object
     :param zoo_project: the Zooniverse project object
     :param zoo_info: a list of the info you want to retrieve from Zooniverse
     :type zoo_info: str
@@ -230,15 +230,15 @@ def extract_metadata(subj_df: pd.DataFrame):
 
 
 def populate_subjects(
-    subjects: pd.DataFrame, project: project_utils.Project, db_path: str
+    subjects: pd.DataFrame, project: Project, conn: sqlite3.Connection
 ):
     """
     Populate the subjects table with the subject metadata
 
+    :param  project: the project object
     :param subjects: the subjects dataframe
-    :param project_path: The path to the projects.csv file
-    :param project_name: The name of the Zooniverse project
-    :param db_path: the path to the database
+    :param conn: SQL connection object
+
     """
 
     from kso_utils.koster_utils import process_koster_subjects
@@ -250,7 +250,7 @@ def populate_subjects(
 
     # Check if the Zooniverse project is the KSO
     if project_name == "Koster_Seafloor_Obs":
-        subjects = process_koster_subjects(subjects, db_path)
+        subjects = process_koster_subjects(subjects, conn)
 
     else:
         # Extract metadata from uploaded subjects
@@ -261,7 +261,7 @@ def populate_subjects(
 
         # Check if the Zooniverse project is the Spyfish
         if project_name == "Spyfish_Aotearoa":
-            subjects = process_spyfish_subjects(subjects, db_path)
+            subjects = process_spyfish_subjects(subjects, conn)
 
         # If project is not KSO or Spyfish standardise subject info
         else:
@@ -372,14 +372,18 @@ def populate_subjects(
     db_utils.test_table(subjects, "subjects", keys=["id"])
 
     # Add values to subjects
-    db_utils.add_to_table(db_path, "subjects", [tuple(i) for i in subjects.values], 15)
+    db_utils.add_to_table(
+        conn=conn,
+        table_name="subjects",
+        values=[tuple(i) for i in subjects.values],
+        num_fields=15,
+    )
 
     ##### Print how many subjects are in the db
-    # Create connection to db
-    conn = db_utils.create_connection(db_path)
-
     # Query id and subject type from the subjects table
-    subjects_df = pd.read_sql_query("SELECT id, subject_type FROM subjects", conn)
+    subjects_df = db_utils.get_df_from_db_table(conn, "subjects")[
+        ["id", "subject_type"]
+    ]
     frame_subjs = subjects_df[subjects_df["subject_type"] == "frame"].shape[0]
     clip_subjs = subjects_df[subjects_df["subject_type"] == "clip"].shape[0]
 
@@ -394,24 +398,28 @@ def populate_subjects(
 
 # Relevant for ML and upload frames tutorials
 def populate_agg_annotations(
-    annotations: pd.DataFrame, subj_type: str, project: project_utils.Project
+    annotations: pd.DataFrame,
+    subj_type: str,
+    project: Project,
+    conn: sqlite3.Connection,
 ):
     """
     It takes in a list of annotations, the subject type, and the project, and adds the annotations to
     the database
 
+    :param project: the project object
+    :param conn: SQL connection object
     :param annotations: a dataframe containing the annotations
     :param subj_type: "clip" or "frame"
-    :param project: the project object
     """
 
     # Get the project-specific name of the database
     db_path = project.db_path
 
-    conn = db_utils.create_connection(db_path)
-
     # Query id and subject type from the subjects table
-    subjects_df = pd.read_sql_query("SELECT id, frame_exp_sp_id FROM subjects", conn)
+    subjects_df = db_utils.get_df_from_db_table(conn, "subjects")[
+        ["id", "frame_exp_sp_id"]
+    ]
 
     # Combine annotation and subject information
     annotations_df = pd.merge(
@@ -423,12 +431,13 @@ def populate_agg_annotations(
         validate="many_to_one",
     )
 
+    # Retrieve species info from db
+    species_df = db_utils.get_df_from_db_table(conn, "species")[["species_id", "label"]]
+    species_df = species_df.rename(columns={"id": "species_id"})
+
     # Update agg_annotations_clip table
     if subj_type == "clip":
         # Set the columns in the right order
-        species_df = pd.read_sql_query(
-            "SELECT id as species_id, label FROM species", conn
-        )
         species_df["label"] = species_df["label"].apply(
             lambda x: x.replace(" ", "").replace(")", "").replace("(", "").upper()
         )
@@ -462,9 +471,6 @@ def populate_agg_annotations(
         annotations_df = annotations_df[["label", "x", "y", "w", "h", "subject_ids"]]
 
         # Set the columns in the right order
-        species_df = pd.read_sql_query(
-            "SELECT id as species_id, label FROM species", conn
-        )
         species_df["label"] = species_df["label"].apply(
             lambda x: x[:-1] if x == "Blue mussels" else x
         )
@@ -477,7 +483,6 @@ def populate_agg_annotations(
         ].dropna()
 
         # Test table validity
-
         db_utils.test_table(
             annotations_df, "agg_annotations_frame", keys=["species_id"]
         )
@@ -543,46 +548,8 @@ def process_clips_template(annotations, row_class_id, rows_list: list):
     return rows_list
 
 
-def retrieve__populate_zoo_info(
-    project: project_utils.Project,
-    db_info_dict: dict,
-    zoo_project: Project,
-    zoo_info: list,
-    generate_export: bool = False,
-):
-    """
-    It retrieves the information of the subjects uploaded to Zooniverse and populates the SQL database
-    with the information
-
-    :param project: the project you want to retrieve information for
-    :param db_info_dict: a dictionary containing the path to the database and the name of the database
-    :param zoo_project: The name of the Zooniverse project you created
-    :param zoo_info: a list containing the information of the Zooniverse project you would like to retrieve
-    :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
-
-    :return: The zoo_info_dict is being returned.
-    """
-
-    if zoo_project is None:
-        logging.error(
-            "This project is not linked to a Zooniverse project. Please create one and add the required fields to proceed with this tutorial."
-        )
-    else:
-        # Retrieve and store the information of subjects uploaded to zooniverse
-        zoo_info_dict = retrieve_zoo_info(
-            project, zoo_project, zoo_info, generate_export
-        )
-
-        # Populate the sql with subjects uploaded to Zooniverse
-        if "db_path" in db_info_dict:
-            populate_subjects(zoo_info_dict["subjects"], project, project.db_path)
-        else:
-            logging.info("No database path found. Subjects have not been added to db")
-        return zoo_info_dict
-
-
 def set_zoo_clip_metadata(
-    project: project_utils.Project,
+    project: Project,
     generated_clipsdf: pd.DataFrame,
     sitesdf: pd.DataFrame,
     moviesdf: pd.DataFrame,
@@ -1185,7 +1152,6 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
 # Function to the provide drop-down options to select the frames to be uploaded
 def get_frames(
     project: Project,
-    db_info_dict: dict,
     zoo_info_dict: dict,
     species_names: list,
     n_frames_subject=3,
@@ -1282,11 +1248,10 @@ def get_frames(
 
             # Get df of frames to be extracted
             frame_df = movie_utils.get_species_frames(
-                project,
-                db_info_dict,
-                sp_agg_clips_df,
-                species_ids,
-                n_frames_subject,
+                project=project,
+                agg_clips_df=sp_agg_clips_df,
+                species_ids=species_ids,
+                n_frames_subject=n_frames_subject,
             )
 
             # Check the frames haven't been uploaded to Zooniverse
@@ -1301,7 +1266,7 @@ def get_frames(
             else:
                 frames_folder = "_".join(species_names_zoo) + "_frames/"
             chooser.df = movie_utils.extract_frames(
-                project, db_info_dict, frame_df, frames_folder
+                project=project, df=frame_df, frames_folder=frames_folder
             )
 
         # Register callback function
@@ -1312,13 +1277,16 @@ def get_frames(
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
-def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
+def set_zoo_frame_metadata(
+    project: Project, df: pd.DataFrame, species_list: list, csv_paths=dict
+):
     """
     It takes a dataframe of clips or frames, and adds metadata about the site and project to it
 
     :param df: the dataframe with the media to upload
     :param project: the project object
-    :param db_info_dict: a dictionary with information about the project
+    :param species_list: a list of the species that should be on the frames
+    :param csv_paths: a dictionary with the paths of the csvs used to initiate the db
     :return: upload_to_zoo, sitename, created_on
     """
     project_name = project.Project_name
@@ -1354,7 +1322,7 @@ def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
     elif project_name == "Spyfish_Aotearoa":
         from kso_utils.spyfish_utils import spyfish_subject_metadata
 
-        upload_to_zoo = spyfish_subject_metadata(df, db_info_dict)
+        upload_to_zoo = spyfish_subject_metadata(df, csv_paths=csv_paths)
     else:
         logging.error("This project is not a supported Zooniverse project.")
 
@@ -1374,13 +1342,22 @@ def set_zoo_frame_metadata(project, db_info_dict, df, species_list: list):
 
 # Function to upload frames to Zooniverse
 def upload_frames_to_zooniverse(
-    self,
-    upload_to_zoo: dict,
+    project: Project,
+    upload_to_zoo: pd.DataFrame,
     species_list: list,
 ):
+    """
+    It takes a dataframe of frames, and upload it to Zooniverse
+
+    :param df: the dataframe with the media to upload
+    :param project: the project object
+    :param species_list: a list of the species that should be on the frames
+    :return: upload_to_zoo, sitename, created_on
+    """
+
     # Retireve zooniverse project name and number
-    project_name = self.project.Project_name
-    project_number = self.project.Zooniverse_number
+    project_name = project.Project_name
+    project_number = project.Zooniverse_number
 
     # Estimate the number of frames
     n_frames = upload_to_zoo.shape[0]
@@ -1402,7 +1379,7 @@ def upload_frames_to_zooniverse(
         )
 
     elif project_name == "SGU":
-        surveys_df = pd.read_csv(self.db_info["local_surveys_csv"])
+        surveys_df = pd.read_csv(project.csv_paths["local_surveys_csv"])
         created_on = surveys_df["SurveyDate"].unique()[0]
         folder_name = os.path.split(
             os.path.dirname(upload_to_zoo["frame_path"].iloc[0])
@@ -1634,7 +1611,7 @@ def modify_frames(
 
 def format_to_gbif_occurence(
     project: Project,
-    db_info_dict: dict,
+    csv_paths: dict,
     zoo_info_dict: dict,
     df: pd.DataFrame,
     classified_by: str,
@@ -1642,11 +1619,11 @@ def format_to_gbif_occurence(
 ):
     """
     > This function takes a df of biological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
+    :param project: the project object
+    :param csv_paths: dictionary with the paths of the csv files used to initiate the db
     :param df: the dataframe containing the aggregated classifications
     :param classified_by: the entity who classified the object of interest, either "citizen_scientists", "biologists" or "ml_algorithms"
     :param subject_type: str,
-    :param db_info_dict: a dictionary containing the path to the database and the database name
-    :param project: the project object
     :param zoo_info_dict: dictionary with the workflow/subjects/classifications retrieved from Zooniverse project
     :return: a df of species occurrences to publish in GBIF/OBIS.
     """
@@ -1680,9 +1657,9 @@ def format_to_gbif_occurence(
         movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
 
         # Add survey information as part of the movie info if spyfish
-        if "local_surveys_csv" in db_info_dict.keys():
+        if "local_surveys_csv" in csv_paths.keys():
             # Read info about the movies
-            movies_csv = pd.read_csv(db_info_dict["local_movies_csv"])
+            movies_csv = pd.read_csv(csv_paths["local_movies_csv"])
 
             # Select only movie ids and survey ids
             movies_csv = movies_csv[["movie_id", "SurveyID"]]
@@ -1694,7 +1671,7 @@ def format_to_gbif_occurence(
 
             # Read info about the surveys
             surveys_df = pd.read_csv(
-                db_info_dict["local_surveys_csv"], parse_dates=["SurveyStartDate"]
+                csv_paths["local_surveys_csv"], parse_dates=["SurveyStartDate"]
             )
 
             # Combine the movie_id and survey information
@@ -1854,17 +1831,20 @@ def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
 
 
 def get_classifications(
+    project: Project,
+    conn: sqlite3.Connection,
     workflow_dict: dict,
     workflows_df: pd.DataFrame,
     subj_type: str,
     class_df: pd.DataFrame,
-    db_path: str,
 ):
     """
     It takes in a dictionary of workflows, a dataframe of workflows, the type of subject (frame or
     clip), a dataframe of classifications, the path to the database, and the project name. It returns a
     dataframe of classifications
 
+    :param project: the project object
+    :param conn: SQL connection object
     :param workflow_dict: a dictionary of the workflows you want to retrieve classifications for. The
         keys are the workflow names, and the values are the workflow IDs, workflow versions, and the minimum
         number of classifications per subject
@@ -1873,8 +1853,6 @@ def get_classifications(
     :type workflows_df: pd.DataFrame
     :param subj_type: "frame" or "clip"
     :param class_df: the dataframe of classifications from the database
-    :param db_path: the path to the database file
-    :param project: the name of the project on Zooniverse
     :return: A dataframe with the classifications for the specified project and workflow.
     """
 
@@ -1895,26 +1873,40 @@ def get_classifications(
     classes_df = pd.concat(classes)
 
     # Add information about the subject
-    # Create connection to db
-    conn = db_utils.create_connection(db_path)
+    # Query id and subject type from the subjects table
+    subjects_df = db_utils.get_df_from_db_table(conn, "subjects")
 
     if subj_type == "frame":
-        # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query(
-            "SELECT id, subject_type, \
-                                        https_location, filename, frame_number, movie_id FROM subjects \
-                                        WHERE subject_type=='frame'",
-            conn,
-        )
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "frame_number",
+                "movie_id",
+            ]
+        ]
 
     else:
-        # Query id and subject type from the subjects table
-        subjects_df = pd.read_sql_query(
-            "SELECT id, subject_type, \
-                                        https_location, filename, clip_start_time, movie_id FROM subjects \
-                                        WHERE subject_type=='clip'",
-            conn,
-        )
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "clip_start_time",
+                "movie_id",
+            ]
+        ]
 
     # Ensure id format matches classification's subject_id
     classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
@@ -1953,11 +1945,11 @@ def get_classifications(
 
 def process_classifications(
     project: Project,
+    conn: sqlite3.Connection,
     classifications_data,
     subject_type: str,
     agg_params: list,
     summary: bool = False,
-    db_connection=None,
 ):
     """
     It takes in a dataframe of classifications, a subject type (clip or frame), a list of
@@ -1981,6 +1973,7 @@ def process_classifications(
     Finally, we call the `aggregrate_classifications` function from the `t8_utils` module, passing
     in the dataframe returned by `get_classifications`, the subject
 
+    :param conn: SQL connection object
     :param classifications_data: the dataframe of classifications from the Zooniverse API
     :param subject_type: This is the type of subject you want to retrieve classifications for. This
            can be either "clip" or "frame"
@@ -2003,24 +1996,40 @@ def process_classifications(
         return
 
     def get_classifications(classes_df, subject_type):
-        conn = db_connection
+        # Query id and subject type from the subjects table
+        subjects_df = db_utils.get_df_from_db_table(conn, "subjects")
+
         if subject_type == "frame":
-            # Query id and subject type from the subjects table
-            subjects_df = pd.read_sql_query(
-                "SELECT id, subject_type, \
-                                                https_location, filename, frame_number, movie_id FROM subjects \
-                                                WHERE subject_type=='frame'",
-                conn,
-            )
+            # Select only frame subjects
+            subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+            # Select columns relevant for frame subjects
+            subjects_df = subjects_df[
+                [
+                    "id",
+                    "subject_type",
+                    "https_location",
+                    "filename",
+                    "frame_number",
+                    "movie_id",
+                ]
+            ]
 
         else:
-            # Query id and subject type from the subjects table
-            subjects_df = pd.read_sql_query(
-                "SELECT id, subject_type, \
-                                                https_location, filename, clip_start_time, movie_id FROM subjects \
-                                                WHERE subject_type=='clip'",
-                conn,
-            )
+            # Select only frame subjects
+            subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
+            # Select columns relevant for frame subjects
+            subjects_df = subjects_df[
+                [
+                    "id",
+                    "subject_type",
+                    "https_location",
+                    "filename",
+                    "clip_start_time",
+                    "movie_id",
+                ]
+            ]
 
         # Ensure id format matches classification's subject_id
         classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
