@@ -80,9 +80,10 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     display(fc)
     return fc
 
+
 def choose_footage(
     project: Project,
-    server_info: dict,
+    server_connection: dict,
     db_connection,
     start_path: str = ".",
     folder_type: str = "",
@@ -99,7 +100,9 @@ def choose_footage(
     """
     if project.server == "AWS":
         available_movies_df = movie_utils.retrieve_movie_info_from_server(
-            project=project, server_info=server_info, db_connection=db_connection
+            project=project,
+            server_connection=server_connection,
+            db_connection=db_connection,
         )
         movie_dict = {
             name: movie_utils.get_movie_path(f_path, project, server_connection)
@@ -123,6 +126,7 @@ def choose_footage(
         fc.title = f"Choose location of {folder_type}"
         display(fc)
         return fc
+
 
 def select_random_clips(project: Project, movie_i: str):
     """
