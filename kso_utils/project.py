@@ -235,6 +235,7 @@ class ProjectProcessor:
         self,
         sheet_df: pd.DataFrame,
         meta_name: str,
+        test: bool = False,
     ):
         return kso_widgets.update_meta(
             project=self.project,
@@ -244,6 +245,7 @@ class ProjectProcessor:
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
             csv_paths=self.csv_paths,
+            test=test,
         )
 
     def map_sites(self):
@@ -270,7 +272,7 @@ class ProjectProcessor:
         """
         return movie_utils.get_movie_path(filepath, self)
 
-    def preview_media(self):
+    def preview_media(self, test: bool = False):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
         function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
@@ -279,21 +281,39 @@ class ProjectProcessor:
         """
         movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, server_connection, server_movies_csv):
-            x = await kso_widgets.single_wait_for_change(movie_selected, "value")
-            html, movie_path = movie_utils.preview_movie(
-                project=project,
-                available_movies_df=server_movies_csv,
-                movie_i=x,
-                server_connection=server_connection,
-            )
-            display(html)
-            self.movie_selected = x
-            self.movie_path = movie_path
+        if not test:
 
-        asyncio.create_task(
+            async def f(project, server_connection, server_movies_csv):
+                x = await kso_widgets.single_wait_for_change(movie_selected, "value")
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
+            asyncio.create_task(
+                f(self.project, self.server_connection, self.server_movies_csv)
+            )
+
+        else:
+
+            def f(project, server_connection, server_movies_csv):
+                x = movie_selected.options[0]
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
             f(self.project, self.server_connection, self.server_movies_csv)
-        )
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -545,6 +565,7 @@ class ProjectProcessor:
         use_gpu: bool = False,
         pool_size: int = 4,
         is_example: bool = False,
+        test: bool = False,
     ):
         """
         > This function takes a movie name and path, and returns a list of clips from that movie
@@ -568,16 +589,45 @@ class ProjectProcessor:
             is_example=is_example,
         )
         clip_modification = kso_widgets.clip_modification_widget()
-        
-        button = widgets.Button(
-            description="Click to extract clips.",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
 
-        def on_button_clicked(b):
+        if not test:
+            button = widgets.Button(
+                description="Click to extract clips.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+
+            def on_button_clicked(b):
+                self.generated_clips = t_utils.create_clips(
+                    available_movies_df=self.server_movies_csv,
+                    movie_i=movie_name,
+                    movie_path=movie_path,
+                    clip_selection=clip_selection,
+                    project=self.project,
+                    modification_details={},
+                    gpu_available=use_gpu,
+                    pool_size=pool_size,
+                )
+                mod_clips = t_utils.create_modified_clips(
+                    self.project,
+                    self.generated_clips.clip_path,
+                    movie_name,
+                    clip_modification.checks,
+                    use_gpu,
+                    pool_size,
+                )
+                # Temporary workaround to get both clip paths
+                self.generated_clips["modif_clip_path"] = mod_clips
+
+            button.on_click(on_button_clicked)
+            display(clip_modification)
+            display(button)
+        else:
+            clip_selection.kwargs = {"clip_length": 5, "clips_range": [0, 10]}
+            clip_selection.result = {}
+            clip_selection.result["clip_start_time"] = [0]
             self.generated_clips = t_utils.create_clips(
                 available_movies_df=self.server_movies_csv,
                 movie_i=movie_name,
@@ -702,6 +752,7 @@ class ProjectProcessor:
     def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
+            zoo_info=self.zoo_info,
             db_connection=self.db_connection,
             server_connection=self.server_connection,
             agg_df=self.aggregated_zoo_classifications,
@@ -709,7 +760,7 @@ class ProjectProcessor:
             subsample_up_to=subsample_up_to,
         )
 
-    def modify_zoo_frames(self):
+    def modify_zoo_frames(self, test: bool = False):
         """
         This function takes a dataframe of frames to upload, a species of interest, a project, and a
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
@@ -717,25 +768,35 @@ class ProjectProcessor:
 
         frame_modification = kso_widgets.clip_modification_widget()
 
-        button = widgets.Button(
-            description="Click to modify frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.modified_frames = zoo_utils.modify_frames(
+        if test:
+            self.generated_frames = zoo_utils.modify_frames(
                 project=self.project,
                 frames_to_upload_df=self.generated_frames.df.reset_index(drop=True),
                 species_i=self.species_of_interest.value,
                 modification_details=frame_modification.checks,
             )
+        else:
+            button = widgets.Button(
+                description="Click to modify frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
 
-        button.on_click(on_button_clicked)
-        display(frame_modification)
-        display(button)
+            def on_button_clicked(b):
+                self.generated_frames = zoo_utils.modify_frames(
+                    project=self.project,
+                    frames_to_upload_df=self.frames_to_upload_df.df.reset_index(
+                        drop=True
+                    ),
+                    species_i=self.species_of_interest,
+                    modification_details=frame_modification.checks,
+                )
+
+            button.on_click(on_button_clicked)
+            display(frame_modification)
+            display(button)
 
     def generate_custom_frames(
         self,
@@ -949,6 +1010,7 @@ class MLProjectProcessor(ProjectProcessor):
         weights_path: str = None,
         output_path: str = None,
         classes: list = [],
+        test: bool = False,
     ):
         self.__dict__ = project_process.__dict__.copy()
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
@@ -978,9 +1040,8 @@ class MLProjectProcessor(ProjectProcessor):
 
         model_selected = t_utils.choose_model_type()
 
-        async def f():
-            x = await kso_widgets.single_wait_for_change(model_selected, "value")
-            self.model_type = x
+        if test:
+            self.model_type = 1
             self.modules.update(self.load_yolov5_modules())
             if all(["train", "detect", "val"]) in self.modules:
                 self.train, self.run, self.test = (
@@ -988,8 +1049,20 @@ class MLProjectProcessor(ProjectProcessor):
                     self.modules["detect"],
                     self.modules["val"],
                 )
+        else:
 
-        asyncio.create_task(f())
+            async def f():
+                x = await kso_widgets.single_wait_for_change(model_selected, "value")
+                self.model_type = x
+                self.modules.update(self.load_yolov5_modules())
+                if all(["train", "detect", "val"]) in self.modules:
+                    self.train, self.run, self.test = (
+                        self.modules["train"],
+                        self.modules["detect"],
+                        self.modules["val"],
+                    )
+
+            asyncio.create_task(f())
 
     def load_yolov5_modules(self):
         # Model-specific imports
@@ -1173,12 +1246,17 @@ class MLProjectProcessor(ProjectProcessor):
         )
         scp.close()
 
-    def setup_paths(self):
+    def setup_paths(self, test: bool = False):
         if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
-        self.data_path, self.hyp_path = yolo_utils.setup_paths(
-            self.output_path, self.model_type
-        )
+        if test:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                os.path.join(self.output_path, "ml-template-data"), self.model_type
+            )
+        else:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                self.output_path, self.model_type
+            )
 
     def choose_train_params(self):
         return t_utils.choose_train_params(self.model_type)

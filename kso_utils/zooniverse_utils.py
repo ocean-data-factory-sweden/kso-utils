@@ -23,6 +23,8 @@ from pathlib import Path
 from kso_utils.project_utils import Project
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
+from kso_utils.tutorials_utils import WidgetMaker
 
 # Widget imports
 from IPython.display import display
@@ -51,15 +53,15 @@ class AuthenticationError(Exception):
 def connect_zoo_project(project: Project, zoo_cred=False):
     """
     It takes a project name as input, and returns a Zooniverse project object
-    
-    zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+
+    zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
     This is used in the automatic tests in gitlab called autotests.py.
     when it is set to False, then the credentials are retrieved from the interacitve widget.
 
     :param project: the KSO project you are working
     :return: A Zooniverse project object.
     """
-    if zoo_cred==False:
+    if zoo_cred == False:
         # Save your Zooniverse user name and password.
         zoo_user, zoo_pass = zoo_credentials()
     else:
@@ -1250,11 +1252,13 @@ def upload_clips_to_zooniverse(
 def extract_frames_for_zoo(
     project: Project,
     species_of_interest: list,
+    zoo_info: dict,
     agg_df: pd.DataFrame,
     db_connection,
     server_connection,
     n_frames_subject,
     subsample_up_to,
+    test: bool = False,
 ):
     """
     > This function allows you to choose a species of interest, and then it will fetch a random
@@ -1357,6 +1361,20 @@ def extract_frames_for_zoo(
         frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
     else:
         frames_folder = "_".join(species_list) + "_frames/"
+        ## Choose the Zooniverse workflow/s with classified clips to extract the frames from ####
+        # Select the Zooniverse workflow/s of interest
+        if test:
+            workflows_out = WidgetMaker(
+                zoo_info["workflows"],
+                test_dict={
+                    "Workflow name: #0": "Development workflow",
+                    "Subject type: #0": "frame",
+                    "Minimum workflow version: #0": 1.0,
+                },
+            )
+        else:
+            workflows_out = WidgetMaker(zoo_info["workflows"])
+        display(workflows_out)
 
     # Extract the frames from the videos, store them in the temp location
     # and save the df with information about the frames in the projectprocessor
