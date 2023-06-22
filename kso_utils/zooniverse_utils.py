@@ -26,6 +26,7 @@ from kso_utils.project_utils import Project
 import kso_utils.db_utils as db_utils
 import kso_utils.tutorials_utils as t_utils
 import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
 
 # Widget imports
 from IPython.display import display
@@ -50,15 +51,15 @@ class AuthenticationError(Exception):
 def connect_zoo_project(project: Project, zoo_cred=False):
     """
     It takes a project name as input, and returns a Zooniverse project object
-    
-    zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+
+    zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
     This is used in the automatic tests in gitlab called autotests.py.
     when it is set to False, then the credentials are retrieved from the interacitve widget.
 
     :param project: the KSO project you are working
     :return: A Zooniverse project object.
     """
-    if zoo_cred==False:
+    if zoo_cred == False:
         # Save your Zooniverse user name and password.
         zoo_user, zoo_pass = zoo_credentials()
     else:
@@ -440,8 +441,9 @@ def populate_agg_annotations(
     )
 
     # Retrieve species info from db
-    species_df = db_utils.get_df_from_db_table(conn, "species")[["species_id", "label"]]
-    species_df = species_df.rename(columns={"id": "species_id"})
+    species_df = db_utils.get_df_from_db_table(conn, "species")
+    species_df.rename(columns={"id": "species_id"}, inplace=True)
+    species_df = species_df[["species_id", "label"]]
 
     # Update agg_annotations_clip table
     if subj_type == "clip":
@@ -467,7 +469,7 @@ def populate_agg_annotations(
 
         # Add annotations to the agg_annotations_clip table
         db_utils.add_to_table(
-            db_path,
+            conn,
             "agg_annotations_clip",
             [(None,) + tuple(i) for i in annotations_df.values],
             5,
@@ -1164,6 +1166,7 @@ def get_frames(
     species_names: list,
     n_frames_subject=3,
     subsample_up_to=100,
+    test: bool = False,
 ):
     # Roadblock to check if species list is empty
     if len(species_names) == 0:
@@ -1173,8 +1176,8 @@ def get_frames(
 
     # Transform species names to species ids
     species_ids = t_utils.get_species_ids(project, species_names)
-
     conn = db_utils.create_connection(project.db_path)
+    server_connection = server_utils.connect_to_server(project)
 
     if project.movie_folder is None:
         # Extract frames of interest from a folder with frames
@@ -1204,7 +1207,17 @@ def get_frames(
     else:
         ## Choose the Zooniverse workflow/s with classified clips to extract the frames from ####
         # Select the Zooniverse workflow/s of interest
-        workflows_out = WidgetMaker(zoo_info_dict["workflows"])
+        if test:
+            workflows_out = WidgetMaker(
+                zoo_info_dict["workflows"],
+                test_dict={
+                    "Workflow name: #0": "Development workflow",
+                    "Subject type: #0": "frame",
+                    "Minimum workflow version: #0": 1.0,
+                },
+            )
+        else:
+            workflows_out = WidgetMaker(zoo_info_dict["workflows"])
         display(workflows_out)
 
         # Select the agreement threshold to aggregrate the responses
@@ -1225,11 +1238,12 @@ def get_frames(
         def extract_files(chooser):
             # Get the aggregated classifications based on the specified agreement threshold
             clips_df = get_classifications(
-                workflows_out.checks,
-                zoo_info_dict["workflows"],
-                "clip",
-                zoo_info_dict["classifications"],
-                project.db_path,
+                project=project,
+                conn=conn,
+                workflow_dict=workflows_out.checks,
+                workflows_df=zoo_info_dict["workflows"],
+                subj_type="clip",
+                class_df=zoo_info_dict["classifications"],
             )
 
             agg_clips_df, raw_clips_df = aggregate_classifications(
@@ -1252,11 +1266,13 @@ def get_frames(
                 sp_agg_clips_df = sp_agg_clips_df.sample(subsample_up_to)
 
             # Populate the db with the aggregated classifications
-            populate_agg_annotations(sp_agg_clips_df, "clip", project)
+            populate_agg_annotations(sp_agg_clips_df, "clip", project, conn=conn)
 
             # Get df of frames to be extracted
             frame_df = movie_utils.get_species_frames(
                 project=project,
+                db_connection=conn,
+                server_connection=server_connection,
                 agg_clips_df=sp_agg_clips_df,
                 species_ids=species_ids,
                 n_frames_subject=n_frames_subject,
@@ -1264,6 +1280,9 @@ def get_frames(
 
             # Check the frames haven't been uploaded to Zooniverse
             frame_df = t_utils.check_frames_uploaded(project, frame_df, species_ids)
+
+            # Get max filename length for OS support
+            max_filename_length = os.pathconf("/", "PC_NAME_MAX")
 
             # Extract the frames from the videos and store them in the temp location
             if project.server == "SNIC":
@@ -1273,13 +1292,21 @@ def get_frames(
                 )
             else:
                 frames_folder = "_".join(species_names_zoo) + "_frames/"
+            if len(frames_folder) > max_filename_length:
+                frames_folder = f"{len(species_names_zoo)}_species_frames"
             chooser.df = movie_utils.extract_frames(
-                project=project, df=frame_df, frames_folder=frames_folder
+                project=project,
+                server_connection=server_connection,
+                df=frame_df,
+                frames_folder=frames_folder,
             )
 
         # Register callback function
-        df.register_callback(extract_files)
-        display(df)
+        if test:
+            extract_files(df)
+        else:
+            df.register_callback(extract_files)
+            display(df)
 
     return df
 
@@ -1477,13 +1504,14 @@ def clean_label(label_string: str):
 
 
 class WidgetMaker(widgets.VBox):
-    def __init__(self, workflows_df: pd.DataFrame):
+    def __init__(self, workflows_df: pd.DataFrame, test_dict: dict = {}):
         """
         The function creates a widget that allows the user to select which workflows to run
 
         :param workflows_df: the dataframe of workflows
         """
         self.workflows_df = workflows_df
+        self.test_dict = test_dict
         self.widget_count = widgets.BoundedIntText(
             value=0,
             min=0,
@@ -1520,7 +1548,10 @@ class WidgetMaker(widgets.VBox):
 
     @property
     def checks(self):
-        return {w.description: w.value for w in self.bool_widget_holder.children}
+        if len(self.test_dict) == 0:
+            return {w.description: w.value for w in self.bool_widget_holder.children}
+        else:
+            return self.test_dict
 
 
 # Function modify the frames

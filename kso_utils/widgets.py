@@ -80,6 +80,7 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
     display(fc)
     return fc
 
+
 def choose_footage(
     project: Project,
     server_info: dict,
@@ -123,6 +124,7 @@ def choose_footage(
         fc.title = f"Choose location of {folder_type}"
         display(fc)
         return fc
+
 
 def select_random_clips(project: Project, movie_i: str):
     """
@@ -169,7 +171,7 @@ def select_random_clips(project: Project, movie_i: str):
         n_random_clips,
         clip_length=select_clip_length(),
         n_clips=widgets.IntSlider(
-            value=3,
+            value=1,
             min=1,
             max=5,
             step=1,
@@ -1206,6 +1208,7 @@ def update_meta(
     df: pd.DataFrame,
     meta_name: str,
     csv_paths: dict,
+    test=False,
 ):
     """
     `update_meta` takes a new table, a meta name, and updates the local and server meta files
@@ -1235,9 +1238,12 @@ def update_meta(
 
     # Save changes in survey csv locally and in the server
     async def f(sheet_df, df, meta_name):
-        x = await wait_for_change(
-            confirm_button, deny_button
-        )  # <---- Pass both buttons into the function
+        if not test:
+            x = await wait_for_change(
+                confirm_button, deny_button
+            )  # <---- Pass both buttons into the function
+        else:
+            x = "Yes, details are correct"
         if (
             x == "Yes, details are correct"
         ):  # <--- use if statement to trigger different events for the two buttons
@@ -1289,7 +1295,10 @@ def update_meta(
     display(
         widgets.HBox([confirm_button, deny_button])
     )  # <----Display both buttons in an HBox
-    asyncio.create_task(f(sheet_df, df, meta_name))
+    if not test:
+        asyncio.create_task(f(sheet_df, df, meta_name))
+    else:
+        f(sheet_df=sheet_df, df=df, meta_name=meta_name)
 
 
 def open_csv(

@@ -355,12 +355,13 @@ def get_species_frames(
     """
 
     from kso_utils.zooniverse_utils import clean_label
+    from kso_utils.db_utils import get_df_from_db_table
 
     # Retrieve list of subjects
     subjects_df = get_df_from_db_table(conn=db_connection, table_name="subjects")
 
     # Select only columns of interest
-    subjects_df = subjects_df[["id", "clip_start_time", "movie_id"]]
+    subjects_df = subjects_df[["id", "clip_start_time", "movie_id", "subject_type"]]
 
     # Select only clip subjects
     subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]

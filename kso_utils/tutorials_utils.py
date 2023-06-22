@@ -1126,9 +1126,9 @@ def choose_train_params(model_type: str):
         readout_format="d",
     )
 
-    h = widgets.IntText(description="Height:")
-    w = widgets.IntText(description="Width:")
-    s = widgets.IntText(description="Image size:")
+    h = widgets.IntText(description="Height:", value=128)
+    w = widgets.IntText(description="Width:", value=128)
+    s = widgets.IntText(description="Image size:", value=128)
 
     def on_value_change(change):
         height = h.value

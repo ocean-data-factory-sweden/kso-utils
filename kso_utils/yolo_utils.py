@@ -869,7 +869,7 @@ def track_objects(
     return t_bbox
 
 
-def choose_baseline_model(download_path: str):
+def choose_baseline_model(download_path: str, test: bool = False):
     """
     It downloads the latest version of the baseline model from WANDB
     :return: The path to the baseline model.
@@ -923,6 +923,8 @@ def choose_baseline_model(download_path: str):
                 )
 
     model_widget.observe(on_change, names="value")
+    if test:
+        model_widget.value = model_dict["baseline-yolov5"]
     return model_widget
 
 
@@ -947,7 +949,7 @@ def setup_paths(output_folder: str, model_type: str):
             # Rewrite main path to images and labels
             with open(data_path, "r") as yamlfile:
                 cur_yaml = yaml.safe_load(yamlfile)
-                cur_yaml["path"] = output_folder
+                cur_yaml["path"] = str(Path(output_folder).resolve())
 
             if cur_yaml:
                 with open(data_path, "w") as yamlfile:

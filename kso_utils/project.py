@@ -187,7 +187,7 @@ class ProjectProcessor:
 
     def set_zoo_info(self, generate_export: bool = False, zoo_cred=False):
         """
-        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
         This is used in the automatic tests in gitlab called autotests.py.
         when it is set to False, then the credentials are retrieved from the interacitve widget.
 
@@ -209,11 +209,11 @@ class ProjectProcessor:
         """
         It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
         the project
-        
-        zoo_cred is an argument that can pass [username, password] to log in into zooniverse. 
+
+        zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
         This is used in the automatic tests in gitlab called autotests.py.
         when it is set to False, then the credentials are retrieved from the interacitve widget.
-        
+
         :return: The zoo_info is being returned.
         """
         if hasattr(self.project, "db_path"):
@@ -335,6 +335,7 @@ class ProjectProcessor:
         self,
         sheet_df: pd.DataFrame,
         meta_name: str,
+        test: bool = False,
     ):
         return kso_widgets.update_meta(
             project=self.project,
@@ -344,12 +345,13 @@ class ProjectProcessor:
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
             csv_paths=self.csv_paths,
+            test=test,
         )
 
     def map_sites(self):
         return kso_widgets.map_sites(project=self.project, csv_paths=self.csv_paths)
 
-    def preview_media(self):
+    def preview_media(self, test: bool = False):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
         function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
@@ -358,21 +360,39 @@ class ProjectProcessor:
         """
         movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, server_connection, server_movies_csv):
-            x = await kso_widgets.single_wait_for_change(movie_selected, "value")
-            html, movie_path = movie_utils.preview_movie(
-                project=project,
-                available_movies_df=server_movies_csv,
-                movie_i=x,
-                server_connection=server_connection,
-            )
-            display(html)
-            self.movie_selected = x
-            self.movie_path = movie_path
+        if not test:
 
-        asyncio.create_task(
+            async def f(project, server_connection, server_movies_csv):
+                x = await kso_widgets.single_wait_for_change(movie_selected, "value")
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
+            asyncio.create_task(
+                f(self.project, self.server_connection, self.server_movies_csv)
+            )
+
+        else:
+
+            def f(project, server_connection, server_movies_csv):
+                x = movie_selected.options[0]
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
             f(self.project, self.server_connection, self.server_movies_csv)
-        )
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -579,6 +599,7 @@ class ProjectProcessor:
         use_gpu: bool = False,
         pool_size: int = 4,
         is_example: bool = False,
+        test: bool = False,
     ):
         """
         > This function takes a movie name and path, and returns a list of clips from that movie
@@ -605,16 +626,45 @@ class ProjectProcessor:
             )
 
         clip_modification = kso_widgets.clip_modification_widget()
-        
-        button = widgets.Button(
-            description="Click to extract clips.",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
 
-        def on_button_clicked(b):
+        if not test:
+            button = widgets.Button(
+                description="Click to extract clips.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+
+            def on_button_clicked(b):
+                self.generated_clips = t_utils.create_clips(
+                    available_movies_df=self.server_movies_csv,
+                    movie_i=movie_name,
+                    movie_path=movie_path,
+                    clip_selection=clip_selection,
+                    project=self.project,
+                    modification_details={},
+                    gpu_available=use_gpu,
+                    pool_size=pool_size,
+                )
+                mod_clips = t_utils.create_modified_clips(
+                    self.project,
+                    self.generated_clips.clip_path,
+                    movie_name,
+                    clip_modification.checks,
+                    use_gpu,
+                    pool_size,
+                )
+                # Temporary workaround to get both clip paths
+                self.generated_clips["modif_clip_path"] = mod_clips
+
+            button.on_click(on_button_clicked)
+            display(clip_modification)
+            display(button)
+        else:
+            clip_selection.kwargs = {"clip_length": 5, "clips_range": [0, 10]}
+            clip_selection.result = {}
+            clip_selection.result["clip_start_time"] = [0]
             self.generated_clips = t_utils.create_clips(
                 available_movies_df=self.server_movies_csv,
                 movie_i=movie_name,
@@ -636,10 +686,6 @@ class ProjectProcessor:
             # Temporary workaround to get both clip paths
             self.generated_clips["modif_clip_path"] = mod_clips
 
-        button.on_click(on_button_clicked)
-        display(clip_modification)
-        display(button)
-
     def check_movies_uploaded(self, movie_name: str):
         """
         This function checks if a movie has been uploaded to Zooniverse
@@ -651,7 +697,7 @@ class ProjectProcessor:
             project=self.project, db_connection=self.db_connection, movie_i=movie_name
         )
 
-    def generate_zu_frames(self):
+    def generate_zu_frames(self, test: bool = False):
         """
         This function takes a dataframe of frames to upload, a species of interest, a project, and a
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
@@ -659,25 +705,35 @@ class ProjectProcessor:
 
         frame_modification = kso_widgets.clip_modification_widget()
 
-        button = widgets.Button(
-            description="Click to modify frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
+        if test:
             self.generated_frames = zu_utils.modify_frames(
                 project=self.project,
                 frames_to_upload_df=self.frames_to_upload_df.df.reset_index(drop=True),
                 species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
             )
+        else:
+            button = widgets.Button(
+                description="Click to modify frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
 
-        button.on_click(on_button_clicked)
-        display(frame_modification)
-        display(button)
+            def on_button_clicked(b):
+                self.generated_frames = zu_utils.modify_frames(
+                    project=self.project,
+                    frames_to_upload_df=self.frames_to_upload_df.df.reset_index(
+                        drop=True
+                    ),
+                    species_i=self.species_of_interest,
+                    modification_details=frame_modification.checks,
+                )
+
+            button.on_click(on_button_clicked)
+            display(frame_modification)
+            display(button)
 
     def generate_custom_frames(
         self,
@@ -730,7 +786,7 @@ class ProjectProcessor:
             )
 
             results = g_utils.parallel_map(
-                self.extract_custom_frames,
+                kso_widgets.extract_custom_frames,
                 movie_files,
                 args=(
                     [output_path] * len(movie_files),
@@ -770,7 +826,7 @@ class ProjectProcessor:
                 logging.error("No results.")
                 self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
-            self.generated_frames = self.modify_frames(
+            self.generated_frames = zu_utils.modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,
@@ -780,7 +836,9 @@ class ProjectProcessor:
         display(frame_modification)
         display(button)
 
-    def get_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 3):
+    def get_frames(
+        self, n_frames_subject: int = 3, subsample_up_to: int = 3, test: bool = False
+    ):
         """
         > This function allows you to choose a species of interest, and then it will fetch a random
         sample of frames from the database for that species
@@ -792,28 +850,42 @@ class ProjectProcessor:
         :type subsample_up_to: int (optional)
         """
 
-        species_list = kso_widgets.choose_species(self.project)
-
-        button = widgets.Button(
-            description="Click to fetch frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.species_of_interest = species_list.value
+        if test:
+            self.species_of_interest = db_utils.get_df_from_db_table(
+                self.db_connection, "species"
+            ).label.tolist()
             self.frames_to_upload_df = zu_utils.get_frames(
                 project=self.project,
                 zoo_info_dict=self.zoo_info,
-                species_names=species_list.value,
+                species_names=self.species_of_interest,
                 n_frames_subject=n_frames_subject,
                 subsample_up_to=subsample_up_to,
+                test=test,
             )
 
-        button.on_click(on_button_clicked)
-        display(button)
+        else:
+            species_list = kso_widgets.choose_species(self.project)
+
+            button = widgets.Button(
+                description="Click to fetch frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
+
+            def on_button_clicked(b):
+                self.species_of_interest = species_list.value
+                self.frames_to_upload_df = zu_utils.get_frames(
+                    project=self.project,
+                    zoo_info_dict=self.zoo_info,
+                    species_names=self.species_of_interest,
+                    n_frames_subject=n_frames_subject,
+                    subsample_up_to=subsample_up_to,
+                )
+
+            button.on_click(on_button_clicked)
+            display(button)
 
     def upload_zu_subjects(self, subject_type: str):
         """
@@ -842,7 +914,7 @@ class ProjectProcessor:
             species_list = []
             upload_df = zu_utils.set_zoo_frame_metadata(
                 project=self.project,
-                df=upload_data,
+                df=self.generated_frames,
                 species_list=species_list,
                 csv_paths=self.csv_paths,
             )
@@ -945,6 +1017,7 @@ class MLProjectProcessor(ProjectProcessor):
         weights_path: str = None,
         output_path: str = None,
         classes: list = [],
+        test: bool = False,
     ):
         self.__dict__ = project_process.__dict__.copy()
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
@@ -974,9 +1047,8 @@ class MLProjectProcessor(ProjectProcessor):
 
         model_selected = t_utils.choose_model_type()
 
-        async def f():
-            x = await kso_widgets.single_wait_for_change(model_selected, "value")
-            self.model_type = x
+        if test:
+            self.model_type = 1
             self.modules.update(self.load_yolov5_modules())
             if all(["train", "detect", "val"]) in self.modules:
                 self.train, self.run, self.test = (
@@ -984,8 +1056,20 @@ class MLProjectProcessor(ProjectProcessor):
                     self.modules["detect"],
                     self.modules["val"],
                 )
+        else:
 
-        asyncio.create_task(f())
+            async def f():
+                x = await kso_widgets.single_wait_for_change(model_selected, "value")
+                self.model_type = x
+                self.modules.update(self.load_yolov5_modules())
+                if all(["train", "detect", "val"]) in self.modules:
+                    self.train, self.run, self.test = (
+                        self.modules["train"],
+                        self.modules["detect"],
+                        self.modules["val"],
+                    )
+
+            asyncio.create_task(f())
 
     def load_yolov5_modules(self):
         # Model-specific imports
@@ -1170,12 +1254,17 @@ class MLProjectProcessor(ProjectProcessor):
         )
         scp.close()
 
-    def setup_paths(self):
+    def setup_paths(self, test: bool = False):
         if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
-        self.data_path, self.hyp_path = yolo_utils.setup_paths(
-            self.output_path, self.model_type
-        )
+        if test:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                os.path.join(self.output_path, "ml-template-data"), self.model_type
+            )
+        else:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                self.output_path, self.model_type
+            )
 
     def choose_train_params(self):
         return t_utils.choose_train_params(self.model_type)
@@ -1191,7 +1280,7 @@ class MLProjectProcessor(ProjectProcessor):
                 weights=weights,
                 project=self.project_name,
                 name=exp_name,
-                img_size=img_size,
+                imgsz=img_size,
                 batch_size=int(batch_size),
                 epochs=epochs,
                 workers=1,
@@ -1260,9 +1349,7 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(
-            eval_dir, wandb_log=True
-        )
+        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
         wandb.finish()
 
     def track_individuals(
