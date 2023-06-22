@@ -719,7 +719,7 @@ class ProjectProcessor:
             )
 
             results = g_utils.parallel_map(
-                self.extract_custom_frames,
+                kso_widgets.extract_custom_frames,
                 movie_files,
                 args=(
                     [output_path] * len(movie_files),
@@ -759,7 +759,7 @@ class ProjectProcessor:
                 logging.error("No results.")
                 self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
-            self.generated_frames = self.modify_frames(
+            self.generated_frames = zu_utils.modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,
