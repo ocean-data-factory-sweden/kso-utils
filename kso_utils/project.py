@@ -1249,9 +1249,7 @@ class MLProjectProcessor(ProjectProcessor):
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(
-            eval_dir, wandb_log=True
-        )
+        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
         wandb.finish()
 
     def track_individuals(
