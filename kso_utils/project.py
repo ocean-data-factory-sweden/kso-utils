@@ -1184,7 +1184,7 @@ class MLProjectProcessor(ProjectProcessor):
                 batch_size=int(batch_size),
                 epochs=epochs,
                 single_cls=False,
-                cache_images=True
+                cache_images=True,
                 upload_dataset=True,
             )
         elif self.model_type == 2:
