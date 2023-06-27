@@ -1169,9 +1169,7 @@ class MLProjectProcessor(ProjectProcessor):
     def choose_train_params(self):
         return t_utils.choose_train_params(self.model_type)
 
-    def train_yolov5(
-        self, exp_name, weights, epochs=50, batch_size=16, img_size=640
-    ):
+    def train_yolov5(self, exp_name, weights, epochs=50, batch_size=16, img_size=640):
         if self.model_type == 1:
             self.modules["train"].run(
                 entity=self.team_name,
@@ -1222,7 +1220,13 @@ class MLProjectProcessor(ProjectProcessor):
         self.modules["wandb"].finish()
 
     def detect_yolov5(
-        self, source: str, save_dir: str, conf_thres: float, artifact_dir: str, img_size: int = 640
+        self,
+        source: str,
+        save_dir: str,
+        conf_thres: float,
+        artifact_dir: str,
+        img_size: int = 640,
+        save_output: bool = True,
     ):
         self.run = self.modules["wandb"].init(
             entity=self.team_name,
@@ -1244,6 +1248,7 @@ class MLProjectProcessor(ProjectProcessor):
             project=save_dir,
             name="detect",
             half=True,
+            nosave=not save_output,
         )
 
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
