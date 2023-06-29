@@ -59,9 +59,8 @@ def process_spyfish_sites(sites_df: pd.DataFrame):
     """
 
     # Drop sintemae to avoid duplicated columns
-    sites_df = sites_df.drop(columns=['SiteName'])
+    sites_df = sites_df.drop(columns=["SiteName"])
 
-    
     # Rename relevant fields
     sites_df = sites_df.rename(
         columns={
@@ -128,18 +127,14 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Conn
         subjects["#Subject_type"] = subjects["#Subject_type"].fillna(
             subjects["subject_type"]
         )
-    
+
     if "subject_type" in subjects.columns:
         subjects["subject_type"] = subjects["subject_type"].fillna(
             subjects["#Subject_type"]
         )
-        
+
     if "Subject_type" in subjects.columns:
-        subjects = subjects.rename(
-            columns={
-                "Subject_type": "subject_type"
-            }
-        )
+        subjects = subjects.rename(columns={"Subject_type": "subject_type"})
 
     # Create columns to match schema if they don't exist
     subjects["upl_seconds"] = subjects.get("upl_seconds", np.nan)
@@ -184,7 +179,7 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Conn
 
     else:
         subjects["frame_exp_sp_id"] = np.nan
-        
+
     ##### Match site code to name from movies sql and get movie_id to save it as "movie_id"
     # Query id and filenames from the movies table
     movies_df = get_df_from_db_table(db_connection, "movies")[["id", "filename"]]
