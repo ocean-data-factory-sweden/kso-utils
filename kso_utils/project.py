@@ -81,7 +81,7 @@ class ProjectProcessor:
 
     def keys(self):
         """Print keys of ProjectProcessor object"""
-        logging.info("Stored variable names.")
+        logging.debug("Stored variable names.")
         return list(self.__dict__.keys())
 
     # Functions to initiate the project

@@ -58,6 +58,10 @@ def process_spyfish_sites(sites_df: pd.DataFrame):
     :return: A dataframe with the columns renamed.
     """
 
+    # Drop sintemae to avoid duplicated columns
+    sites_df = sites_df.drop(columns=['SiteName'])
+
+    
     # Rename relevant fields
     sites_df = sites_df.rename(
         columns={
@@ -119,13 +123,23 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Conn
         - filename, clip_start_time,clip_end_time,frame_number,subject_type,ScientificName,frame_exp_sp_id,movie_id
     """
 
-    # Merge "#Subject_type" and "Subject_type" columns to "subject_type"
-    subjects["#Subject_type"] = subjects["#Subject_type"].fillna(
-        subjects["subject_type"]
-    )
-    subjects["subject_type"] = subjects["subject_type"].fillna(
-        subjects["#Subject_type"]
-    )
+    if "#Subject_type" in subjects.columns:
+        # Merge "#Subject_type" and "Subject_type" columns to "subject_type"
+        subjects["#Subject_type"] = subjects["#Subject_type"].fillna(
+            subjects["subject_type"]
+        )
+    
+    if "subject_type" in subjects.columns:
+        subjects["subject_type"] = subjects["subject_type"].fillna(
+            subjects["#Subject_type"]
+        )
+        
+    if "Subject_type" in subjects.columns:
+        subjects = subjects.rename(
+            columns={
+                "Subject_type": "subject_type"
+            }
+        )
 
     # Create columns to match schema if they don't exist
     subjects["upl_seconds"] = subjects.get("upl_seconds", np.nan)
@@ -149,24 +163,28 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Conn
     from kso_utils.db_utils import get_df_from_db_table
 
     ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
-    # Query id and sci. names from the species table
-    species_df = get_df_from_db_table(db_connection, "species")[
-        ["id", "scientificName"]
-    ]
+    if "frame_exp_sp_id" in subjects.columns:
+        # Query id and sci. names from the species table
+        species_df = get_df_from_db_table(db_connection, "species")[
+            ["id", "scientificName"]
+        ]
 
-    # Rename columns to match subject df
-    species_df = species_df.rename(
-        columns={"id": "frame_exp_sp_id", "scientificName": "ScientificName"}
-    )
+        # Rename columns to match subject df
+        species_df = species_df.rename(
+            columns={"id": "frame_exp_sp_id", "scientificName": "ScientificName"}
+        )
 
-    # Reference the expected species on the uploaded subjects
-    subjects = pd.merge(
-        subjects.drop(columns=["frame_exp_sp_id"]),
-        species_df,
-        how="left",
-        on="ScientificName",
-    )
+        # Reference the expected species on the uploaded subjects
+        subjects = pd.merge(
+            subjects.drop(columns=["frame_exp_sp_id"]),
+            species_df,
+            how="left",
+            on="ScientificName",
+        )
 
+    else:
+        subjects["frame_exp_sp_id"] = np.nan
+        
     ##### Match site code to name from movies sql and get movie_id to save it as "movie_id"
     # Query id and filenames from the movies table
     movies_df = get_df_from_db_table(db_connection, "movies")[["id", "filename"]]
