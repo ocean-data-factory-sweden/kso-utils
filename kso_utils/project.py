@@ -84,7 +84,9 @@ class ProjectProcessor:
         logging.debug("Stored variable names.")
         return list(self.__dict__.keys())
 
+    #############
     # Functions to initiate the project
+    #############
     def connect_to_server(self):
         """
         It connects to the server and returns the server info
@@ -180,98 +182,9 @@ class ProjectProcessor:
             for i in local_dfs
         ]
 
-    def choose_workflows(self, generate_export: bool = False):
-        self.set_zoo_info(generate_export=generate_export)
-        self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
-        display(self.workflow_widget)
-
-    def set_zoo_info(self, generate_export: bool = False):
-        if self.project.Zooniverse_number is not None:
-            self.zoo_project = zu_utils.connect_zoo_project(self.project)
-        else:
-            logging.error("This project is not registered with Zooniverse.")
-            return
-        if self.zoo_info is None or self.zoo_info == {}:
-            self.zoo_info = zu_utils.retrieve_zoo_info(
-                self.project,
-                self.zoo_project,
-                zoo_info=["subjects", "workflows", "classifications"],
-                generate_export=generate_export,
-            )
-
-    def get_zoo_info(self, generate_export: bool = False):
-        """
-        It connects to the Zooniverse project, and then retrieves and populates the Zooniverse info for
-        the project
-        :return: The zoo_info is being returned.
-        """
-        if hasattr(self.project, "db_path"):
-            if hasattr(self, "workflow_widget"):
-                # If the workflow widget is used, retrieve a subset of the subjects to build the db
-                names, workflow_versions = [], []
-                for i in range(0, len(self.workflow_widget.checks), 3):
-                    names.append(list(self.workflow_widget.checks.values())[i])
-                    workflow_versions.append(
-                        list(self.workflow_widget.checks.values())[i + 2]
-                    )
-
-                self.project.zu_workflows = zu_utils.get_workflow_ids(
-                    self.zoo_info["workflows"], names
-                )
-
-                if not isinstance(self.project.zu_workflows, list):
-                    self.project.zu_workflows = literal_eval(self.project.zu_workflows)
-
-                self.zoo_info["subjects"]["workflow_id"] = self.zoo_info["subjects"][
-                    "workflow_id"
-                ].astype("Int64")
-                subjects_series = self.zoo_info["subjects"][
-                    self.zoo_info["subjects"].workflow_id.isin(
-                        self.project.zu_workflows
-                    )
-                ].copy()
-
-            else:
-                self.set_zoo_info(generate_export=generate_export)
-                subjects_series = self.zoo_info["subjects"].copy()
-
-            # Safely remove subjects table
-            db_utils.drop_table(conn=self.db_connection, table_name="subjects")
-
-            if len(subjects_series) > 0:
-                # Fill or re-fill subjects table
-                zu_utils.populate_subjects(
-                    subjects_series, project=self.project, conn=self.db_connection
-                )
-            else:
-                logging.error(
-                    "No subjects to populate database from the workflows selected."
-                )
-        else:
-            logging.info("No database path found. Subjects have not been added to db")
-
-    def get_movie_info(self):
-        """
-        This function checks what movies from the movies csv are available
-        """
-        self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
-            project=self.project,
-            db_connection=self.db_connection,
-            server_connection=self.server_connection,
-        )
-
-        logging.info("Information of available movies has been retrieved")
-
-    def load_movie(self, filepath):
-        """
-        It takes a filepath, and returns a movie path
-
-        :param filepath: The path to the movie file
-        :return: The movie path.
-        """
-        return movie_utils.get_movie_path(filepath, self)
-
+    #############
     # t1
+    #############
 
     def select_meta_range(self, meta_key: str):
         """
@@ -337,6 +250,27 @@ class ProjectProcessor:
 
     def map_sites(self):
         return kso_widgets.map_sites(project=self.project, csv_paths=self.csv_paths)
+
+    def get_movie_info(self):
+        """
+        This function checks what movies from the movies csv are available
+        """
+        self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
+            project=self.project,
+            db_connection=self.db_connection,
+            server_connection=self.server_connection,
+        )
+
+        logging.info("Information of available movies has been retrieved")
+
+    def load_movie(self, filepath):
+        """
+        It takes a filepath, and returns a movie path
+
+        :param filepath: The path to the movie file
+        :return: The movie path.
+        """
+        return movie_utils.get_movie_path(filepath, self)
 
     def preview_media(self):
         """
@@ -413,7 +347,10 @@ class ProjectProcessor:
         # TODO: code for processing sites metadata (t1_utils.check_sites_csv)
         pass
 
+    #############
     # t2
+    #############
+
     def upload_movies(self, movie_list: list):
         """
         It uploads the new movies to the SNIC server and creates new rows to be updated
@@ -560,7 +497,80 @@ class ProjectProcessor:
             folder_path, species_list=annotation_classes
         )
 
+    #############
     # t3 / t4
+    #############
+
+    def set_zoo_info(self, generate_export: bool = False):
+        """
+        This function connects to Zooniverse, saves the connection
+        to the project processor and, if there is no information in
+        the project processor from the Zooniverse project, it retrieves
+        the subjects, workflows and classifications.
+        """
+        if self.project.Zooniverse_number is not None:
+            self.zoo_project = zu_utils.connect_zoo_project(self.project)
+        else:
+            logging.error("This project is not registered with Zooniverse.")
+            return
+        if self.zoo_info is None or self.zoo_info == {}:
+            self.zoo_info = zu_utils.retrieve_zoo_info(
+                self.project,
+                self.zoo_project,
+                zoo_info=["subjects", "workflows", "classifications"],
+                generate_export=generate_export,
+            )
+
+    def get_zoo_info(self, generate_export: bool = False):
+        """
+        It retrieves and populates the Zooniverse info for the project
+        :return: The zoo_info is being returned.
+        """
+        if hasattr(self.project, "db_path"):
+            if hasattr(self, "workflow_widget"):
+                # If the workflow widget is used, retrieve a subset of the subjects to build the db
+                names, workflow_versions = [], []
+                for i in range(0, len(self.workflow_widget.checks), 3):
+                    names.append(list(self.workflow_widget.checks.values())[i])
+                    workflow_versions.append(
+                        list(self.workflow_widget.checks.values())[i + 2]
+                    )
+
+                self.project.zu_workflows = zu_utils.get_workflow_ids(
+                    self.zoo_info["workflows"], names
+                )
+
+                if not isinstance(self.project.zu_workflows, list):
+                    self.project.zu_workflows = literal_eval(self.project.zu_workflows)
+
+                self.zoo_info["subjects"]["workflow_id"] = self.zoo_info["subjects"][
+                    "workflow_id"
+                ].astype("Int64")
+                subjects_series = self.zoo_info["subjects"][
+                    self.zoo_info["subjects"].workflow_id.isin(
+                        self.project.zu_workflows
+                    )
+                ].copy()
+
+            else:
+                self.set_zoo_info(generate_export=generate_export)
+                subjects_series = self.zoo_info["subjects"].copy()
+
+            # Safely remove subjects table
+            db_utils.drop_table(conn=self.db_connection, table_name="subjects")
+
+            if len(subjects_series) > 0:
+                # Fill or re-fill subjects table
+                zu_utils.populate_subjects(
+                    subjects_series, project=self.project, conn=self.db_connection
+                )
+            else:
+                logging.error(
+                    "No subjects to populate database from the workflows selected."
+                )
+        else:
+            logging.info("No database path found. Subjects have not been added to db")
+
     def generate_zu_clips(
         self,
         movie_name,
@@ -841,7 +851,10 @@ class ProjectProcessor:
                 species_list=species_list,
             )
 
+    #############
     # t5, t6, t7
+    #############
+
     def get_team_name(self):
         """
         > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
@@ -883,21 +896,18 @@ class ProjectProcessor:
             self.species_of_interest,
         )
 
+    #############
     # t8
-    def get_classifications(
-        self,
-        workflow_dict: dict,
-        workflows_df: pd.DataFrame,
-        subj_type: str,
-        class_df: pd.DataFrame,
-    ):
-        return zu_utils.get_classifications(
-            project=self.project,
-            workflow_dict=workflow_dict,
-            workflows_df=workflows_df,
-            subj_type=subj_type,
-            class_df=class_df,
-        )
+    #############
+    def choose_workflows(self, generate_export: bool = False):
+        """
+        The function retrieves the workflows available from Zooniverse and enables
+        users to select those of interest
+        :return: A widget displaying the different workflows available.
+        """
+        self.set_zoo_info(generate_export=generate_export)
+        self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
+        display(self.workflow_widget)
 
     def process_classifications(
         self, classifications_data, subject_type, agg_params, summary
@@ -923,6 +933,25 @@ class ProjectProcessor:
             df=agg_df,
             classified_by="citizen_scientists",
             subject_type=subject_type,
+        )
+
+    #############
+    # t9
+    #############
+
+    def get_classifications(
+        self,
+        workflow_dict: dict,
+        workflows_df: pd.DataFrame,
+        subj_type: str,
+        class_df: pd.DataFrame,
+    ):
+        return zu_utils.get_classifications(
+            project=self.project,
+            workflow_dict=workflow_dict,
+            workflows_df=workflows_df,
+            subj_type=subj_type,
+            class_df=class_df,
         )
 
 

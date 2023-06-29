@@ -1097,9 +1097,9 @@ def aggregate_classifications(
 
     logging.info(
         f"{agg_class_df.shape[0]}"
-        "classifications aggregated out of"
+        " classifications aggregated out of "
         f"{df.subject_ids.nunique()}"
-        "unique subjects available"
+        " unique subjects available"
     )
 
     return agg_class_df, raw_class_df
@@ -1830,6 +1830,95 @@ def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
     ]
 
 
+def get_classifications(
+    classes_df: pd.DataFrame,
+    subject_type: str,
+    conn: sqlite3.Connection,
+):
+    """
+    This function takes in a dataframe of classifications and a subject type.
+
+    It queries the subjects table for the subject type and then merges the
+    classifications dataframe with the subjects dataframe.
+
+    It then returns the merged dataframe.
+
+    :param classes_df: the dataframe of classifications from the Zooniverse API
+    :param subject_type: This is the type of subject you want to retrieve classifications for. This
+           can be either "clip" or "frame"
+    :param conn: SQL connection object
+    """
+
+    # Query id and subject type from the subjects table
+    subjects_df = db_utils.get_df_from_db_table(conn, "subjects")
+
+    if subject_type == "frame":
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "frame_number",
+                "movie_id",
+            ]
+        ]
+
+    else:
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "clip_start_time",
+                "movie_id",
+            ]
+        ]
+
+    # Ensure id format matches classification's subject_id
+    classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
+    subjects_df["id"] = subjects_df["id"].astype("Int64")
+
+    # Add subject information based on subject_ids
+    classes_df = pd.merge(
+        classes_df,
+        subjects_df,
+        how="left",
+        left_on="subject_ids",
+        right_on="id",
+    )
+
+    if classes_df[["subject_type", "https_location"]].isna().any().any():
+        # Exclude classifications from missing subjects
+        filtered_class_df = classes_df.dropna(
+            subset=["subject_type", "https_location"], how="any"
+        ).reset_index(drop=True)
+
+        # Report on the issue
+        logging.info(
+            f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}"
+            f" classifications out of {classes_df.shape[0]}"
+            f" missing subject info. Maybe the subjects have been removed from Zooniverse?"
+        )
+
+        classes_df = filtered_class_df
+
+    logging.info(
+        f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
+    )
+
+    return classes_df
+
+
 def process_classifications(
     project: Project,
     conn: sqlite3.Connection,
@@ -1849,13 +1938,7 @@ def process_classifications(
 
     First, we check that the length of the aggregation parameters is correct for the subject type.
 
-    Then, we define a function called `get_classifications` that takes in a dataframe of
-    classifications and a subject type.
-
-    This function queries the subjects table for the subject type and then merges the
-    classifications dataframe with the subjects dataframe.
-
-    It then returns the merged dataframe.
+    Then, we call `get_classifications` to merge the classifications dataframe with the subjects dataframe.
 
     Finally, we call the `aggregrate_classifications` function from the `t8_utils` module, passing
     in the dataframe returned by `get_classifications`, the subject
@@ -1882,79 +1965,9 @@ def process_classifications(
         logging.error("Incorrect agg_params length for subject type")
         return
 
-    def get_classifications(classes_df, subject_type):
-        # Query id and subject type from the subjects table
-        subjects_df = db_utils.get_df_from_db_table(conn, "subjects")
-
-        if subject_type == "frame":
-            # Select only frame subjects
-            subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
-
-            # Select columns relevant for frame subjects
-            subjects_df = subjects_df[
-                [
-                    "id",
-                    "subject_type",
-                    "https_location",
-                    "filename",
-                    "frame_number",
-                    "movie_id",
-                ]
-            ]
-
-        else:
-            # Select only frame subjects
-            subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
-
-            # Select columns relevant for frame subjects
-            subjects_df = subjects_df[
-                [
-                    "id",
-                    "subject_type",
-                    "https_location",
-                    "filename",
-                    "clip_start_time",
-                    "movie_id",
-                ]
-            ]
-
-        # Ensure id format matches classification's subject_id
-        classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
-        subjects_df["id"] = subjects_df["id"].astype("Int64")
-
-        # Add subject information based on subject_ids
-        classes_df = pd.merge(
-            classes_df,
-            subjects_df,
-            how="left",
-            left_on="subject_ids",
-            right_on="id",
-        )
-
-        if classes_df[["subject_type", "https_location"]].isna().any().any():
-            # Exclude classifications from missing subjects
-            filtered_class_df = classes_df.dropna(
-                subset=["subject_type", "https_location"], how="any"
-            ).reset_index(drop=True)
-
-            # Report on the issue
-            logging.info(
-                f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}"
-                f" classifications out of {classes_df.shape[0]}"
-                f" missing subject info. Maybe the subjects have been removed from Zooniverse?"
-            )
-
-            classes_df = filtered_class_df
-
-        logging.info(
-            f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
-        )
-
-        return classes_df
-
     agg_class_df, raw_class_df = aggregate_classifications(
         project,
-        get_classifications(classifications_data, subject_type),
+        get_classifications(classifications_data, subject_type, conn),
         subject_type,
         agg_params,
     )
