@@ -333,122 +333,6 @@ def check_movie_uploaded(
         logging.info(f"{movie_i} has not been uploaded to Zooniverse yet")
 
 
-def get_species_frames(
-    project: Project,
-    db_connection: sqlite3.Connection,
-    server_connection: dict,
-    agg_clips_df: pd.DataFrame,
-    species_ids: list,
-    n_frames_subject: int,
-):
-    """
-    # Function to identify up to n number of frames per classified clip
-    # that contains species of interest after the first time seen
-
-    # Find classified clips that contain the species of interest
-    :param project: the project object
-    :param db_connection: SQL connection object
-    :param server_connection: a dictionary with the connection to the server
-    :param agg_clips_df: a df of the aggregated clips
-    :param species_ids: a list with ids of the species of interest,
-    :param n_frames_subject: an integer with the number of frames per subject
-    """
-
-    from kso_utils.zooniverse_utils import clean_label
-
-    # Retrieve list of subjects
-    subjects_df = get_df_from_db_table(conn=db_connection, table_name="subjects")
-
-    # Select only columns of interest
-    subjects_df = subjects_df[["id", "clip_start_time", "movie_id"]]
-
-    # Select only clip subjects
-    subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
-
-    agg_clips_df["subject_ids"] = pd.to_numeric(
-        agg_clips_df["subject_ids"], errors="coerce"
-    ).astype("Int64")
-    subjects_df["id"] = pd.to_numeric(subjects_df["id"], errors="coerce").astype(
-        "Int64"
-    )
-
-    # Combine the aggregated clips and subjects dataframes
-    frames_df = pd.merge(
-        agg_clips_df, subjects_df, how="left", left_on="subject_ids", right_on="id"
-    ).drop(columns=["id"])
-
-    # Identify the second of the original movie when the species first appears
-    frames_df["first_seen_movie"] = (
-        frames_df["clip_start_time"] + frames_df["first_seen"]
-    )
-
-    if project.server in ["SNIC", "TEMPLATE"]:
-        movies_df = retrieve_movie_info_from_server(
-            project=project,
-            server_connection=server_connection,
-            db_connection=db_connection,
-        )
-        # Include movies' filepath and fps to the df
-        frames_df = frames_df.merge(movies_df, left_on="movie_id", right_on="movie_id")
-
-    if len(frames_df[~frames_df.exists]) > 0:
-        logging.error(
-            f"There are {len(frames_df) - frames_df.exists.sum()} out of {len(frames_df)} frames with a missing movie"
-        )
-
-    # Select only frames from movies that can be found
-    frames_df = frames_df[frames_df.exists]
-    if len(frames_df) == 0:
-        logging.error(
-            "There are no frames for this species that meet your aggregation criteria."
-            "Please adjust your aggregation criteria / species choice and try again."
-        )
-
-    ##### Add species_id info ####
-    # Retrieve species info
-    species_df = get_df_from_db_table(conn=db_connection, table_name="species")
-
-    # Select only columns of interest
-    species_df = species_df[["id", "label", "scientificName"]]
-
-    # Rename cols to match frames df cols
-    species_df = species_df.rename(columns={"id": "species_id"})
-
-    # Match format of species name to Zooniverse labels
-    species_df["label"] = species_df["label"].apply(clean_label)
-
-    # Combine the aggregated clips and subjects dataframes
-    frames_df = pd.merge(frames_df, species_df, how="left", on="label")
-
-    # Identify the ordinal number of the frames expected to be extracted
-    if len(frames_df) == 0:
-        raise ValueError("No frames. Workflow stopped.")
-
-    frames_df["frame_number"] = frames_df[["first_seen_movie", "fps"]].apply(
-        lambda x: [
-            int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
-        ],
-        1,
-    )
-
-    # Reshape df to have each frame as rows
-    lst_col = "frame_number"
-
-    frames_df = pd.DataFrame(
-        {
-            col: np.repeat(frames_df[col].values, frames_df[lst_col].str.len())
-            for col in frames_df.columns.difference([lst_col])
-        }
-    ).assign(**{lst_col: np.concatenate(frames_df[lst_col].values)})[
-        frames_df.columns.tolist()
-    ]
-
-    # Drop unnecessary columns
-    frames_df.drop(["subject_ids"], inplace=True, axis=1)
-
-    return frames_df
-
-
 # Function to extract selected frames from videos
 def extract_frames(
     project: Project,
@@ -954,3 +838,5 @@ def check_movies_meta(
                 orig_csv="server_movies_csv",
                 updated_csv="local_movies_csv",
             )
+
+   

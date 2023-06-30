@@ -97,7 +97,7 @@ def auth_session(username: str, password: str, project_n: int):
 # Function to retrieve information from Zooniverse
 def retrieve_zoo_info(
     project: Project,
-    zoo_project: zooProject,
+    zoo_project,
     zoo_info: str,
     generate_export: bool = False,
 ):
@@ -112,13 +112,6 @@ def retrieve_zoo_info(
     :param generate_export: boolean determining whether to generate a new export and wait for it to be ready or to just download the latest export
     :return: A dictionary of dataframes.
     """
-
-    if hasattr(project, "info_df"):
-        if project.info_df is not None:
-            logging.info(
-                "Zooniverse info retrieved from cache, to force retrieval set project.info_df = None"
-            )
-            return project.info_df
 
     # Create an empty dictionary to host the dfs of interest
     info_df = {}
@@ -152,7 +145,7 @@ def retrieve_zoo_info(
                 return
         except:
             logging.info(
-                "No connection with Zooniverse, retrieve template info from google drive."
+                "No connection with Zooniverse, retrieving template info from google drive."
             )
             if info_n == "classifications":
                 url = "https://drive.google.com/file/d/1DvJ2nOrG32MR2D7faAJZXMNbEm_ra3rb/view?usp=sharing"
@@ -1146,134 +1139,7 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
         "label"
     ].transform("nunique")
 
-    return agg_class_df
-
-
-# Function to the provide drop-down options to select the frames to be uploaded
-def get_frames(
-    project: Project,
-    zoo_info_dict: dict,
-    species_names: list,
-    n_frames_subject=3,
-    subsample_up_to=100,
-):
-    # Roadblock to check if species list is empty
-    if len(species_names) == 0:
-        raise ValueError(
-            "No species were selected. Please select at least one species before continuing."
-        )
-
-    # Transform species names to species ids
-    species_ids = t_utils.get_species_ids(project, species_names)
-
-    conn = db_utils.create_connection(project.db_path)
-
-    if project.movie_folder is None:
-        # Extract frames of interest from a folder with frames
-        if project.server == "SNIC":
-            # Specify volume allocated by SNIC
-            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-            df = FileChooser(str(Path(snic_path, "tmp_dir")))
-        else:
-            df = FileChooser(".")
-        df.title = "<b>Select frame folder location</b>"
-
-        # Callback function
-        def build_df(chooser):
-            frame_files = os.listdir(chooser.selected)
-            frame_paths = [os.path.join(chooser.selected, i) for i in frame_files]
-            chooser.df = pd.DataFrame(frame_paths, columns=["frame_path"])
-
-            if isinstance(species_ids, list):
-                chooser.df["species_id"] = str(species_ids)
-            else:
-                chooser.df["species_id"] = species_ids
-
-        # Register callback function
-        df.register_callback(build_df)
-        display(df)
-
-    else:
-        ## Choose the Zooniverse workflow/s with classified clips to extract the frames from ####
-        # Select the Zooniverse workflow/s of interest
-        workflows_out = WidgetMaker(zoo_info_dict["workflows"])
-        display(workflows_out)
-
-        # Select the agreement threshold to aggregrate the responses
-        from kso_utils.widgets import choose_agg_parameters
-
-        agg_params = choose_agg_parameters("clip")
-
-        # Select the temp location to store frames before uploading them to Zooniverse
-        if project.server == "SNIC":
-            # Specify volume allocated by SNIC
-            snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-            df = FileChooser(str(Path(snic_path, "tmp_dir")))
-        else:
-            df = FileChooser(".")
-        df.title = "<b>Choose location to store frames</b>"
-
-        # Callback function
-        def extract_files(chooser):
-            # Get the aggregated classifications based on the specified agreement threshold
-            clips_df = get_classifications(
-                workflows_out.checks,
-                zoo_info_dict["workflows"],
-                "clip",
-                zoo_info_dict["classifications"],
-                project.db_path,
-            )
-
-            agg_clips_df, raw_clips_df = aggregate_classifications(
-                project, clips_df, "clip", agg_params=agg_params
-            )
-
-            # Match format of species name to Zooniverse labels
-            species_names_zoo = [
-                clean_label(species_name) for species_name in species_names
-            ]
-
-            # Select only aggregated classifications of species of interest:
-            sp_agg_clips_df = agg_clips_df[
-                agg_clips_df["label"].isin(species_names_zoo)
-            ]
-
-            # Subsample up to desired sample
-            if sp_agg_clips_df.shape[0] >= subsample_up_to:
-                logging.info("Subsampling up to " + str(subsample_up_to))
-                sp_agg_clips_df = sp_agg_clips_df.sample(subsample_up_to)
-
-            # Populate the db with the aggregated classifications
-            populate_agg_annotations(sp_agg_clips_df, "clip", project)
-
-            # Get df of frames to be extracted
-            frame_df = movie_utils.get_species_frames(
-                project=project,
-                agg_clips_df=sp_agg_clips_df,
-                species_ids=species_ids,
-                n_frames_subject=n_frames_subject,
-            )
-
-            # Check the frames haven't been uploaded to Zooniverse
-            frame_df = t_utils.check_frames_uploaded(project, frame_df, species_ids)
-
-            # Extract the frames from the videos and store them in the temp location
-            if project.server == "SNIC":
-                folder_name = chooser.selected
-                frames_folder = Path(
-                    folder_name, "_".join(species_names_zoo) + "_frames/"
-                )
-            else:
-                frames_folder = "_".join(species_names_zoo) + "_frames/"
-            chooser.df = movie_utils.extract_frames(
-                project=project, df=frame_df, frames_folder=frames_folder
-            )
-
-        # Register callback function
-        df.register_callback(extract_files)
-        display(df)
-
-    return df
+    return agg_class_df    
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
@@ -1475,11 +1341,15 @@ class WidgetMaker(widgets.VBox):
 
         :param workflows_df: the dataframe of workflows
         """
+        
+        # Estimate the maximum number of workflows available
+        max_workflows = workflows_df.display_name.nunique()
+        
         self.workflows_df = workflows_df
         self.widget_count = widgets.BoundedIntText(
             value=0,
             min=0,
-            max=100,
+            max=max_workflows,
             description="Number of workflows:",
             display="flex",
             flex_flow="column",
@@ -1630,71 +1500,14 @@ def format_to_gbif_occurence(
 
     # If classifications have been created by citizen scientists
     if classified_by == "citizen_scientists":
-        #### Retrieve subject information #####
-        # Create connection to db
-        conn = db_utils.create_connection(project.db_path)
-
-        # Add annotations to db
-        populate_agg_annotations(df, subject_type, project)
-
-        # Retrieve list of subjects
-        subjects_df = pd.read_sql_query(
-            "SELECT id, clip_start_time, frame_number, movie_id FROM subjects",
-            conn,
-        )
-
-        # Ensure subject_ids format is int
-        df["subject_ids"] = df["subject_ids"].astype(int)
-        subjects_df["id"] = subjects_df["id"].astype(int)
-
         # Combine the aggregated clips and subjects dataframes
-        comb_df = pd.merge(
-            df, subjects_df, how="left", left_on="subject_ids", right_on="id"
-        ).drop(columns=["id"])
-
-        #### Retrieve movie and site information #####
-        # Query info about the movie of interest
-        movies_df = pd.read_sql_query("SELECT * FROM movies", conn)
-
-        # Add survey information as part of the movie info if spyfish
-        if "local_surveys_csv" in csv_paths.keys():
-            # Read info about the movies
-            movies_csv = pd.read_csv(csv_paths["local_movies_csv"])
-
-            # Select only movie ids and survey ids
-            movies_csv = movies_csv[["movie_id", "SurveyID"]]
-
-            # Combine the movie_id and survey information
-            movies_df = pd.merge(
-                movies_df, movies_csv, how="left", left_on="id", right_on="movie_id"
-            ).drop(columns=["movie_id"])
-
-            # Read info about the surveys
-            surveys_df = pd.read_csv(
-                csv_paths["local_surveys_csv"], parse_dates=["SurveyStartDate"]
-            )
-
-            # Combine the movie_id and survey information
-            movies_df = pd.merge(
-                movies_df,
-                surveys_df,
-                how="left",
-                left_on="SurveyID",
-                right_on="SurveyID",
-            )
-
-        # Combine the aggregated clips and subjects dataframes
-        comb_df = pd.merge(
-            comb_df, movies_df, how="left", left_on="movie_id", right_on="id"
-        ).drop(columns=["id"])
-
-        # Query info about the sites of interest
-        sites_df = pd.read_sql_query("SELECT * FROM sites", conn)
-
-        # Combine the aggregated classifications and site information
-        comb_df = pd.merge(
-            comb_df, sites_df, how="left", left_on="site_id", right_on="id"
-        ).drop(columns=["id"])
+        comb_df = add_db_info_to_df(project, df, "subjects")
+        
+        # Combine the aggregated clips and movies dataframes
+        comb_df = add_db_info_to_df(project, comb_df, "movies")
+        
+        # Combine the aggregated clips and sites dataframes
+        comb_df = add_db_info_to_df(project, comb_df, "sites")
 
         #### Retrieve species/labels information #####
         # Create a df with unique workflow ids and versions of interest
@@ -1976,3 +1789,78 @@ def process_classifications(
             agg_class_df.groupby("label")["subject_ids"].agg("count").to_frame()
         )
     return agg_class_df, raw_class_df
+
+
+# Function to gather information of frames already uploaded to Zooniverse
+def check_frames_uploaded(
+    project: Project,
+    frames_df: pd.DataFrame,
+):
+    from kso_utils.db_utils import create_connection
+
+    conn = create_connection(project.db_path)
+    # create a list of the species about to upload (scientificName)
+    list_species = frames_df["scientificName"].unique()
+
+    if project.server == "SNIC":
+        # Get info of frames of the species of interest already uploaded
+        if len(list_species) <= 1:
+            uploaded_frames_df = pd.read_sql_query(
+                f"SELECT movie_id, frame_number, \
+            frame_exp_sp_id FROM subjects WHERE scientificName=='{scientificName[0]}' AND subject_type='frame'",
+                conn,
+            )
+
+        else:
+            uploaded_frames_df = pd.read_sql_query(
+                f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
+            {tuple(scientificName)} AND subject_type='frame'",
+                conn,
+            )
+
+        # Filter out frames that have already been uploaded
+        if (
+            len(uploaded_frames_df) > 0
+            and not uploaded_frames_df["frame_number"].isnull().any()
+        ):
+            logging.info(
+                "There are some frames already uploaded in Zooniverse for the species selected. \
+                Checking if those are the frames you are trying to upload"
+            )
+            # Ensure that frame_number is an integer
+            uploaded_frames_df["frame_number"] = uploaded_frames_df[
+                "frame_number"
+            ].astype(int)
+            frames_df["frame_number"] = frames_df["frame_number"].astype(int)
+            merge_df = (
+                pd.merge(
+                    frames_df,
+                    uploaded_frames_df,
+                    left_on=["movie_id", "frame_number"],
+                    right_on=["movie_id", "frame_number"],
+                    how="left",
+                    indicator=True,
+                )["_merge"]
+                == "both"
+            )
+
+            # Exclude frames that have already been uploaded
+            # trunk-ignore(flake8/E712)
+            frames_df = frames_df[merge_df == False]
+            if len(frames_df) == 0:
+                logging.error(
+                    "All of the frames you have selected are already uploaded."
+                )
+            else:
+                logging.info(
+                    "There are",
+                    len(frames_df),
+                    "frames with the species of interest not uploaded to Zooniverse yet.",
+                )
+
+        else:
+            logging.info(
+                "There are no frames uploaded in Zooniverse for the species selected."
+            )
+
+    return frames_df

@@ -253,7 +253,7 @@ def spyfish_subject_metadata(df: pd.DataFrame, csv_paths: dict):
     to be uploaded to Zooniverse
 
     :param df: the dataframe of all the detections
-    :param csv_paths: the project object
+    :param csv_paths: paths to the csv from the project object
     :return: A dataframe with the columns of interest for uploading to Zooniverse.
     """
 
@@ -311,3 +311,39 @@ def spyfish_subject_metadata(df: pd.DataFrame, csv_paths: dict):
     ].reset_index(drop=True)
 
     return upload_to_zoo
+
+
+def add_spyfish_survey_info(movies_df: pd.DataFrame, csv_paths: dict):
+    """
+    It takes a dataframe of movies and returns it with the survey_specific info
+
+    :param df: the dataframe of all the detections
+    :param csv_paths: paths to the csv from the project object
+    :return: A dataframe with the columns of interest for uploading to Zooniverse.
+    """
+    # Read info about the movies
+    movies_csv = pd.read_csv(csv_paths["local_movies_csv"])
+
+    # Select only movie ids and survey ids
+    movies_csv = movies_csv[["movie_id", "SurveyID"]]
+
+    # Combine the movie_id and survey information
+    movies_df = pd.merge(
+        movies_df, movies_csv, how="left", left_on="id", right_on="movie_id"
+    ).drop(columns=["movie_id"])
+
+    # Read info about the surveys
+    surveys_df = pd.read_csv(
+        csv_paths["local_surveys_csv"], parse_dates=["SurveyStartDate"]
+    )
+
+    # Combine the movie_id and survey information
+    movies_df = pd.merge(
+        movies_df,
+        surveys_df,
+        how="left",
+        left_on="SurveyID",
+        right_on="SurveyID",
+    )
+
+    return movies_df

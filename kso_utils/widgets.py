@@ -252,20 +252,18 @@ def select_clip_n_len(project: Project, movie_i: str):
     return clip_length_number
 
 
-def choose_species(project: Project):
+def choose_species(
+    df:pd.DataFrame
+):
     """
     This function generates a widget to select the species of interest
-    :param project: the project object
+    :param df: a df of classifications swith the species of interest in the column "label"
 
-    """
-    # Create connection to db
-    conn = create_connection(project.db_path)
-
+    """    
     # Get a list of the species available
-    species_list = pd.read_sql_query("SELECT label from species", conn)[
-        "label"
-    ].tolist()
-
+    species_list = df.label.unique()
+        
+        
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
         raise ValueError(
@@ -374,7 +372,7 @@ def choose_project(
     return choose_project
 
 
-def select_retrieve_info():
+def request_latest_zoo_info():
     """
     Display a widget that allows to select whether to retrieve the last available information,
     or to request the latest information.
