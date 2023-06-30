@@ -191,14 +191,14 @@ def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
     return df
 
 
-def check_table_name(conn: sqlite3.Connection, table_name:str):
+def check_table_name(conn: sqlite3.Connection, table_name: str):
     """
     > This function checks if a table name exists in the sql db
 
     :param conn: SQL connection object
     :param table_name: a string of the name of the table of interest
     """
-    
+
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = cursor.fetchall()
@@ -207,9 +207,11 @@ def check_table_name(conn: sqlite3.Connection, table_name:str):
     if table_name in table_names:
         pass
     else:
-        logging.error(f"The table_name specified ({table_name}) doesn't exist in the sql database")
+        logging.error(
+            f"The table_name specified ({table_name}) doesn't exist in the sql database"
+        )
 
-        
+
 def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     """
     > This function returns the "column" names of the sql table of interest
@@ -221,7 +223,7 @@ def get_column_names_db(conn: sqlite3.Connection, table_i: str):
 
     # Check if the table name exists in the sql db
     check_table_name(conn, table_i)
-    
+
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
 
@@ -410,7 +412,7 @@ def check_species_meta(
 
     logging.info("The species dataframe is complete")
 
-    
+
 def add_db_info_to_df(
     project: Project,
     df: pd.DataFrame,
@@ -418,7 +420,7 @@ def add_db_info_to_df(
     cols_interest: str = "*",
 ):
     """
-    > This function retrieves information from a sql table and adds it to 
+    > This function retrieves information from a sql table and adds it to
     the df
 
     :param project: The project object
@@ -430,52 +432,52 @@ def add_db_info_to_df(
     # Check if the table name exists in the sql db
     check_table_name(project.db_connection, table_name)
 
-    # Retrieve the sql as a df 
+    # Retrieve the sql as a df
     query = f"SELECT {cols_interest} FROM {table_name}"
     sql_df = pd.read_sql_query(query, project.db_connection)
-  
+
     # Merge movies table
     if table_name == "movies":
         # Add survey information as part of the movie info if spyfish
         if "local_surveys_csv" in project.csv_paths.keys():
             sql_df = add_spyfish_survey_info(sql_df, project.csv_paths)
-        
+
         # Combine the original and sqldf dfs
         comb_df = pd.merge(
             df, sql_df, how="left", left_on="movie_id", right_on="id"
         ).drop(columns=["id"])
-        
+
     # Merge subjects table
     elif table_name == "subjects":
         # Ensure subject_ids format is int
         df["subject_ids"] = df["subject_ids"].astype(int)
-        sql_df["id"] = sql_df["id"].astype(int)        
-        
+        sql_df["id"] = sql_df["id"].astype(int)
+
         # Combine the original and sqldf dfs
         comb_df = pd.merge(
             df, sql_df, how="left", left_on="subject_ids", right_on="id"
-        ).drop(columns=["id"])        
-    
+        ).drop(columns=["id"])
+
     # Merge sites table
-    elif table_name == "sites":        
+    elif table_name == "sites":
         # Combine the original and sqldf dfs
         comb_df = pd.merge(
             df, sql_df, how="left", left_on="site_id", right_on="id"
         ).drop(columns=["id"])
-        
+
     # Merge species table
-    elif table_name == "species":        
+    elif table_name == "species":
         from kso_utils.zooniverse_utils import clean_label
+
         # Match format of species name to Zooniverse labels
         sql_df["label"] = sql_df["label"].apply(clean_label)
-        
+
         # Combine the original and sqldf dfs
-        comb_df = pd.merge(
-            df, sql_df, how="left", on="label"
-        ).drop(columns=["id"])
-        
+        comb_df = pd.merge(df, sql_df, how="left", on="label").drop(columns=["id"])
+
     else:
-        logging.error(f"The table_name specified ({table_name}) doesn't have a merging option")
-        
+        logging.error(
+            f"The table_name specified ({table_name}) doesn't have a merging option"
+        )
+
     return comb_df
-       

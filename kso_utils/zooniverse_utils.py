@@ -1139,7 +1139,7 @@ def aggregate_labels(raw_class_df: pd.DataFrame, agg_users: float, min_users: in
         "label"
     ].transform("nunique")
 
-    return agg_class_df    
+    return agg_class_df
 
 
 # Function to set the metadata of the frames to be uploaded to Zooniverse
@@ -1341,10 +1341,10 @@ class WidgetMaker(widgets.VBox):
 
         :param workflows_df: the dataframe of workflows
         """
-        
+
         # Estimate the maximum number of workflows available
         max_workflows = workflows_df.display_name.nunique()
-        
+
         self.workflows_df = workflows_df
         self.widget_count = widgets.BoundedIntText(
             value=0,
@@ -1502,10 +1502,10 @@ def format_to_gbif_occurence(
     if classified_by == "citizen_scientists":
         # Combine the aggregated clips and subjects dataframes
         comb_df = add_db_info_to_df(project, df, "subjects")
-        
+
         # Combine the aggregated clips and movies dataframes
         comb_df = add_db_info_to_df(project, comb_df, "movies")
-        
+
         # Combine the aggregated clips and sites dataframes
         comb_df = add_db_info_to_df(project, comb_df, "sites")
 

@@ -838,5 +838,3 @@ def check_movies_meta(
                 orig_csv="server_movies_csv",
                 updated_csv="local_movies_csv",
             )
-
-   

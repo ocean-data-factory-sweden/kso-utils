@@ -505,21 +505,21 @@ class ProjectProcessor:
         """
         This function connects to Zooniverse, saves the connection
         to the project processor and retrieves
-        the subjects, workflows and classifications. 
+        the subjects, workflows and classifications.
         If the project is template, retrieves the info from the Gdrive.
         """
         # Connect to Zooniverse if project is not template
-        if self.project.Project_name=='Template project':
+        if self.project.Project_name == "Template project":
             self.zoo_project = {}
-            
+
         else:
             if self.project.Zooniverse_number is not None:
                 # connect to Zooniverse
                 self.zoo_project = zoo_utils.connect_zoo_project(self.project)
             else:
                 logging.error("This project is not registered with Zooniverse.")
-                return  
-                                
+                return
+
         # Retrieve the Zooniverse information
         self.zoo_info = zoo_utils.retrieve_zoo_info(
             self.project,
@@ -527,7 +527,6 @@ class ProjectProcessor:
             zoo_info=["subjects", "workflows", "classifications"],
             generate_export=generate_export,
         )
-            
 
     def choose_workflows(self):
         """
@@ -549,7 +548,7 @@ class ProjectProcessor:
             agg_params=agg_params,
             summary=summary,
         )
-    
+
     def get_zoo_info(self):
         """
         It retrieves and populates the Zooniverse info for the project
@@ -558,7 +557,7 @@ class ProjectProcessor:
         # Check there is a path to the db
         if not hasattr(self.project, "db_path"):
             logging.info("No database path found. Subjects have not been added to db")
-        
+
         else:
             if hasattr(self, "workflow_widget"):
                 # If the workflow widget is used, retrieve a subset of the subjects to build the db
@@ -601,7 +600,6 @@ class ProjectProcessor:
                 logging.error(
                     "No subjects to populate database from the workflows selected."
                 )
-        
 
     def generate_zu_clips(
         self,
@@ -694,71 +692,70 @@ class ProjectProcessor:
         :type subsample_up_to: int (optional)
         """
 
-        species_list=self.species_of_interest.value
-        
+        species_list = self.species_of_interest.value
+
         # Roadblock to check if species list is empty
         if len(species_list) == 0:
             raise ValueError(
                 "No species were selected. Please select at least one species before continuing."
-            )         
+            )
 
         # Select only aggregated classifications of species of interest
-        sp_agg_df = self.agg_df[
-            self.agg_df["label"].isin(species_list)
-        ]
+        sp_agg_df = self.agg_df[self.agg_df["label"].isin(species_list)]
 
         # Subsample up to n subjects per label
         if sp_agg_df["label"].value_counts().max() > subsample_up_to:
-            logging.info(f"Subsampling up to {subsample_up_to} subjects of the species selected")
-            sp_agg_df = sp_agg_df.groupby('label').sample(subsample_up_to)  
-            
+            logging.info(
+                f"Subsampling up to {subsample_up_to} subjects of the species selected"
+            )
+            sp_agg_df = sp_agg_df.groupby("label").sample(subsample_up_to)
+
         # Combine the aggregated clips and subjects dataframes
         comb_df = db_utils.add_db_info_to_df(
-            project=self, 
-            df=sp_agg_df, 
+            project=self,
+            df=sp_agg_df,
             table_name="subjects",
-            cols_interest='id, clip_start_time, movie_id'
-        )        
-        
+            cols_interest="id, clip_start_time, movie_id",
+        )
+
         # Identify the second of the original movie when the species first appears
-        comb_df["first_seen_movie"] = (
-            comb_df["clip_start_time"] + comb_df["first_seen"]
-        )        
-        
-        # Add information of the original movies associated with the subjects 
-        #(e.g. the movie that was clipped from)
+        comb_df["first_seen_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
+
+        # Add information of the original movies associated with the subjects
+        # (e.g. the movie that was clipped from)
         movies_df = movie_utils.retrieve_movie_info_from_server(
             project=self.project,
             server_connection=self.server_connection,
             db_connection=self.db_connection,
         )
-        
+
         # Include movies' filepath and fps to the df
         comb_df = comb_df.merge(movies_df, on="movie_id")
-        
+
         # Prevent trying to extract frames from movies that are not accessible
         if len(comb_df[~comb_df.exists]) > 0:
             logging.error(
                 f"There are {len(comb_df) - comb_df.exists.sum()} out of"
                 "{len(frames_df)} subjects with original movies that are not accessible"
-            )                     
-  
+            )
+
         # Combine the aggregated clips and species dataframes
         comb_df = db_utils.add_db_info_to_df(
-            project=self, 
-            df=comb_df, 
+            project=self,
+            df=comb_df,
             table_name="species",
-            cols_interest='id, label, scientificName'
-        )        
-        
-        # Create a list with the frames to be extracted and save into frame_number column        
+            cols_interest="id, label, scientificName",
+        )
+
+        # Create a list with the frames to be extracted and save into frame_number column
         comb_df["frame_number"] = comb_df[["first_seen_movie", "fps"]].apply(
             lambda x: [
-                int((x["first_seen_movie"] + j) * x["fps"]) for j in range(n_frames_subject)
+                int((x["first_seen_movie"] + j) * x["fps"])
+                for j in range(n_frames_subject)
             ],
             1,
         )
-        
+
         # Reshape df to have each frame as rows
         lst_col = "frame_number"
 
@@ -781,23 +778,19 @@ class ProjectProcessor:
         if self.project.server == "SNIC":
             snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             folder_name = f"{snic_path}/tmp_dir/frames/"
-            frames_folder = Path(
-                folder_name, "_".join(species_list) + "_frames/"
-            )
+            frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
         else:
             frames_folder = "_".join(species_list) + "_frames/"
-            
+
         # Extract the frames from the videos, store them in the temp location
         # and save the df with information about the frames in the projectprocessor
         self.generated_frames = movie_utils.extract_frames(
-            project=self.project, 
+            project=self.project,
             server_connection=self.server_connection,
-            df=comb_df, 
-            frames_folder=frames_folder
+            df=comb_df,
+            frames_folder=frames_folder,
         )
 
-
-        
     def modify_zoo_frames(self):
         """
         This function takes a dataframe of frames to upload, a species of interest, a project, and a
@@ -926,7 +919,6 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(frame_modification)
         display(button)
-    
 
     def upload_zu_subjects(self, subject_type: str):
         """
@@ -964,7 +956,7 @@ class ProjectProcessor:
                 upload_to_zoo=upload_df,
                 species_list=self.species_of_interest.value,
             )
-            
+
         else:
             logging.error("Select the right type of subject (e.g. frame or clip)")
 
@@ -1015,7 +1007,7 @@ class ProjectProcessor:
 
     #############
     # t8
-    #############   
+    #############
     def process_annotations(self):
         # code for prepare dataset for machine learning
         pass

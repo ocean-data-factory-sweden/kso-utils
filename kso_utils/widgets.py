@@ -252,18 +252,15 @@ def select_clip_n_len(project: Project, movie_i: str):
     return clip_length_number
 
 
-def choose_species(
-    df:pd.DataFrame
-):
+def choose_species(df: pd.DataFrame):
     """
     This function generates a widget to select the species of interest
     :param df: a df of classifications swith the species of interest in the column "label"
 
-    """    
+    """
     # Get a list of the species available
     species_list = df.label.unique()
-        
-        
+
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
         raise ValueError(
