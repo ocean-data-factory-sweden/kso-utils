@@ -191,52 +191,25 @@ def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
     return df
 
 
-def get_id(
-    row: int,
-    field_name: str,
-    table_name: str,
-    conn: sqlite3.Connection,
-    conditions: dict = {"a": "=b"},
-):
+def check_table_name(conn: sqlite3.Connection, table_name:str):
     """
-    This function retrieves an ID value from a specified table in a SQLite database based on specified
-    conditions.
+    > This function checks if a table name exists in the sql db
 
-    :param row: The row number of the data in the table
-    :type row: int
-    :param field_name: The name of the field/column from which we want to retrieve data
-    :type field_name: str
-    :param table_name: The name of the table in the database where the data is stored
-    :type table_name: str
-    :param conn: The `conn` parameter is a connection object to a SQLite database. It is used to execute
-    SQL queries and retrieve data from the database
-    :type conn: sqlite3.Connection
-    :param conditions: The `conditions` parameter is an optional dictionary that specifies the
-    conditions that need to be met in order to retrieve the `id_value` from the specified table. The
-    keys of the dictionary represent the column names in the table, and the values represent the
-    conditions that need to be met for that column
-    :type conditions: dict
-    :return: the value of the specified field (field_name) from the specified table (table_name) where
-    the specified conditions (conditions) are met. If no value is found, it returns None.
+    :param conn: SQL connection object
+    :param table_name: a string of the name of the table of interest
     """
-    # Get id from a table where a condition is met
+    
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = cursor.fetchall()
+    table_names = [table[0] for table in tables]
 
-    if isinstance(conditions, dict):
-        condition_string = " AND ".join(
-            [k + v[0] + f"{v[1:]}" for k, v in conditions.items()]
-        )
+    if table_name in table_names:
+        pass
     else:
-        raise ValueError("Conditions should be specified as a dict, e.g. {'a', '=b'}")
+        logging.error(f"The table_name specified ({table_name}) doesn't exist in the sql database")
 
-    try:
-        id_value = retrieve_query(
-            conn, f"SELECT {field_name} FROM {table_name} WHERE {condition_string}"
-        )[0][0]
-    except IndexError:
-        id_value = None
-    return id_value
-
-
+        
 def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     """
     > This function returns the "column" names of the sql table of interest
@@ -246,6 +219,9 @@ def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     :return: A list of column names of the table of interest
     """
 
+    # Check if the table name exists in the sql db
+    check_table_name(conn, table_i)
+    
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
 
@@ -433,3 +409,73 @@ def check_species_meta(
     test_table(df_to_db, "species", df_to_db.columns)
 
     logging.info("The species dataframe is complete")
+
+    
+def add_db_info_to_df(
+    project: Project,
+    df: pd.DataFrame,
+    table_name: str,
+    cols_interest: str = "*",
+):
+    """
+    > This function retrieves information from a sql table and adds it to 
+    the df
+
+    :param project: The project object
+    :param local_df: a dataframe with the information of the local csv to populate from
+    :param table_name: The name of the table in the database where the data is stored
+    :param cols_interest: list,
+    :type table_name: str
+    """
+    # Check if the table name exists in the sql db
+    check_table_name(project.db_connection, table_name)
+
+    # Retrieve the sql as a df 
+    query = f"SELECT {cols_interest} FROM {table_name}"
+    sql_df = pd.read_sql_query(query, project.db_connection)
+  
+    # Merge movies table
+    if table_name == "movies":
+        # Add survey information as part of the movie info if spyfish
+        if "local_surveys_csv" in project.csv_paths.keys():
+            sql_df = add_spyfish_survey_info(sql_df, project.csv_paths)
+        
+        # Combine the original and sqldf dfs
+        comb_df = pd.merge(
+            df, sql_df, how="left", left_on="movie_id", right_on="id"
+        ).drop(columns=["id"])
+        
+    # Merge subjects table
+    elif table_name == "subjects":
+        # Ensure subject_ids format is int
+        df["subject_ids"] = df["subject_ids"].astype(int)
+        sql_df["id"] = sql_df["id"].astype(int)        
+        
+        # Combine the original and sqldf dfs
+        comb_df = pd.merge(
+            df, sql_df, how="left", left_on="subject_ids", right_on="id"
+        ).drop(columns=["id"])        
+    
+    # Merge sites table
+    elif table_name == "sites":        
+        # Combine the original and sqldf dfs
+        comb_df = pd.merge(
+            df, sql_df, how="left", left_on="site_id", right_on="id"
+        ).drop(columns=["id"])
+        
+    # Merge species table
+    elif table_name == "species":        
+        from kso_utils.zooniverse_utils import clean_label
+        # Match format of species name to Zooniverse labels
+        sql_df["label"] = sql_df["label"].apply(clean_label)
+        
+        # Combine the original and sqldf dfs
+        comb_df = pd.merge(
+            df, sql_df, how="left", on="label"
+        ).drop(columns=["id"])
+        
+    else:
+        logging.error(f"The table_name specified ({table_name}) doesn't have a merging option")
+        
+    return comb_df
+       
