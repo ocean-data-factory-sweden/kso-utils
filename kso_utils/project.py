@@ -1270,7 +1270,7 @@ class MLProjectProcessor(ProjectProcessor):
         return t_utils.choose_train_params(self.model_type)
 
     def train_yolov5(
-        self, exp_name, weights, epochs=50, batch_size=16, img_size=[720, 540]
+        self, exp_name, weights, project, epochs=50, batch_size=16, img_size=640
     ):
         if self.model_type == 1:
             self.modules["train"].run(
@@ -1278,7 +1278,7 @@ class MLProjectProcessor(ProjectProcessor):
                 data=self.data_path,
                 hyp=self.hyp_path,
                 weights=weights,
-                project=self.project_name,
+                project=project,
                 name=exp_name,
                 imgsz=img_size,
                 batch_size=int(batch_size),
@@ -1302,10 +1302,10 @@ class MLProjectProcessor(ProjectProcessor):
         else:
             logging.error("Segmentation model training not yet supported.")
 
-    def eval_yolov5(self, exp_name: str, model_folder: str, conf_thres: float):
+    def eval_yolov5(self, exp_name: str, conf_thres: float):
         # Find trained model weights
-        project_path = str(Path(self.output_path, self.project.Project_name.lower()))
-        self.tuned_weights = f"{Path(project_path, model_folder, 'weights', 'best.pt')}"
+        project_path = os.path.join(self.output_path, self.project_name, exp_name)
+        self.tuned_weights = f"{Path(project_path, 'weights', 'best.pt')}"
         try:
             self.modules["val"].run(
                 data=self.data_path,
@@ -1377,12 +1377,20 @@ class MLProjectProcessor(ProjectProcessor):
         )
         self.modules["wandb"].finish()
 
-    def enhance_yolov5(self, conf_thres: float, img_size=[640, 640]):
+    def enhance_yolov5(
+        self, in_path: str, project_path: str, conf_thres: float, img_size=[640, 640]
+    ):
+        from datetime import datetime
+
+        run_name = f"enhance_run_{datetime.now()}"
+        self.run_path = os.path.join(project_path, run_name)
         if self.model_type == 1:
             logging.info("Enhancement running...")
             self.modules["detect"].run(
                 weights=self.tuned_weights,
-                source=str(Path(self.output_path, "images")),
+                source=str(Path(in_path, "images")),
+                project=project_path,
+                name=run_name,
                 imgsz=img_size,
                 conf_thres=conf_thres,
                 save_txt=True,
@@ -1397,10 +1405,10 @@ class MLProjectProcessor(ProjectProcessor):
                 "Enhancements not supported for segmentation models at this time."
             )
 
-    def enhance_replace(self, run_folder: str):
+    def enhance_replace(self, data_path: str):
         if self.model_type == 1:
-            os.rename(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
-            os.rename(f"{run_folder}/labels", f"{self.output_path}/labels")
+            os.rename(f"{data_path}/labels", f"{data_path}/labels_org")
+            os.rename(f"{self.run_path}/labels", f"{data_path}/labels")
         else:
             logging.error("This option is not supported for other model types.")
 
