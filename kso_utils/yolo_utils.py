@@ -33,7 +33,6 @@ from natsort import index_natsorted
 from kso_utils.project_utils import Project
 
 try:
-    import yolov5_tracker.track as track
     from yolov5.utils import torch_utils
     import yolov5.detect as detect
 except ModuleNotFoundError:
@@ -1146,6 +1145,7 @@ def track_objects(
     :return: The latest tracker folder
     """
     import torch
+    import yolov5_tracker.track as track
 
     # Check that tracker folder specified exists
     if not os.path.exists(tracker_folder):
