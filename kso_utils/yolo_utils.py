@@ -18,7 +18,6 @@ import requests
 import wandb
 import imagesize
 import base64
-import torch
 import ffmpeg
 import ipywidgets as widgets
 from IPython.display import display, clear_output, HTML
@@ -1091,6 +1090,8 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
 def generate_counts(
     eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_log: bool = False
 ):
+    import torch
+
     model = torch.load(
         Path(
             [
@@ -1144,6 +1145,8 @@ def track_objects(
     :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720 (optional)
     :return: The latest tracker folder
     """
+    import torch
+
     # Check that tracker folder specified exists
     if not os.path.exists(tracker_folder):
         logging.error("The tracker folder does not exist. Please try again")
