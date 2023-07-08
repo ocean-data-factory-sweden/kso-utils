@@ -187,7 +187,53 @@ def process_spyfish_subjects(subjects: pd.DataFrame, db_connection: sqlite3.Conn
     # Rename columns to match subject df
     movies_df = movies_df.rename(columns={"id": "movie_id"})
 
-    # Drop movie_ids from subjects to avoid issues
+    # Manually update the name of the original movies that have
+    # been renamed after the clips were uploaded
+    # Store the values to be replace in a dictionary
+    filenames_dict = dict(
+        zip(
+            [
+                "WP38",
+                "WP40",
+                "WP54",
+                "WP58",
+                "TON_017",
+                "TON_025",
+                "TON_044",
+                "TON_045",
+                "TON_046",
+                "TON_050",
+                "SLI_NEW_003_28_02_2022",
+                "SLI_NEW_005_28_02_2022",
+                "SLI_NEW_084_03_03_2022",
+                "SLI_NEW_017_03_03_2022",
+                "CRP_018",
+            ],
+            [
+                "RON_078_18_01_2021",
+                "RON_077_18_01_2021",
+                "RON_045_18_01_2021",
+                "RON_049_18_01_2021",
+                "TON_017_26_10_2021",
+                "TON_025_26_10_2021",
+                "TON_044_26_10_2021",
+                "TON_045_26_10_2021",
+                "TON_046_26_10_2021",
+                "TON_050_26_10_2021",
+                "SLI_003_28_02_2022",
+                "SLI_005_28_02_2022",
+                "SLI_084_03_03_2022",
+                "SLI_017_03_03_2022",
+                "CRP_018_11_04_2022",
+            ],
+        )
+    )
+
+    subjects["filename"] = (
+        subjects["filename"].str.strip().replace(filenames_dict, regex=True)
+    )
+
+    # Drop movie_ids from subjects to avoid duplicated columns after merge
     subjects = subjects.drop(columns="movie_id")
 
     # Reference the movienames with the id movies table

@@ -215,9 +215,23 @@ def retrieve_movie_info_from_server(
         lambda x: x.split("/")[-1], 1
     )
 
-    logging.info(
-        f"{available_movies_df.shape[0]} out of {len(movies_df)} movies are mapped from the server"
-    )
+    # log the available movies
+    n_movies = len(movies_df)
+    n_available_movies = available_movies_df.shape[0]
+
+    if n_movies == n_available_movies:
+        logging.info(f"All {n_movies} movies are mapped from the server")
+
+    else:
+        df_all = movies_df.merge(
+            available_movies_df, on=["filename"], how="left", indicator=True
+        )
+        unavailable_movies = df_all[df_all["_merge"] == "left_only"]["filename"]
+
+        logging.info(
+            f"{n_movies} out of {n_movies} movies are available."
+            f"The missing movies are: {unavailable_movies.unique()}"
+        )
 
     return available_movies_df
 

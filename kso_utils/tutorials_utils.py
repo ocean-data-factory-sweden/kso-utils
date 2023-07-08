@@ -738,7 +738,7 @@ def launch_viewer(class_df: pd.DataFrame, subject_type: str):
 
 def explore_classifications_per_subject(class_df: pd.DataFrame, subject_type: str):
     """
-    > This function takes a dataframe of classifications and a subject type (clip or frame) and displays
+    > This function takes a dataframe of processed classifications and a subject type (clip or frame) and displays
     the classifications for a given subject
 
     :param class_df: the dataframe of classifications
@@ -1617,3 +1617,141 @@ def get_species_ids(project: Project, species_list: list):
             f"SELECT id FROM species WHERE label IN {tuple(species_list)}", conn
         )["id"].tolist()
     return species_ids
+
+
+def format_to_gbif(
+    project: Project,
+    db_connection,
+    df: pd.DataFrame,
+    classified_by: str,
+    zoo_info_dict: dict = {},
+):
+    """
+    > This function takes a df of biological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
+    :param project: the project object
+    :param db_connection:
+    :param df: the dataframe containing the aggregated classifications
+    :param classified_by: the entity who classified the object of interest, either "citizen_scientists", "biologists" or "ml_algorithms"
+    :param subject_type: str,
+    :param zoo_info_dict: dictionary with the workflow/subjects/classifications retrieved from Zooniverse project
+    :return: a df of species occurrences to publish in GBIF/OBIS.
+    """
+
+    # If classifications have been created by citizen scientists
+    if classified_by == "citizen_scientists":
+        #### Retrieve species/labels information #####
+        # Create a df with unique workflow ids and versions of interest
+        work_df = (
+            df[["workflow_id", "workflow_version"]].drop_duplicates().astype("int")
+        )
+
+        # Correct for some weird zooniverse version behaviour
+        work_df["workflow_version"] = work_df["workflow_version"] - 1
+
+        # Store df of all the common names and the labels into a list of df
+        from kso_utils.tutorials_utils import get_workflow_labels
+
+        commonName_labels_list = [
+            get_workflow_labels(zoo_info_dict["workflows"], x, y)
+            for x, y in zip(work_df["workflow_id"], work_df["workflow_version"])
+        ]
+
+        # Concatenate the dfs and select only unique common names and the labels
+        commonName_labels_df = pd.concat(commonName_labels_list).drop_duplicates()
+
+        # Rename the columns as they are the other way aorund (potentially only in Spyfish?)
+        vernacularName_labels_df = commonName_labels_df.rename(
+            columns={
+                "commonName": "label",
+                "label": "vernacularName",
+            }
+        )
+
+        # Combine the labels with the commonNames of the classifications
+        comb_df = pd.merge(df, vernacularName_labels_df, how="left", on="label")
+
+        from kso_utils.db_utils import get_df_from_db_table
+
+        # Query info about the species of interest
+        species_df = get_df_from_db_table(db_connection, "species")
+
+        # Rename the column to match Darwin core std
+        species_df = species_df.rename(
+            columns={
+                "label": "vernacularName",
+            }
+        )
+        # Combine the aggregated classifications and species information
+        comb_df = pd.merge(comb_df, species_df, how="left", on="vernacularName")
+
+        # Identify the second of the original movie when the species first appears
+        comb_df["second_in_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
+
+        # Drop the clips classified as nothing here or other
+        comb_df[~comb_df["label"].isin(["OTHER", "NOTHINGHERE"])]
+
+        # Select the max count of each species on each movie
+        comb_df = comb_df.sort_values("how_many").drop_duplicates(
+            ["movie_id", "vernacularName"], keep="last"
+        )
+
+        # Rename columns to match Darwin Data Core Standards
+        comb_df = comb_df.rename(
+            columns={
+                "created_on": "eventDate",
+                "how_many": "individualCount",
+            }
+        )
+
+        # Create relevant columns for GBIF
+        comb_df["occurrenceID"] = (
+            project.Project_name
+            + "_"
+            + comb_df["siteName"]
+            + "_"
+            + comb_df["eventDate"].astype(str)
+            + "_"
+            + comb_df["second_in_movie"].astype(str)
+            + "_"
+            + comb_df["vernacularName"].astype(str)
+        )
+
+        comb_df["basisOfRecord"] = "MachineObservation"
+
+        # If coord uncertainity doesn't exist set to 30 metres
+        comb_df["coordinateUncertaintyInMeters"] = comb_df.get(
+            "coordinateUncertaintyInMeters", 30
+        )
+
+        # Select columns relevant for GBIF occurrences
+        comb_df = comb_df[
+            [
+                "occurrenceID",
+                "basisOfRecord",
+                "vernacularName",
+                "scientificName",
+                "eventDate",
+                "countryCode",
+                "taxonRank",
+                "kingdom",
+                "decimalLatitude",
+                "decimalLongitude",
+                "geodeticDatum",
+                "coordinateUncertaintyInMeters",
+                "individualCount",
+            ]
+        ]
+
+        return comb_df
+
+    # If classifications have been created by biologists
+    if classified_by == "biologists":
+        logging.info("This sections is currently under development")
+
+    # If classifications have been created by ml algorithms
+    if classified_by == "ml_algorithms":
+        logging.info("This sections is currently under development")
+    else:
+        raise ValueError(
+            "Specify who classified the species of interest (citizen_scientists, biologists or ml_algorithms)"
+        )

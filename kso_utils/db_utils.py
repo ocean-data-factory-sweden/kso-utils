@@ -48,7 +48,7 @@ def drop_table(conn: sqlite3.Connection, table_name: str):
     except Exception as e:
         logging.info(f"Table doesn't exist, {e}")
         return
-    logging.info(f"Table contents {table_name} cleared. ")
+    logging.debug(f"Previous content from the {table_name} table have been cleared.")
 
     # Commit your changes in the database
     conn.commit()
@@ -136,7 +136,7 @@ def add_to_table(
 
     conn.commit()
 
-    logging.info(f"Updated {table_name}")
+    logging.info(f"Updated {table_name} table from the temporary database")
 
 
 def test_table(df: pd.DataFrame, table_name: str, keys: list = ["id"]):
@@ -415,6 +415,8 @@ def check_species_meta(
 
 def add_db_info_to_df(
     project: Project,
+    db_connection,
+    csv_paths,
     df: pd.DataFrame,
     table_name: str,
     cols_interest: str = "*",
@@ -424,23 +426,26 @@ def add_db_info_to_df(
     the df
 
     :param project: The project object
-    :param local_df: a dataframe with the information of the local csv to populate from
+    :param db_connection: SQL connection object
+    :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
+    :param df: a dataframe with the information of the local csv to populate from
     :param table_name: The name of the table in the database where the data is stored
     :param cols_interest: list,
-    :type table_name: str
     """
     # Check if the table name exists in the sql db
-    check_table_name(project.db_connection, table_name)
+    check_table_name(db_connection, table_name)
 
     # Retrieve the sql as a df
     query = f"SELECT {cols_interest} FROM {table_name}"
-    sql_df = pd.read_sql_query(query, project.db_connection)
+    sql_df = pd.read_sql_query(query, db_connection)
+
+    from kso_utils.spyfish_utils import add_spyfish_survey_info
 
     # Merge movies table
     if table_name == "movies":
-        # Add survey information as part of the movie info if spyfish
-        if "local_surveys_csv" in project.csv_paths.keys():
-            sql_df = add_spyfish_survey_info(sql_df, project.csv_paths)
+        # Add survey information as part of the movie info
+        if "local_surveys_csv" in csv_paths.keys():
+            sql_df = add_spyfish_survey_info(sql_df, csv_paths)
 
         # Combine the original and sqldf dfs
         comb_df = pd.merge(
