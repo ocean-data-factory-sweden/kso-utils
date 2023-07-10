@@ -5,6 +5,7 @@ import glob
 import logging
 import asyncio
 import wandb
+import datetime
 import numpy as np
 import pandas as pd
 import ipywidgets as widgets
@@ -29,7 +30,7 @@ import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
 import kso_utils.yolo_utils as yolo_utils
-import kso_utils.zooniverse_utils as zu_utils
+import kso_utils.zooniverse_utils as zoo_utils
 import kso_utils.general as g_utils
 import kso_utils.widgets as kso_widgets
 
@@ -64,17 +65,14 @@ class ProjectProcessor:
 
         # Create empty db and populate with local csv files data
         self.setup_db()
-
-        ############ TO REVIEW #############
-        # Check if template project
+         
+        # Mount Snic server if needed
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):
                 logging.error("Not running on SNIC server, attempting to mount...")
                 status = self.mount_snic()
                 if status == 0:
                     return
-
-    ############# Finish Review ###################
 
     def __repr__(self):
         return repr(self.__dict__)
@@ -227,7 +225,7 @@ class ProjectProcessor:
         :param sheet: the name of the sheet you want to view
         :return: A dataframe with the changes highlighted.
         """
-        highlight_changes, sheet_df = kso_widgets.display_changes(
+        highlight_changes, sheet_df = kso_widgets.display_ipysheet_changes(
             isheet=sheet, df_filtered=df_filtered
         )
         display(highlight_changes)
@@ -498,80 +496,49 @@ class ProjectProcessor:
         )
 
     #############
-    # t3 / t4
+    # t3
     #############
 
-    def set_zoo_info(self, generate_export: bool = False):
+    def connect_zoo_project(self, generate_export: bool = False):
         """
         This function connects to Zooniverse, saves the connection
-        to the project processor and, if there is no information in
-        the project processor from the Zooniverse project, it retrieves
+        to the project processor and retrieves
         the subjects, workflows and classifications.
-        """
-        if self.project.Zooniverse_number is not None:
-            self.zoo_project = zu_utils.connect_zoo_project(self.project)
-        else:
-            logging.error("This project is not registered with Zooniverse.")
-            return
-        if self.zoo_info is None or self.zoo_info == {}:
-            self.zoo_info = zu_utils.retrieve_zoo_info(
-                self.project,
-                self.zoo_project,
-                zoo_info=["subjects", "workflows", "classifications"],
-                generate_export=generate_export,
-            )
-
-    def get_zoo_info(self, generate_export: bool = False):
-        """
-        It retrieves and populates the Zooniverse info for the project
+        If the project is template, retrieves the info from the Gdrive.
         :return: The zoo_info is being returned.
         """
-        if hasattr(self.project, "db_path"):
-            if hasattr(self, "workflow_widget"):
-                # If the workflow widget is used, retrieve a subset of the subjects to build the db
-                names, workflow_versions = [], []
-                for i in range(0, len(self.workflow_widget.checks), 3):
-                    names.append(list(self.workflow_widget.checks.values())[i])
-                    workflow_versions.append(
-                        list(self.workflow_widget.checks.values())[i + 2]
-                    )
+        # Connect to Zooniverse if project is not template
+        if self.project.Project_name == "Template project":
+            self.zoo_project = {}
 
-                self.project.zu_workflows = zu_utils.get_workflow_ids(
-                    self.zoo_info["workflows"], names
-                )
-
-                if not isinstance(self.project.zu_workflows, list):
-                    self.project.zu_workflows = literal_eval(self.project.zu_workflows)
-
-                self.zoo_info["subjects"]["workflow_id"] = self.zoo_info["subjects"][
-                    "workflow_id"
-                ].astype("Int64")
-                subjects_series = self.zoo_info["subjects"][
-                    self.zoo_info["subjects"].workflow_id.isin(
-                        self.project.zu_workflows
-                    )
-                ].copy()
-
-            else:
-                self.set_zoo_info(generate_export=generate_export)
-                subjects_series = self.zoo_info["subjects"].copy()
-
-            # Safely remove subjects table
-            db_utils.drop_table(conn=self.db_connection, table_name="subjects")
-
-            if len(subjects_series) > 0:
-                # Fill or re-fill subjects table
-                zu_utils.populate_subjects(
-                    subjects_series, project=self.project, conn=self.db_connection
-                )
-            else:
-                logging.error(
-                    "No subjects to populate database from the workflows selected."
-                )
         else:
-            logging.info("No database path found. Subjects have not been added to db")
+            if self.project.Zooniverse_number is not None:
+                # connect to Zooniverse
+                self.zoo_project = zoo_utils.connect_zoo_project(self.project)
+            else:
+                logging.error("This project is not registered with Zooniverse.")
+                return
 
-    def generate_zu_clips(
+        # Retrieve the Zooniverse information
+        self.zoo_info = zoo_utils.retrieve_zoo_info(
+            self.project,
+            self.zoo_project,
+            zoo_info=["subjects", "workflows", "classifications"],
+            generate_export=generate_export,
+        )
+
+    def check_movies_uploaded(self, movie_name: str):
+        """
+        This function checks if a movie has been uploaded to Zooniverse
+
+        :param movie_name: The name of the movie you want to check if it's uploaded
+        :type movie_name: str
+        """
+        movie_utils.check_movie_uploaded(
+            project=self.project, db_connection=self.db_connection, movie_i=movie_name
+        )
+
+    def generate_zoo_clips(
         self,
         movie_name,
         movie_path,
@@ -592,17 +559,14 @@ class ProjectProcessor:
                selected based on the number of clips and the length of each clip, defaults to False
         :type is_example: bool (optional)
         """
-        # t3_utils.create_clips
 
-        if is_example:
-            clip_selection = kso_widgets.select_random_clips(
-                project=self.project, movie_i=movie_name
-            )
-        else:
-            clip_selection = kso_widgets.select_clip_n_len(
-                project=self.project, movie_i=movie_name
-            )
-
+        # Select the clips to be extracted
+        clip_selection = kso_widgets.select_n_clips(
+            project=self.project,
+            db_connection=self.db_connection,
+            movie_i=movie_name,
+            is_example=is_example,
+        )
         clip_modification = kso_widgets.clip_modification_widget()
 
         button = widgets.Button(
@@ -639,18 +603,106 @@ class ProjectProcessor:
         display(clip_modification)
         display(button)
 
-    def check_movies_uploaded(self, movie_name: str):
+    def upload_zoo_subjects(self, subject_type: str):
         """
-        This function checks if a movie has been uploaded to Zooniverse
+        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
 
-        :param movie_name: The name of the movie you want to check if it's uploaded
-        :type movie_name: str
+        :param
+        :param subject_type: str = "clip" or "frame"
+        :type subject_type: str
         """
-        movie_utils.check_movie_uploaded(
-            project=self.project, db_connection=self.db_connection, movie_i=movie_name
+        if subject_type == "clip":
+            upload_df, sitename, created_on = zoo_utils.set_zoo_clip_metadata(
+                project=self.project,
+                generated_clipsdf=self.generated_clips,
+                sitesdf=self.local_sites_csv,
+                moviesdf=self.local_movies_csv,
+            )
+            zoo_utils.upload_clips_to_zooniverse(
+                project=self.project,
+                upload_to_zoo=upload_df,
+                sitename=sitename,
+                created_on=created_on,
+            )
+            # Clean up subjects after upload
+            for temp_clip in upload_df["clip_path"].unique().tolist():
+                os.remove(temp_clip)
+
+            logging.info(f"Clips temporarily stored locally has been removed")
+
+        elif subject_type == "frame":
+            species_list = []
+            upload_df = zoo_utils.set_zoo_frame_metadata(
+                project=self.project,
+                db_connection=self.db_connection,
+                df=self.generated_frames,
+                species_list=self.species_of_interest.value,
+                csv_paths=self.csv_paths,
+            )
+            zoo_utils.upload_frames_to_zooniverse(
+                project=self.project,
+                upload_to_zoo=upload_df,
+                species_list=self.species_of_interest.value,
+            )
+
+        else:
+            logging.error("Select the right type of subject (e.g. frame or clip)")
+
+    #############
+    # t4
+    #############
+
+    def choose_zoo_workflows(self):
+        """
+        The function process the available Zooniverse workflows and enables
+        users to select those of interest
+        :return: A widget displaying the different workflows available.
+        """
+        self.workflow_widget = zoo_utils.WidgetWorkflowSelection(
+            self.zoo_info["workflows"]
+        )
+        display(self.workflow_widget)
+
+    def process_zoo_classifications(self):
+        """
+        It samples subjects from the workflows selected, populates the subjects db,
+        sample the classifications from the workflows of interest,
+        process them and saves them to the Zooniverse attribute of the project processor
+
+        """
+
+        # Retrieve a subset of the subjects from the workflows of interest and
+        # populate the sql subjects table
+        zoo_utils.sample_subjects_from_workflows(
+            project=self.project,
+            db_connection=self.db_connection,
+            workflow_widget_checks=self.workflow_widget.checks,
+            workflows_df=self.zoo_info["workflows"],
+            subjects_df=self.zoo_info["subjects"],
         )
 
-    def generate_zu_frames(self):
+        # Make sure all the classifications have existing subjects,
+        # Flatten the classifications provided the cit. scientists
+        self.processed_zoo_classifications = zoo_utils.process_zoo_classifications(
+            project=self.project,
+            db_connection=self.db_connection,
+            csv_paths=self.csv_paths,
+            classifications_data=self.zoo_info["classifications"],
+            subject_type=self.workflow_widget.checks["Subject type: #0"],
+        )
+
+    def aggregate_zoo_classifications(self, agg_params):
+        self.aggregated_zoo_classifications = zoo_utils.aggregate_classifications(
+            self.project,
+            self.processed_zoo_classifications,
+            self.workflow_widget.checks["Subject type: #0"],
+            agg_params,
+        )
+
+    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
+        self.aggregated_zoo_classifications = zoo_utils.extract_frames_for_zoo()
+
+    def modify_zoo_frames(self):
         """
         This function takes a dataframe of frames to upload, a species of interest, a project, and a
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
@@ -667,10 +719,10 @@ class ProjectProcessor:
         )
 
         def on_button_clicked(b):
-            self.generated_frames = zu_utils.modify_frames(
+            self.modified_frames = zoo_utils.modify_frames(
                 project=self.project,
-                frames_to_upload_df=self.frames_to_upload_df.df.reset_index(drop=True),
-                species_i=self.species_of_interest,
+                frames_to_upload_df=self.generated_frames.df.reset_index(drop=True),
+                species_i=self.species_of_interest.value,
                 modification_details=frame_modification.checks,
             )
 
@@ -769,7 +821,7 @@ class ProjectProcessor:
                 logging.error("No results.")
                 self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
-            self.generated_frames = zu_utils.modify_frames(
+            self.generated_frames = zoo_utils.modify_frames(
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,
@@ -778,78 +830,6 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(frame_modification)
         display(button)
-
-    def get_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 3):
-        """
-        > This function allows you to choose a species of interest, and then it will fetch a random
-        sample of frames from the database for that species
-
-        :param n_frames_subject: number of frames to fetch per subject, defaults to 3
-        :type n_frames_subject: int (optional)
-        :param subsample_up_to: If you have a lot of frames for a given species, you can subsample them.
-               This parameter controls how many frames you want to subsample to, defaults to 3
-        :type subsample_up_to: int (optional)
-        """
-
-        species_list = kso_widgets.choose_species(self.project)
-
-        button = widgets.Button(
-            description="Click to fetch frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.species_of_interest = species_list.value
-            self.frames_to_upload_df = zu_utils.get_frames(
-                project=self.project,
-                zoo_info_dict=self.zoo_info,
-                species_names=species_list.value,
-                n_frames_subject=n_frames_subject,
-                subsample_up_to=subsample_up_to,
-            )
-
-        button.on_click(on_button_clicked)
-        display(button)
-
-    def upload_zu_subjects(self, subject_type: str):
-        """
-        This function uploads clips or frames to Zooniverse, depending on the subject_type argument
-
-        :param
-        :param subject_type: str = "clip" or "frame"
-        :type subject_type: str
-        """
-        if subject_type == "clip":
-            upload_df, sitename, created_on = zu_utils.set_zoo_clip_metadata(
-                project=self.project,
-                generated_clipsdf=self.generated_clips,
-                sitesdf=self.local_sites_csv,
-                moviesdf=self.local_movies_csv,
-            )
-            zu_utils.upload_clips_to_zooniverse(
-                project=self.project,
-                upload_to_zoo=upload_df,
-                sitename=sitename,
-                created_on=created_on,
-            )
-            # Clean up subjects after upload
-            zu_utils.remove_temp_clips(upload_df)
-        elif subject_type == "frame":
-            species_list = []
-            upload_df = zu_utils.set_zoo_frame_metadata(
-                project=self.project,
-                df=upload_data,
-                species_list=species_list,
-                csv_paths=self.csv_paths,
-            )
-            zu_utils.upload_frames_to_zooniverse(
-                project=self.project,
-                upload_to_zoo=upload_df,
-                species_list=species_list,
-            )
 
     #############
     # t5, t6, t7
@@ -899,60 +879,59 @@ class ProjectProcessor:
     #############
     # t8
     #############
-    def choose_workflows(self, generate_export: bool = False):
+    def explore_processed_classifications_per_subject(self):
         """
-        The function retrieves the workflows available from Zooniverse and enables
-        users to select those of interest
-        :return: A widget displaying the different workflows available.
+        It displays the processed classifications for a given subject
+
         """
-        self.set_zoo_info(generate_export=generate_export)
-        self.workflow_widget = zu_utils.WidgetMaker(self.zoo_info["workflows"])
-        display(self.workflow_widget)
-
-    def process_classifications(
-        self, classifications_data, subject_type, agg_params, summary
-    ):
-        return zu_utils.process_classifications(
-            project=self.project,
-            conn=self.db_connection,
-            classifications_data=classifications_data,
-            subject_type=subject_type,
-            agg_params=agg_params,
-            summary=summary,
+        # Display the displays the processed classifications for a given subject
+        t_utils.explore_classifications_per_subject(
+            self.processed_zoo_classifications,
+            self.workflow_widget.checks["Subject type: #0"],
         )
 
-    def process_annotations(self):
-        # code for prepare dataset for machine learning
-        pass
-
-    def format_to_gbif(self, agg_df: pd.DataFrame, subject_type: str):
-        return zu_utils.format_to_gbif_occurence(
-            project=self.project,
-            csv_paths=self.csv_paths,
-            zoo_info_dict=self.zoo_info,
-            df=agg_df,
-            classified_by="citizen_scientists",
-            subject_type=subject_type,
+    def download_classications_csv(self, class_df):
+        # Add the site and movie information to the classifications based on the subject information
+        class_df = zoo_utils.add_subject_site_movie_info_to_class(
+            self.project, self.db_connection, self.csv_paths, class_df
         )
 
-    #############
-    # t9
-    #############
-
-    def get_classifications(
-        self,
-        workflow_dict: dict,
-        workflows_df: pd.DataFrame,
-        subj_type: str,
-        class_df: pd.DataFrame,
-    ):
-        return zu_utils.get_classifications(
-            project=self.project,
-            workflow_dict=workflow_dict,
-            workflows_df=workflows_df,
-            subj_type=subj_type,
-            class_df=class_df,
+        # Download the processed classifications as a csv file
+        csv_filename = (
+            self.project.Project_name
+            + str(datetime.date.today())
+            + "classifications.csv"
         )
+        class_df.to_csv(csv_filename, index=False)
+
+        logging.info(f"The classications have been downloaded to {csv_filename}")
+
+    def download_gbif_occurrences(self, classified_by):
+        if classified_by == "citizen_scientists":
+            # Add the site and movie information to the classifications based on the subject information
+            class_df = zoo_utils.add_subject_site_movie_info_to_class(
+                self.project,
+                self.db_connection,
+                self.csv_paths,
+                self.aggregated_zoo_classifications,
+            )
+
+        # Format the classifications to Darwin Core Standard occurrences
+        occurrence_df = t_utils.format_to_gbif(
+            self.project,
+            self.db_connection,
+            class_df,
+            classified_by,
+            self.zoo_info,
+        )
+
+        # Download the processed classifications as a csv file
+        csv_filename = (
+            self.project.Project_name + str(datetime.date.today()) + "occurrence.csv"
+        )
+        occurrence_df.to_csv(csv_filename, index=False)
+
+        logging.info(f"The occurences have been downloaded to {csv_filename}")
 
 
 class MLProjectProcessor(ProjectProcessor):
@@ -1040,7 +1019,7 @@ class MLProjectProcessor(ProjectProcessor):
         track_frames: bool = False,
         n_tracked_frames: int = 0,
     ):
-        species_list = kso_widgets.choose_species(self.project)
+        species_widget = kso_widgets.choose_species(agg_df)
 
         button = widgets.Button(
             description="Aggregate frames",
@@ -1052,7 +1031,7 @@ class MLProjectProcessor(ProjectProcessor):
         )
 
         def on_button_clicked(b):
-            self.species_of_interest = species_list.value
+            self.species_of_interest = species_widget.value
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
                 project=self.project,

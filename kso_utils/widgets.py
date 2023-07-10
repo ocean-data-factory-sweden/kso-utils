@@ -1,11 +1,8 @@
 # base imports
 import logging
 import os
-import math
-import sqlite3
 import random
 import subprocess
-import datetime
 import pandas as pd
 import numpy as np
 import cv2
@@ -62,8 +59,163 @@ def single_wait_for_change(widget, value):
 
 
 ######################################################################
-#####################Tutorial widgets#################################
+#####################Common widgets###################################
 ######################################################################
+
+
+def choose_project(
+    projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv",
+):
+    """
+    > This function takes a csv file with a list of projects and returns a dropdown menu with the
+    projects listed
+
+    :param projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv", defaults to ../kso_utils/db_starter/projects_list.csv
+    :type projects_csv: str (optional)
+    :return: A dropdown widget with the project names as options.
+    """
+
+    # Check path to the list of projects is a csv
+    if os.path.exists(projects_csv) and not projects_csv.endswith(".csv"):
+        logging.error("A csv file was not selected. Please try again.")
+
+    # If list of projects doesn't exist retrieve it from github
+    if not os.path.exists(projects_csv):
+        projects_csv = "https://github.com/ocean-data-factory-sweden/kso_utils/blob/main/kso_utils/db_starter/projects_list.csv?raw=true"
+
+    projects_df = pd.read_csv(projects_csv)
+
+    if "Project_name" not in projects_df.columns:
+        logging.error(
+            "We were unable to find any projects in that file, \
+                      please choose a projects csv file that matches our template."
+        )
+
+    # Display the project options
+    choose_project = widgets.Dropdown(
+        options=projects_df.Project_name.unique().tolist(),
+        value=projects_df.Project_name.unique().tolist()[0],
+        description="Project:",
+        disabled=False,
+    )
+
+    display(choose_project)
+    return choose_project
+
+
+def gpu_select():
+    """
+    If the user selects "No GPU", then the function will return a boolean value of False. If the user
+    selects "Colab GPU", then the function will install the GPU requirements and return a boolean value
+    of True. If the user selects "Other GPU", then the function will return a boolean value of True
+    :return: The gpu_available variable is being returned.
+    """
+
+    def gpu_output(gpu_option):
+        if gpu_option == "No GPU":
+            logging.info("You are set to start the modifications")
+            # Set GPU argument
+            gpu_available = False
+            return gpu_available
+
+        if gpu_option == "Colab GPU":
+            # Install the GPU requirements
+            if not os.path.exists("./colab-ffmpeg-cuda/bin/."):
+                try:
+                    logging.info(
+                        "Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS"
+                    )  # Install ffmpeg with GPU version
+                    subprocess.check_call(
+                        "git clone https://github.com/fritolays/colab-ffmpeg-cuda.git",
+                        shell=True,
+                    )
+                    subprocess.check_call(
+                        "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/", shell=True
+                    )
+                    logging.info("GPU Requirements installed!")
+
+                except subprocess.CalledProcessError as e:
+                    logging.error(
+                        f"There was an issues trying to install the GPU requirements, {e}"
+                    )
+
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+
+        if gpu_option == "Other GPU":
+            # Set GPU argument
+            gpu_available = True
+            return gpu_available
+
+    # Select the gpu availability
+    gpu_output_interact = interactive(
+        gpu_output,
+        gpu_option=widgets.RadioButtons(
+            options=["No GPU", "Colab GPU", "Other GPU"],
+            value="No GPU",
+            description="Select GPU availability:",
+            disabled=False,
+        ),
+    )
+
+    display(gpu_output_interact)
+    return gpu_output_interact
+
+
+# Select the movie you want
+def select_movie(available_movies_df: pd.DataFrame):
+    """
+    > This function takes in a dataframe of available movies and returns a widget that allows the user
+    to select a movie of interest
+
+    :param available_movies_df: a dataframe containing the list of available movies
+    :return: The widget object
+    """
+
+    # Get the list of available movies
+    available_movies_tuple = tuple(sorted(available_movies_df.filename.unique()))
+
+    # Widget to select the movie
+    select_movie_widget = widgets.Dropdown(
+        options=available_movies_tuple,
+        description="Movie of interest:",
+        ensure_option=False,
+        value=None,
+        disabled=False,
+        layout=widgets.Layout(width="50%"),
+        style={"description_width": "initial"},
+    )
+
+    display(select_movie_widget)
+    return select_movie_widget
+
+
+def choose_species(df: pd.DataFrame):
+    """
+    This function generates a widget to select the species of interest
+    :param df: a df of classifications swith the species of interest in the column "label"
+
+    """
+    # Get a list of the species available
+    species_list = df.label.unique()
+
+    # Roadblock to check if species list is empty
+    if len(species_list) == 0:
+        raise ValueError(
+            "Your database contains no species, please add at least one species before continuing."
+        )
+
+    # Generate the widget
+    w = widgets.SelectMultiple(
+        options=species_list,
+        value=[species_list[0]],
+        description="Species",
+        disabled=False,
+    )
+
+    display(w)
+    return w
 
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
@@ -128,253 +280,12 @@ def choose_footage(
         return fc
 
 
-def select_random_clips(project: Project, movie_i: str):
-    """
-    > The function `select_random_clips` takes in a movie name and a dictionary containing information
-    about the database, and returns a dictionary containing the starting points of the clips and the
-    length of the clips.
-
-    :param project: the project object
-    :param movie_i: the name of the movie of interest
-    :type movie_i: str
-    :return: A dictionary with the starting points of the clips and the length of the clips.
-    """
-    # Create connection to db
-    conn = create_connection(project.db_path)
-
-    # Query info about the movie of interest
-    movie_df = pd.read_sql_query(
-        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'",
-        conn,
-    )
-
-    # Select n number of clips at random
-    def n_random_clips(clip_length, n_clips):
-        # Create a list of starting points for n number of clips
-        duration_movie = math.floor(movie_df["duration"].values[0])
-        starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
-
-        # Seave the outputs in a dictionary
-        random_clips_info = {
-            # The starting points of the clips
-            "clip_start_time": starting_clips,
-            # The length of the clips
-            "random_clip_length": clip_length,
-        }
-
-        logging.info(
-            f"The initial seconds of the examples will be: {random_clips_info['clip_start_time']}"
-        )
-
-        return random_clips_info
-
-    # Select the number of clips to upload
-    clip_length_number = widgets.interactive(
-        n_random_clips,
-        clip_length=select_clip_length(),
-        n_clips=widgets.IntSlider(
-            value=3,
-            min=1,
-            max=5,
-            step=1,
-            description="Number of random clips:",
-            disabled=False,
-            layout=widgets.Layout(width="40%"),
-            style={"description_width": "initial"},
-        ),
-    )
-
-    display(clip_length_number)
-    return clip_length_number
+######################################################################
+###################Common ZOO widgets#################################
+######################################################################
 
 
-def select_clip_length():
-    """
-    > This function creates a dropdown widget that allows the user to select the length of the clips
-    :return: The widget is being returned.
-    """
-    # Widget to record the length of the clips
-    ClipLength_widget = widgets.Dropdown(
-        options=[10, 5],
-        value=10,
-        description="Length of clips:",
-        style={"description_width": "initial"},
-        ensure_option=True,
-        disabled=False,
-    )
-
-    return ClipLength_widget
-
-
-def select_clip_n_len(project: Project, movie_i: str):
-    """
-    This function allows the user to select the length of the clips to upload to the database
-
-    :param project: the project object
-    :param movie_i: the name of the movie you want to upload
-    :return: The number of clips to upload
-    """
-
-    # Create connection to db
-    conn = create_connection(project.db_path)
-
-    # Query info about the movie of interest
-    movie_df = pd.read_sql_query(
-        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'",
-        conn,
-    )
-
-    # Display in hours, minutes and seconds
-    def to_clips(clip_length, clips_range):
-        # Calculate the number of clips
-        clips = int((clips_range[1] - clips_range[0]) / clip_length)
-
-        logging.info(f"Number of clips to upload: {clips}")
-
-        return clips
-
-    # Select the number of clips to upload
-    clip_length_number = widgets.interactive(
-        to_clips,
-        clip_length=select_clip_length(),
-        clips_range=widgets.IntRangeSlider(
-            value=[movie_df.sampling_start.values, movie_df.sampling_end.values],
-            min=0,
-            max=int(movie_df.duration.values),
-            step=1,
-            description="Range in seconds:",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width="90%"),
-        ),
-    )
-
-    display(clip_length_number)
-    return clip_length_number
-
-
-def choose_species(project: Project):
-    """
-    This function generates a widget to select the species of interest
-    :param project: the project object
-
-    """
-    # Create connection to db
-    conn = create_connection(project.db_path)
-
-    # Get a list of the species available
-    species_list = pd.read_sql_query("SELECT label from species", conn)[
-        "label"
-    ].tolist()
-
-    # Roadblock to check if species list is empty
-    if len(species_list) == 0:
-        raise ValueError(
-            "Your database contains no species, please add at least one species before continuing."
-        )
-
-    # Generate the widget
-    w = widgets.SelectMultiple(
-        options=species_list,
-        value=[species_list[0]],
-        description="Species",
-        disabled=False,
-    )
-
-    display(w)
-    return w
-
-
-def map_sites(project: Project, csv_paths: dict):
-    """
-    > This function takes a dictionary of database information and a project object as input, and
-    returns a map of the sites in the database
-
-    :param project: The project object
-    :param csv_paths: a dictionary with the paths of the csv files used to initiate te db
-    :return: A map with all the sites plotted on it.
-    """
-    if project.server in ["SNIC", "LOCAL"]:
-        # Set initial location to Gothenburg
-        init_location = [57.708870, 11.974560]
-
-    else:
-        # Set initial location to Taranaki
-        init_location = [-39.296109, 174.063916]
-
-    # Create the initial kso map
-    kso_map = folium.Map(location=init_location, width=900, height=600)
-
-    # Read the csv file with site information
-    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
-
-    # Combine information of interest into a list to display for each site
-    sites_df["site_info"] = sites_df.values.tolist()
-
-    # Save the names of the columns
-    df_cols = sites_df.columns
-
-    # Add each site to the map
-    sites_df.apply(
-        lambda row: folium.CircleMarker(
-            location=[
-                row[df_cols.str.contains("Latitude")],
-                row[df_cols.str.contains("Longitude")],
-            ],
-            radius=14,
-            popup=row["site_info"],
-            tooltip=row[df_cols.str.contains("siteName", case=False)],
-        ).add_to(kso_map),
-        axis=1,
-    )
-
-    # Add a minimap to the corner for reference
-    kso_map = kso_map.add_child(MiniMap())
-
-    # Return the map
-    return kso_map
-
-
-def choose_project(
-    projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv",
-):
-    """
-    > This function takes a csv file with a list of projects and returns a dropdown menu with the
-    projects listed
-
-    :param projects_csv: str = "../kso_utils/kso_utils/db_starter/projects_list.csv", defaults to ../kso_utils/db_starter/projects_list.csv
-    :type projects_csv: str (optional)
-    :return: A dropdown widget with the project names as options.
-    """
-
-    # Check path to the list of projects is a csv
-    if os.path.exists(projects_csv) and not projects_csv.endswith(".csv"):
-        logging.error("A csv file was not selected. Please try again.")
-
-    # If list of projects doesn't exist retrieve it from github
-    if not os.path.exists(projects_csv):
-        projects_csv = "https://github.com/ocean-data-factory-sweden/kso_utils/blob/main/kso_utils/db_starter/projects_list.csv?raw=true"
-
-    projects_df = pd.read_csv(projects_csv)
-
-    if "Project_name" not in projects_df.columns:
-        logging.error(
-            "We were unable to find any projects in that file, \
-                      please choose a projects csv file that matches our template."
-        )
-
-    # Display the project options
-    choose_project = widgets.Dropdown(
-        options=projects_df.Project_name.unique().tolist(),
-        value=projects_df.Project_name.unique().tolist()[0],
-        description="Project:",
-        disabled=False,
-    )
-
-    display(choose_project)
-    return choose_project
-
-
-def select_retrieve_info():
+def request_latest_zoo_info():
     """
     Display a widget that allows to select whether to retrieve the last available information,
     or to request the latest information.
@@ -418,355 +329,7 @@ def select_retrieve_info():
     return latest_info
 
 
-def choose_single_workflow(workflows_df: pd.DataFrame):
-    """
-    > This function displays two dropdown menus, one for the workflow name and one for the subject type
-
-    :param workflows_df: a dataframe containing the workflows you want to choose from
-    :return: the workflow name and subject type.
-    """
-
-    # Display the names of the workflows
-    workflow_name = widgets.Dropdown(
-        options=workflows_df.display_name.unique().tolist(),
-        value=workflows_df.display_name.unique().tolist()[0],
-        description="Workflow name:",
-        disabled=False,
-    )
-
-    # Display the type of subjects
-    subj_type = widgets.Dropdown(
-        options=["frame", "clip"],
-        value="clip",
-        description="Subject type:",
-        disabled=False,
-    )
-
-    display(workflow_name)
-    display(subj_type)
-
-    return workflow_name, subj_type
-
-
-# Select the movie you want
-def select_movie(available_movies_df: pd.DataFrame):
-    """
-    > This function takes in a dataframe of available movies and returns a widget that allows the user
-    to select a movie of interest
-
-    :param available_movies_df: a dataframe containing the list of available movies
-    :return: The widget object
-    """
-
-    # Get the list of available movies
-    available_movies_tuple = tuple(sorted(available_movies_df.filename.unique()))
-
-    # Widget to select the movie
-    select_movie_widget = widgets.Dropdown(
-        options=available_movies_tuple,
-        description="Movie of interest:",
-        ensure_option=False,
-        value=None,
-        disabled=False,
-        layout=widgets.Layout(width="50%"),
-        style={"description_width": "initial"},
-    )
-
-    display(select_movie_widget)
-    return select_movie_widget
-
-
-def gpu_select():
-    """
-    If the user selects "No GPU", then the function will return a boolean value of False. If the user
-    selects "Colab GPU", then the function will install the GPU requirements and return a boolean value
-    of True. If the user selects "Other GPU", then the function will return a boolean value of True
-    :return: The gpu_available variable is being returned.
-    """
-
-    def gpu_output(gpu_option):
-        if gpu_option == "No GPU":
-            logging.info("You are set to start the modifications")
-            # Set GPU argument
-            gpu_available = False
-            return gpu_available
-
-        if gpu_option == "Colab GPU":
-            # Install the GPU requirements
-            if not os.path.exists("./colab-ffmpeg-cuda/bin/."):
-                try:
-                    logging.info(
-                        "Installing the GPU requirements. PLEASE WAIT 10-20 SECONDS"
-                    )  # Install ffmpeg with GPU version
-                    subprocess.check_call(
-                        "git clone https://github.com/fritolays/colab-ffmpeg-cuda.git",
-                        shell=True,
-                    )
-                    subprocess.check_call(
-                        "cp -r ./colab-ffmpeg-cuda/bin/. /usr/bin/", shell=True
-                    )
-                    logging.info("GPU Requirements installed!")
-
-                except subprocess.CalledProcessError as e:
-                    logging.error(
-                        f"There was an issues trying to install the GPU requirements, {e}"
-                    )
-
-            # Set GPU argument
-            gpu_available = True
-            return gpu_available
-
-        if gpu_option == "Other GPU":
-            # Set GPU argument
-            gpu_available = True
-            return gpu_available
-
-    # Select the gpu availability
-    gpu_output_interact = interactive(
-        gpu_output,
-        gpu_option=widgets.RadioButtons(
-            options=["No GPU", "Colab GPU", "Other GPU"],
-            value="No GPU",
-            description="Select GPU availability:",
-            disabled=False,
-        ),
-    )
-
-    display(gpu_output_interact)
-    return gpu_output_interact
-
-
-def choose_new_videos_to_upload():
-    """
-    Simple widget for uploading videos from a file browser.
-    returns the list of movies to be added.
-    Supports multi-select file uploads
-    """
-
-    movie_list = []
-
-    fc = FileChooser()
-    fc.title = "First choose your directory of interest"
-    " and then the movies you would like to upload"
-    logging.info("Choose the file that you want to upload: ")
-
-    def change_dir(chooser):
-        sel.options = os.listdir(chooser.selected)
-        fc.children[1].children[2].layout.display = "none"
-        sel.layout.visibility = "visible"
-
-    fc.register_callback(change_dir)
-
-    sel = widgets.SelectMultiple(options=os.listdir(fc.selected))
-
-    display(fc)
-    display(sel)
-
-    sel.layout.visibility = "hidden"
-
-    button_add = widgets.Button(description="Add selected file")
-    output_add = widgets.Output()
-
-    logging.info(
-        "Showing paths to the selected movies:\nRerun cell to reset\n--------------"
-    )
-
-    display(button_add, output_add)
-
-    def on_button_add_clicked(b):
-        with output_add:
-            if sel.value is not None:
-                for movie in sel.value:
-                    if Path(movie).suffix in [".mp4", ".mov"]:
-                        movie_list.append([Path(fc.selected, movie), movie])
-                        logging.info(Path(fc.selected, movie))
-                    else:
-                        logging.error("Invalid file extension")
-                    fc.reset()
-
-    button_add.on_click(on_button_add_clicked)
-    return movie_list
-
-
-def choose_movie_review():
-    """
-    This function creates a widget that allows the user to choose between two methods to review the
-    movies.csv file.
-    :return: The widget is being returned.
-    """
-    choose_movie_review_widget = widgets.RadioButtons(
-        options=[
-            "Basic: Automatic check for empty fps/duration and sampling start/end cells in the movies.csv",
-            "Advanced: Basic + Check format and metadata of each movie",
-        ],
-        description="What method you want to use to review the movies:",
-        disabled=False,
-        layout=Layout(width="95%"),
-        style={"description_width": "initial"},
-    )
-    display(choose_movie_review_widget)
-    return choose_movie_review_widget
-
-
-class clip_modification_widget(widgets.VBox):
-    def __init__(self):
-        """
-        The function creates a widget that allows the user to select which modifications to run
-        """
-        self.widget_count = widgets.IntText(
-            description="Number of modifications:",
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-            style={"description_width": "initial"},
-        )
-        self.bool_widget_holder = widgets.HBox(
-            layout=widgets.Layout(
-                width="100%", display="inline-flex", flex_flow="row wrap"
-            )
-        )
-        children = [
-            self.widget_count,
-            self.bool_widget_holder,
-        ]
-        self.widget_count.observe(self._add_bool_widgets, names=["value"])
-        super().__init__(children=children)
-
-    def _add_bool_widgets(self, widg):
-        num_bools = widg["new"]
-        new_widgets = []
-        for _ in range(num_bools):
-            new_widget = select_modification()
-            for wdgt in [new_widget]:
-                wdgt.description = wdgt.description + f" #{_}"
-            new_widgets.extend([new_widget])
-        self.bool_widget_holder.children = tuple(new_widgets)
-
-    @property
-    def checks(self):
-        return {w.description: w.value for w in self.bool_widget_holder.children}
-
-
-def select_modification():
-    """
-    This function creates a dropdown widget that allows the user to select a clip modification
-    :return: A widget that allows the user to select a clip modification.
-    """
-    # Widget to select the clip modification
-
-    clip_modifications = {
-        "Color_correction": {
-            "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
-                                        '0/0 0.525/0.451 1/1', \
-                                        '0/0 0.459/0.517 1/1')"
-        }
-        # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
-        ,
-        "Zoo_low_compression": {
-            "crf": "25",
-            "bv": "7",
-        },
-        "Zoo_medium_compression": {
-            "crf": "27",
-            "bv": "6",
-        },
-        "Zoo_high_compression": {
-            "crf": "30",
-            "bv": "5",
-        },
-        "Blur_sensitive_info": {
-            "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
-                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
-                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
-            "None": {},
-        },
-    }
-
-    select_modification_widget = widgets.Dropdown(
-        options=[(a, b) for a, b in clip_modifications.items()],
-        description="Select modification:",
-        ensure_option=True,
-        disabled=False,
-        style={"description_width": "initial"},
-    )
-
-    # display(select_modification_widget)
-    return select_modification_widget
-
-
-# Display the clips side-by-side
-def view_clips(example_clips: list, modified_clip_path: str):
-    """
-    > This function takes in a list of example clips and a path to a modified clip, and returns a widget
-    that displays the original and modified clips side-by-side
-
-    :param example_clips: a list of paths to the original clips
-    :param modified_clip_path: The path to the modified clip you want to view
-    :return: A widget that displays the original and modified videos side-by-side.
-    """
-
-    # Get the path of the modified clip selected
-    example_clip_name = os.path.basename(modified_clip_path).replace("modified_", "")
-    example_clip_path = next(
-        filter(lambda x: os.path.basename(x) == example_clip_name, example_clips), None
-    )
-
-    # Get the extension of the video
-    extension = Path(example_clip_path).suffix
-
-    # Open original video
-    vid1 = open(example_clip_path, "rb").read()
-    wi1 = widgets.Video(value=vid1, format=extension, width=400, height=500)
-
-    # Open modified video
-    vid2 = open(modified_clip_path, "rb").read()
-    wi2 = widgets.Video(value=vid2, format=extension, width=400, height=500)
-
-    # Display videos side-by-side
-    a = [wi1, wi2]
-    wid = widgets.HBox(a)
-
-    return wid
-
-
-def compare_clips(example_clips: list, modified_clips: list):
-    """
-    > This function allows you to select a clip from the modified clips and displays the original and
-    modified clips side by side
-
-    :param example_clips: The original clips
-    :param modified_clips: The list of clips that you want to compare to the original clips
-    """
-
-    # Add "no movie" option to prevent conflicts
-    modified_clips = np.append(modified_clips, "0 No movie")
-
-    clip_path_widget = widgets.Dropdown(
-        options=tuple(modified_clips),
-        description="Select original clip:",
-        ensure_option=True,
-        disabled=False,
-        layout=Layout(width="50%"),
-        style={"description_width": "initial"},
-    )
-
-    main_out = widgets.Output()
-    display(clip_path_widget, main_out)
-
-    # Display the original and modified clips
-    def on_change(change):
-        with main_out:
-            clear_output()
-            if change["new"] == "0 No movie":
-                logging.info("It is OK to modify the clips again")
-            else:
-                a = view_clips(example_clips, change["new"])
-                display(a)
-
-    clip_path_widget.observe(on_change, names="value")
-
-
-def choose_agg_parameters(subject_type: str = "clip", full_description: bool = True):
+def choose_agg_parameters(subject_type: str = "clip"):
     """
     > This function creates a set of sliders that allow you to set the parameters for the aggregation
     algorithm
@@ -802,8 +365,7 @@ def choose_agg_parameters(subject_type: str = "clip", full_description: bool = T
     )
     # Display both widgets in a VBox
     display(agg_users)
-    if full_description:
-        display(description_widget)
+    display(description_widget)
     min_users = widgets.IntSlider(
         value=3,
         min=1,
@@ -826,8 +388,7 @@ def choose_agg_parameters(subject_type: str = "clip", full_description: bool = T
     )
     # Display both widgets in a VBox
     display(min_users)
-    if full_description:
-        display(description_widget)
+    display(description_widget)
     if subject_type == "frame":
         agg_obj = widgets.FloatSlider(
             value=0.8,
@@ -851,8 +412,7 @@ def choose_agg_parameters(subject_type: str = "clip", full_description: bool = T
         )
         # Display both widgets in a VBox
         display(agg_obj)
-        if full_description:
-            display(description_widget)
+        display(description_widget)
         agg_iou = widgets.FloatSlider(
             value=0.5,
             min=0,
@@ -875,8 +435,7 @@ def choose_agg_parameters(subject_type: str = "clip", full_description: bool = T
         )
         # Display both widgets in a VBox
         display(agg_iou)
-        if full_description:
-            display(description_widget)
+        display(description_widget)
         agg_iua = widgets.FloatSlider(
             value=0.8,
             min=0,
@@ -899,8 +458,8 @@ def choose_agg_parameters(subject_type: str = "clip", full_description: bool = T
         )
         # Display both widgets in a VBox
         display(agg_iua)
-        if full_description:
-            display(description_widget)
+        display(description_widget)
+        
         return agg_users, min_users, agg_obj, agg_iou, agg_iua
     else:
         return agg_users, min_users
@@ -995,7 +554,100 @@ def choose_workflows(workflows_df: pd.DataFrame):
     return workflow_name, subj_type, workflow_version
 
 
-def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
+######################################################################
+#####################Tutorial 1 widgets###############################
+######################################################################
+
+
+def map_sites(project: Project, csv_paths: dict):
+    """
+    > This function takes a dictionary of database information and a project object as input, and
+    returns a map of the sites in the database
+
+    :param project: The project object
+    :param csv_paths: a dictionary with the paths of the csv files used to initiate te db
+    :return: A map with all the sites plotted on it.
+    """
+    if project.server in ["SNIC", "LOCAL"]:
+        # Set initial location to Gothenburg
+        init_location = [57.708870, 11.974560]
+
+    else:
+        # Set initial location to Taranaki
+        init_location = [-39.296109, 174.063916]
+
+    # Create the initial kso map
+    kso_map = folium.Map(location=init_location, width=900, height=600)
+
+    # Read the csv file with site information
+    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
+
+    # Combine information of interest into a list to display for each site
+    sites_df["site_info"] = sites_df.values.tolist()
+
+    # Save the names of the columns
+    df_cols = sites_df.columns
+
+    # Add each site to the map
+    sites_df.apply(
+        lambda row: folium.CircleMarker(
+            location=[
+                row[df_cols.str.contains("Latitude")],
+                row[df_cols.str.contains("Longitude")],
+            ],
+            radius=14,
+            popup=row["site_info"],
+            tooltip=row[df_cols.str.contains("siteName", case=False)],
+        ).add_to(kso_map),
+        axis=1,
+    )
+
+    # Add a minimap to the corner for reference
+    kso_map = kso_map.add_child(MiniMap())
+
+    # Return the map
+    return kso_map
+
+
+def select_sheet_range(project: Project, csv_paths: dict, orig_csv: str):
+    """
+    > This function loads the csv file of interest into a pandas dataframe and enables users
+    to pick a range of rows and columns to display
+
+    :param project: the project object
+    :param csv_paths: a dictionary with the paths of the csv files used to initiate the db
+    :param orig_csv: the original csv file name
+    :type orig_csv: str
+    :return: A dataframe with the sites information
+    """
+
+    # Load the csv with the information of interest
+    df = pd.read_csv(csv_paths[orig_csv])
+
+    df_range_rows = widgets.SelectionRangeSlider(
+        options=range(0, len(df.index) + 1),
+        index=(0, len(df.index)),
+        description="Rows to display",
+        orientation="horizontal",
+        layout=Layout(width="90%", padding="35px"),
+        style={"description_width": "initial"},
+    )
+
+    display(df_range_rows)
+
+    df_range_columns = widgets.SelectMultiple(
+        options=df.columns,
+        description="Columns",
+        disabled=False,
+        layout=Layout(width="50%", padding="35px"),
+    )
+
+    display(df_range_columns)
+
+    return df, df_range_rows, df_range_columns
+
+
+def display_ipysheet_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
     """
     It takes the dataframe from the ipysheet and compares it to the dataframe from the local csv file.
     If there are any differences, it highlights them and returns the dataframe with the changes
@@ -1047,164 +699,29 @@ def display_changes(isheet: ipysheet.Sheet, df_filtered: pd.DataFrame):
         return highlight_changes, sheet_df
 
 
-def select_sheet_range(project: Project, csv_paths: dict, orig_csv: str):
+def choose_movie_review():
     """
-    > This function loads the csv file of interest into a pandas dataframe and enables users
-    to pick a range of rows and columns to display
-
-    :param project: the project object
-    :param csv_paths: a dictionary with the paths of the csv files used to initiate the db
-    :param orig_csv: the original csv file name
-    :type orig_csv: str
-    :return: A dataframe with the sites information
+    This function creates a widget that allows the user to choose between two methods to review the
+    movies.csv file.
+    :return: The widget is being returned.
     """
-
-    # Load the csv with the information of interest
-    df = pd.read_csv(csv_paths[orig_csv])
-
-    df_range_rows = widgets.SelectionRangeSlider(
-        options=range(0, len(df.index) + 1),
-        index=(0, len(df.index)),
-        description="Rows to display",
-        orientation="horizontal",
-        layout=Layout(width="90%", padding="35px"),
+    choose_movie_review_widget = widgets.RadioButtons(
+        options=[
+            "Basic: Automatic check for empty fps/duration and sampling start/end cells in the movies.csv",
+            "Advanced: Basic + Check format and metadata of each movie",
+        ],
+        description="What method you want to use to review the movies:",
+        disabled=False,
+        layout=Layout(width="95%"),
         style={"description_width": "initial"},
     )
-
-    display(df_range_rows)
-
-    df_range_columns = widgets.SelectMultiple(
-        options=df.columns,
-        description="Columns",
-        disabled=False,
-        layout=Layout(width="50%", padding="35px"),
-    )
-
-    display(df_range_columns)
-
-    return df, df_range_rows, df_range_columns
-
-
-def extract_custom_frames(
-    input_path,
-    output_dir,
-    skip_start=None,
-    skip_end=None,
-    num_frames=None,
-    frame_skip=None,
-):
-    """
-    This function extracts frames from a video file and saves them as JPEG images.
-
-    :param input_path: The file path of the input movie file that needs to be processed
-    :param output_dir: The directory where the extracted frames will be saved as JPEG files
-    :param num_frames: The number of frames to extract from the input video. If this parameter is
-    provided, the function will randomly select num_frames frames to extract from the video
-    :param frame_skip: frame_skip is an optional parameter that determines how many frames to skip
-    between extracted frames. For example, if frame_skip is set to 10, then every 10th frame will be
-    extracted. If frame_skip is not provided, then all frames will be extracted
-    """
-    # Open the input movie file
-    cap = cv2.VideoCapture(input_path)
-
-    # Get base filename
-    input_stem = Path(input_path).stem
-
-    # Get the total number of frames in the movie
-    num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    skip_start = int(skip_start * fps)
-    skip_end = int(skip_end * fps)
-
-    frame_start = 0 if skip_start is None else skip_start
-    frame_end = num_frames_total if skip_end is None else num_frames_total - skip_end
-
-    # Determine which frames to extract based on the input parameters
-    if num_frames is not None:
-        frames_to_extract = random.sample(range(frame_start, frame_end), num_frames)
-    elif frame_skip is not None:
-        frames_to_extract = range(frame_start, frame_end, frame_skip)
-    else:
-        frames_to_extract = range(frame_end)
-
-    output_files, input_movies = [], []
-
-    # Loop through the frames and extract the selected ones
-    for frame_idx in frames_to_extract:
-        # Set the frame index for the next frame to read
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-
-        # Read the next frame
-        ret, frame = cap.read()
-
-        if ret:
-            # Construct the output filename for this frame
-            output_filename = os.path.join(
-                output_dir, f"{input_stem}_frame_{frame_idx}.jpg"
-            )
-
-            # Write the frame to a JPEG file
-            cv2.imwrite(output_filename, frame)
-
-            # Add output filename to list of files
-            output_files.append(output_filename)
-
-            # Add movie filename to list
-            input_movies.append(Path(input_path).name)
-
-    # Release the video capture object
-    cap.release()
-
-    return pd.DataFrame(
-        np.column_stack([input_movies, output_files, frames_to_extract]),
-        columns=["movie_filename", "frame_path", "frame_number"],
-    )
-
-
-# Function to specify the frame modification
-def select_modification():
-    # Widget to select the frame modification
-
-    frame_modifications = {
-        "Color_correction": {
-            "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
-                                        '0/0 0.525/0.451 1/1', \
-                                        '0/0 0.459/0.517 1/1')"
-        }
-        # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
-        ,
-        "Zoo_low_compression": {
-            "crf": "25",
-        },
-        "Zoo_medium_compression": {
-            "crf": "27",
-        },
-        "Zoo_high_compression": {
-            "crf": "30",
-        },
-        "Blur_sensitive_info": {
-            "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
-                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
-                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
-            "None": {},
-        },
-    }
-
-    select_modification_widget = widgets.Dropdown(
-        options=[(a, b) for a, b in frame_modifications.items()],
-        description="Select modification:",
-        ensure_option=True,
-        disabled=False,
-        style={"description_width": "initial"},
-    )
-
-    display(select_modification_widget)
-    return select_modification_widget
+    display(choose_movie_review_widget)
+    return choose_movie_review_widget
 
 
 def update_meta(
     project: Project,
-    conn: sqlite3.Connection,
+    conn,
     server_connection: dict,
     sheet_df: pd.DataFrame,
     df: pd.DataFrame,
@@ -1330,3 +847,408 @@ def open_csv(
     sheet = ipysheet.from_dataframe(df_filtered)
 
     return df_filtered, sheet
+
+
+######################################################################
+#####################Tutorial 2 widgets###############################
+######################################################################
+
+
+def choose_new_videos_to_upload():
+    """
+    Simple widget for uploading videos from a file browser.
+    returns the list of movies to be added.
+    Supports multi-select file uploads
+    """
+
+    movie_list = []
+
+    fc = FileChooser()
+    fc.title = "First choose your directory of interest"
+    " and then the movies you would like to upload"
+    logging.info("Choose the file that you want to upload: ")
+
+    def change_dir(chooser):
+        sel.options = os.listdir(chooser.selected)
+        fc.children[1].children[2].layout.display = "none"
+        sel.layout.visibility = "visible"
+
+    fc.register_callback(change_dir)
+
+    sel = widgets.SelectMultiple(options=os.listdir(fc.selected))
+
+    display(fc)
+    display(sel)
+
+    sel.layout.visibility = "hidden"
+
+    button_add = widgets.Button(description="Add selected file")
+    output_add = widgets.Output()
+
+    logging.info(
+        "Showing paths to the selected movies:\nRerun cell to reset\n--------------"
+    )
+
+    display(button_add, output_add)
+
+    def on_button_add_clicked(b):
+        with output_add:
+            if sel.value is not None:
+                for movie in sel.value:
+                    if Path(movie).suffix in [".mp4", ".mov"]:
+                        movie_list.append([Path(fc.selected, movie), movie])
+                        logging.info(Path(fc.selected, movie))
+                    else:
+                        logging.error("Invalid file extension")
+                    fc.reset()
+
+    button_add.on_click(on_button_add_clicked)
+    return movie_list
+
+
+######################################################################
+#####################Tutorial 3 widgets###############################
+######################################################################
+
+
+# Select n number of clips at random
+def n_random_clips(clip_length, n_clips):
+    # Create a list of starting points for n number of clips
+    duration_movie = int(movie_df["duration"].values[0])
+    starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
+
+    # Seave the outputs in a dictionary
+    random_clips_info = {
+        # The starting points of the clips
+        "clip_start_time": starting_clips,
+        # The length of the clips
+        "random_clip_length": clip_length,
+    }
+
+    logging.info(
+        f"The initial seconds of the examples will be: {random_clips_info['clip_start_time']}"
+    )
+
+    return random_clips_info
+
+
+# Display in hours, minutes and seconds
+def to_clips(clip_length, clips_range):
+    # Calculate the number of clips
+    clips = int((clips_range[1] - clips_range[0]) / clip_length)
+
+    logging.info(f"Number of clips to upload: {clips}")
+
+    return clips
+
+
+def select_n_clips(
+    project: Project,
+    db_connection,
+    movie_i: str,
+    is_example: bool,
+):
+    """
+    > The function `select_random_clips` takes in a movie name and
+    returns a dictionary containing the starting points of the clips and the
+    length of the clips.
+
+    :param project: the project object
+    :param db_connection: SQL connection object
+    :param movie_i: the name of the movie of interest
+    :param is_example: a boolean value to specify whether the clips should be selected at random or not
+    :return: A dictionary with the starting points of the clips and the length of the clips.
+    """
+
+    # Query info about the movie of interest
+    movie_df = pd.read_sql_query(
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'",
+        db_connection,
+    )
+
+    if is_example:
+        # Select the number of clips to upload
+        clip_length_number = widgets.interactive(
+            n_random_clips,
+            clip_length=select_clip_length(),
+            n_clips=widgets.IntSlider(
+                value=3,
+                min=1,
+                max=5,
+                step=1,
+                description="Number of random clips:",
+                disabled=False,
+                layout=widgets.Layout(width="40%"),
+                style={"description_width": "initial"},
+            ),
+        )
+
+    else:
+        # Select the number of clips to upload
+        clip_length_number = widgets.interactive(
+            to_clips,
+            clip_length=select_clip_length(),
+            clips_range=widgets.IntRangeSlider(
+                value=[movie_df.sampling_start.values, movie_df.sampling_end.values],
+                min=0,
+                max=int(movie_df.duration.values),
+                step=1,
+                description="Range in seconds:",
+                style={"description_width": "initial"},
+                layout=widgets.Layout(width="90%"),
+            ),
+        )
+
+    display(clip_length_number)
+    return clip_length_number
+
+
+def select_clip_length():
+    """
+    > This function creates a dropdown widget that allows the user to select the length of the clips
+    :return: The widget is being returned.
+    """
+    # Widget to record the length of the clips
+    ClipLength_widget = widgets.Dropdown(
+        options=[10, 5],
+        value=10,
+        description="Length of clips:",
+        style={"description_width": "initial"},
+        ensure_option=True,
+        disabled=False,
+    )
+
+    return ClipLength_widget
+
+
+class clip_modification_widget(widgets.VBox):
+    def __init__(self):
+        """
+        The function creates a widget that allows the user to select which modifications to run
+        """
+        self.widget_count = widgets.IntText(
+            description="Number of modifications:",
+            display="flex",
+            flex_flow="column",
+            align_items="stretch",
+            style={"description_width": "initial"},
+        )
+        self.bool_widget_holder = widgets.HBox(
+            layout=widgets.Layout(
+                width="100%", display="inline-flex", flex_flow="row wrap"
+            )
+        )
+        children = [
+            self.widget_count,
+            self.bool_widget_holder,
+        ]
+        self.widget_count.observe(self._add_bool_widgets, names=["value"])
+        super().__init__(children=children)
+
+    def _add_bool_widgets(self, widg):
+        num_bools = widg["new"]
+        new_widgets = []
+        for _ in range(num_bools):
+            new_widget = select_modification()
+            for wdgt in [new_widget]:
+                wdgt.description = wdgt.description + f" #{_}"
+            new_widgets.extend([new_widget])
+        self.bool_widget_holder.children = tuple(new_widgets)
+
+    @property
+    def checks(self):
+        return {w.description: w.value for w in self.bool_widget_holder.children}
+
+
+# Function to specify the frame modification
+def select_modification():
+    # Widget to select the frame modification
+
+    frame_modifications = {
+        "Color_correction": {
+            "filter": ".filter('curves', '0/0 0.396/0.67 1/1', \
+                                        '0/0 0.525/0.451 1/1', \
+                                        '0/0 0.459/0.517 1/1')"
+        }
+        # borrowed from https://www.element84.com/blog/color-correction-in-space-and-at-sea
+        ,
+        "Zoo_low_compression": {
+            "crf": "25",
+        },
+        "Zoo_medium_compression": {
+            "crf": "27",
+        },
+        "Zoo_high_compression": {
+            "crf": "30",
+        },
+        "Blur_sensitive_info": {
+            "filter": ".drawbox(0, 0, 'iw', 'ih*(15/100)', color='black' \
+                            ,thickness='fill').drawbox(0, 'ih*(95/100)', \
+                            'iw', 'ih*(15/100)', color='black', thickness='fill')",
+            "None": {},
+        },
+    }
+
+    select_modification_widget = widgets.Dropdown(
+        options=[(a, b) for a, b in frame_modifications.items()],
+        description="Select modification:",
+        ensure_option=True,
+        disabled=False,
+        style={"description_width": "initial"},
+    )
+
+    display(select_modification_widget)
+    return select_modification_widget
+
+
+# Display the clips side-by-side
+def view_clips(example_clips: list, modified_clip_path: str):
+    """
+    > This function takes in a list of example clips and a path to a modified clip, and returns a widget
+    that displays the original and modified clips side-by-side
+
+    :param example_clips: a list of paths to the original clips
+    :param modified_clip_path: The path to the modified clip you want to view
+    :return: A widget that displays the original and modified videos side-by-side.
+    """
+
+    # Get the path of the modified clip selected
+    example_clip_name = os.path.basename(modified_clip_path).replace("modified_", "")
+    example_clip_path = next(
+        filter(lambda x: os.path.basename(x) == example_clip_name, example_clips), None
+    )
+
+    # Get the extension of the video
+    extension = Path(example_clip_path).suffix
+
+    # Open original video
+    vid1 = open(example_clip_path, "rb").read()
+    wi1 = widgets.Video(value=vid1, format=extension, width=400, height=500)
+
+    # Open modified video
+    vid2 = open(modified_clip_path, "rb").read()
+    wi2 = widgets.Video(value=vid2, format=extension, width=400, height=500)
+
+    # Display videos side-by-side
+    a = [wi1, wi2]
+    wid = widgets.HBox(a)
+
+    return wid
+
+
+def compare_clips(example_clips: list, modified_clips: list):
+    """
+    > This function allows you to select a clip from the modified clips and displays the original and
+    modified clips side by side
+
+    :param example_clips: The original clips
+    :param modified_clips: The list of clips that you want to compare to the original clips
+    """
+
+    # Add "no movie" option to prevent conflicts
+    modified_clips = np.append(modified_clips, "0 No movie")
+
+    clip_path_widget = widgets.Dropdown(
+        options=tuple(modified_clips),
+        description="Select original clip:",
+        ensure_option=True,
+        disabled=False,
+        layout=Layout(width="50%"),
+        style={"description_width": "initial"},
+    )
+
+    main_out = widgets.Output()
+    display(clip_path_widget, main_out)
+
+    # Display the original and modified clips
+    def on_change(change):
+        with main_out:
+            clear_output()
+            if change["new"] == "0 No movie":
+                logging.info("It is OK to modify the clips again")
+            else:
+                a = view_clips(example_clips, change["new"])
+                display(a)
+
+    clip_path_widget.observe(on_change, names="value")
+
+
+######################################################################
+#####################Tutorial 4 widgets###############################
+######################################################################
+
+
+def extract_custom_frames(
+    input_path,
+    output_dir,
+    skip_start=None,
+    skip_end=None,
+    num_frames=None,
+    frame_skip=None,
+):
+    """
+    This function extracts frames from a video file and saves them as JPEG images.
+
+    :param input_path: The file path of the input movie file that needs to be processed
+    :param output_dir: The directory where the extracted frames will be saved as JPEG files
+    :param num_frames: The number of frames to extract from the input video. If this parameter is
+    provided, the function will randomly select num_frames frames to extract from the video
+    :param frame_skip: frame_skip is an optional parameter that determines how many frames to skip
+    between extracted frames. For example, if frame_skip is set to 10, then every 10th frame will be
+    extracted. If frame_skip is not provided, then all frames will be extracted
+    """
+    # Open the input movie file
+    cap = cv2.VideoCapture(input_path)
+
+    # Get base filename
+    input_stem = Path(input_path).stem
+
+    # Get the total number of frames in the movie
+    num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    skip_start = int(skip_start * fps)
+    skip_end = int(skip_end * fps)
+
+    frame_start = 0 if skip_start is None else skip_start
+    frame_end = num_frames_total if skip_end is None else num_frames_total - skip_end
+
+    # Determine which frames to extract based on the input parameters
+    if num_frames is not None:
+        frames_to_extract = random.sample(range(frame_start, frame_end), num_frames)
+    elif frame_skip is not None:
+        frames_to_extract = range(frame_start, frame_end, frame_skip)
+    else:
+        frames_to_extract = range(frame_end)
+
+    output_files, input_movies = [], []
+
+    # Loop through the frames and extract the selected ones
+    for frame_idx in frames_to_extract:
+        # Set the frame index for the next frame to read
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+
+        # Read the next frame
+        ret, frame = cap.read()
+
+        if ret:
+            # Construct the output filename for this frame
+            output_filename = os.path.join(
+                output_dir, f"{input_stem}_frame_{frame_idx}.jpg"
+            )
+
+            # Write the frame to a JPEG file
+            cv2.imwrite(output_filename, frame)
+
+            # Add output filename to list of files
+            output_files.append(output_filename)
+
+            # Add movie filename to list
+            input_movies.append(Path(input_path).name)
+
+    # Release the video capture object
+    cap.release()
+
+    return pd.DataFrame(
+        np.column_stack([input_movies, output_files, frames_to_extract]),
+        columns=["movie_filename", "frame_path", "frame_number"],
+    )
