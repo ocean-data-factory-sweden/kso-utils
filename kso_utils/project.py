@@ -1462,9 +1462,7 @@ class MLProjectProcessor(ProjectProcessor):
         if "_" in model:
             run_id = model.split("_")[1]
             try:
-                run = api.run(
-                    f"{team_name}/{self.project_name}/runs/{run_id}"
-                )
+                run = api.run(f"{team_name}/{self.project_name}/runs/{run_id}")
             except wandb.CommError:
                 logging.error("Run data not found")
                 return "empty_string", "empty_string"
