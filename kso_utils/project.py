@@ -1087,7 +1087,7 @@ class MLProjectProcessor(ProjectProcessor):
     # Function to choose a model to evaluate
     def choose_model(self):
         """
-        It takes a project name and returns a dropdown widget that displays the metrics of the model
+        It takes a project name that is defined in the class and returns a dropdown widget that displays the metrics of the model
         selected
 
         :param project_name: The name of the project you want to load the model from
@@ -1098,13 +1098,12 @@ class MLProjectProcessor(ProjectProcessor):
         api = wandb.Api()
         # weird error fix (initialize api another time)
 
-        project_name = self.project.Project_name.replace(" ", "_")
         if self.team_name == "wildlife-ai":
             logging.info("Please note: Using models from adi-ohad-heb-uni account.")
             full_path = "adi-ohad-heb-uni/project-wildlife-ai"
             api.runs(path=full_path).objects
         else:
-            full_path = f"{self.team_name}/{project_name.lower()}"
+            full_path = f"{self.team_name}/{self.project_name}"
 
         runs = api.runs(full_path)
 
@@ -1140,7 +1139,7 @@ class MLProjectProcessor(ProjectProcessor):
                 if change["new"] == "No file":
                     logging.info("Choose another file")
                 else:
-                    if project_name == "model-registry":
+                    if self.project_name == "model-registry":
                         logging.info("No metrics available")
                     else:
                         logging.info(
@@ -1230,7 +1229,7 @@ class MLProjectProcessor(ProjectProcessor):
 
     def eval_yolov5(self, exp_name: str, model_folder: str, conf_thres: float):
         # Find trained model weights
-        project_path = str(Path(self.output_path, self.project.Project_name.lower()))
+        project_path = str(Path(self.output_path, self.project_name))
         self.tuned_weights = f"{Path(project_path, model_folder, 'weights', 'best.pt')}"
         try:
             self.modules["val"].run(
@@ -1371,7 +1370,7 @@ class MLProjectProcessor(ProjectProcessor):
             logging.info("Please note: Using models from adi-ohad-heb-uni account.")
             full_path = "adi-ohad-heb-uni/project-wildlife-ai"
         else:
-            full_path = f"{self.team_name}/{self.project.Project_name.lower()}"
+            full_path = f"{self.team_name}/{self.project_name}"
         api = wandb.Api()
         try:
             api.artifact_type(type_name="model", project=full_path).collections()
@@ -1464,7 +1463,7 @@ class MLProjectProcessor(ProjectProcessor):
             run_id = model.split("_")[1]
             try:
                 run = api.run(
-                    f"{team_name}/{self.project.Project_name.lower()}/runs/{run_id}"
+                    f"{team_name}/{self.project_name}/runs/{run_id}"
                 )
             except wandb.CommError:
                 logging.error("Run data not found")
