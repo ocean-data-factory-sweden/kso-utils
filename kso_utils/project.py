@@ -65,7 +65,7 @@ class ProjectProcessor:
 
         # Create empty db and populate with local csv files data
         self.setup_db()
-         
+
         # Mount Snic server if needed
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):

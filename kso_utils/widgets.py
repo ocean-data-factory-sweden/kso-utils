@@ -459,7 +459,7 @@ def choose_agg_parameters(subject_type: str = "clip"):
         # Display both widgets in a VBox
         display(agg_iua)
         display(description_widget)
-        
+
         return agg_users, min_users, agg_obj, agg_iou, agg_iua
     else:
         return agg_users, min_users
