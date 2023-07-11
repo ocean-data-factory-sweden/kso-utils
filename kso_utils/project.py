@@ -976,6 +976,7 @@ class ProjectProcessor:
     ):
         return zu_utils.get_classifications(
             project=self.project,
+            conn=self.db_connection,
             workflow_dict=workflow_dict,
             workflows_df=workflows_df,
             subj_type=subj_type,
@@ -1105,20 +1106,14 @@ class MLProjectProcessor(ProjectProcessor):
         remove_nulls: bool = False,
         track_frames: bool = False,
         n_tracked_frames: int = 0,
+        test: bool = False,
     ):
-        species_list = kso_widgets.choose_species(self.project)
 
-        button = widgets.Button(
-            description="Aggregate frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-            style={"description_width": "initial"},
-        )
+        if test:
+            self.species_of_interest = db_utils.get_df_from_db_table(
+                self.db_connection, "species"
+            ).label.tolist()
 
-        def on_button_clicked(b):
-            self.species_of_interest = species_list.value
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
                 project=self.project,
@@ -1133,9 +1128,39 @@ class MLProjectProcessor(ProjectProcessor):
                 n_tracked_frames=n_tracked_frames,
                 agg_df=agg_df,
             )
+            assert False
 
-        button.on_click(on_button_clicked)
-        display(button)
+        else:
+            species_list = kso_widgets.choose_species(self.project)
+
+            button = widgets.Button(
+                description="Aggregate frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+                style={"description_width": "initial"},
+            )
+
+            def on_button_clicked(b):
+                self.species_of_interest = species_list.value
+                # code for prepare dataset for machine learning
+                yolo_utils.frame_aggregation(
+                    project=self.project,
+                    server_connection=self.server_connection,
+                    db_connection=self.db_connection,
+                    out_path=out_path,
+                    perc_test=perc_test,
+                    class_list=self.species_of_interest,
+                    img_size=img_size,
+                    remove_nulls=remove_nulls,
+                    track_frames=track_frames,
+                    n_tracked_frames=n_tracked_frames,
+                    agg_df=agg_df,
+                )
+
+            button.on_click(on_button_clicked)
+            display(button)
 
     def choose_entity(self, alt_name: bool = False):
         if self.team_name is None:
@@ -1323,7 +1348,12 @@ class MLProjectProcessor(ProjectProcessor):
         self.modules["wandb"].finish()
 
     def detect_yolov5(
-        self, source: str, save_dir: str, conf_thres: float, artifact_dir: str
+        self,
+        exp_name: str,
+        source: str,
+        save_dir: str,
+        conf_thres: float,
+        artifact_dir: str,
     ):
         self.run = self.modules["wandb"].init(
             entity=self.team_name,
@@ -1343,17 +1373,19 @@ class MLProjectProcessor(ProjectProcessor):
             save_txt=True,
             save_conf=True,
             project=save_dir,
-            name="detect",
+            name=exp_name,
         )
 
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
-        wandb.finish()
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir, self.run, wandb_log=True
+        )
 
     def track_individuals(
         self,
+        name: str,
         source: str,
         artifact_dir: str,
         eval_dir: str,
@@ -1361,6 +1393,7 @@ class MLProjectProcessor(ProjectProcessor):
         img_size: tuple = (540, 540),
     ):
         latest_tracker = yolo_utils.track_objects(
+            name=name,
             source_dir=source,
             artifact_dir=artifact_dir,
             tracker_folder=eval_dir,
@@ -1371,11 +1404,13 @@ class MLProjectProcessor(ProjectProcessor):
         yolo_utils.add_data_wandb(
             Path(latest_tracker).parent.absolute(), "tracker_output", self.run
         )
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
-        self.tracking_report = yolo_utils.generate_counts(
-            eval_dir, latest_tracker, artifact_dir, wandb_log=True
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir, self.run, wandb_log=True
         )
-        self.modules["wandb"].finish()
+        self.tracking_report = yolo_utils.generate_counts(
+            eval_dir, latest_tracker, artifact_dir, self.run, wandb_log=True
+        )
+        # self.modules["wandb"].finish()
 
     def enhance_yolov5(
         self, in_path: str, project_path: str, conf_thres: float, img_size=[640, 640]
@@ -1445,7 +1480,8 @@ class MLProjectProcessor(ProjectProcessor):
             logging.info("Please note: Using models from adi-ohad-heb-uni account.")
             full_path = "adi-ohad-heb-uni/project-wildlife-ai"
         else:
-            full_path = f"{self.team_name}/{self.project.Project_name.lower()}"
+            project_name = self.project.Project_name.replace(" ", "_")
+            full_path = f"{self.team_name}/{project_name.lower()}"
         api = wandb.Api()
         try:
             api.artifact_type(type_name="model", project=full_path).collections()

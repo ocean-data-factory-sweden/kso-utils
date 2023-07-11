@@ -1932,10 +1932,10 @@ def get_classifications(
         ]
 
     else:
-        # Select only frame subjects
+        # Select only clip subjects
         subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
 
-        # Select columns relevant for frame subjects
+        # Select columns relevant for clip subjects
         subjects_df = subjects_df[
             [
                 "id",

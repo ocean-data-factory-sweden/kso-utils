@@ -83,7 +83,7 @@ def choose_folder(start_path: str = ".", folder_type: str = ""):
 
 def choose_footage(
     project: Project,
-    server_info: dict,
+    server_connection: dict,
     db_connection,
     start_path: str = ".",
     folder_type: str = "",
