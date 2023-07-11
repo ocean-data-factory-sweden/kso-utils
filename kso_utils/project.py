@@ -1108,7 +1108,6 @@ class MLProjectProcessor(ProjectProcessor):
         n_tracked_frames: int = 0,
         test: bool = False,
     ):
-
         if test:
             self.species_of_interest = db_utils.get_df_from_db_table(
                 self.db_connection, "species"
