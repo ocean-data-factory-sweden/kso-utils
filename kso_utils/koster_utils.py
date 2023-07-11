@@ -15,6 +15,29 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
+def get_koster_col_names(table_name: str):
+    """Return a dictionary with the project-specific column names of a csv of interest
+    This function helps matching the schema format without modifying the column names of the original csv.
+
+    :param table_name: a string of the name of the schema table of interest
+    :return: a dictionary with the names of the columns
+    """
+
+    if table_name == "movies":
+        # Save the column names of interest in a dict
+        col_names_dic = {
+            "SamplingStart": "sampling_start",
+            "SamplingEnd": "sampling_end",
+            "filename": "fpath",
+        }
+    else:
+        # Create empty data frame as there are no project-specific
+        # columns for this table
+        col_names_dic = {}
+
+    return col_names_dic
+
+
 # Function to process subjects uploaded automatically
 def auto_subjects(subjects_df: pd.DataFrame, auto_date: str):
     """

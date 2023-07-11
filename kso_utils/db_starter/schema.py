@@ -19,7 +19,7 @@ duration datetime NULL,
 sampling_start real NULL,
 sampling_end real NULL,
 author text NULL,
-site_id integer NULL,
+site_id text NULL,
 fpath text NULL,
 UNIQUE (filename),
 FOREIGN KEY (site_id) REFERENCES sites (id)
@@ -58,11 +58,11 @@ FOREIGN KEY (movie_id) REFERENCES movies (id)
 CREATE TABLE IF NOT EXISTS species
 (
 id integer PRIMARY KEY,
-label text NOT NULL,
+commonName text NOT NULL,
 scientificName text NOT NULL,
 taxonRank text NOT NULL,
 kingdom text NOT NULL,
-UNIQUE (label)
+UNIQUE (commonName)
 );
 
 CREATE TABLE IF NOT EXISTS agg_annotations_clip

@@ -65,7 +65,7 @@ class ProjectProcessor:
 
         # Create empty db and populate with local csv files data
         self.setup_db()
-         
+
         # Mount Snic server if needed
         if self.project.server == "SNIC":
             if not os.path.exists(self.project.csv_folder):
@@ -78,7 +78,7 @@ class ProjectProcessor:
         return repr(self.__dict__)
 
     def keys(self):
-        """Print keys of ProjectProcessor object"""
+        """Log keys of ProjectProcessor object"""
         logging.debug("Stored variable names.")
         return list(self.__dict__.keys())
 
@@ -162,10 +162,18 @@ class ProjectProcessor:
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
+        # Retrieves the table names of the sql db
+        table_names = db_utils.get_schema_table_names(self.db_connection)
+
         # Select only attributes of the propjectprocessor that are df of local csvs
-        # (sorted in reverse alphabetically to load sites before movies)
+        # (sorted in reverse alphabetically to load sites before movies) and
+        # have a table in the sql db
         local_dfs = sorted(
-            [str(file) for file in list(self.keys()) if "local" in str(file)],
+            [
+                str(file)
+                for file in list(self.keys())
+                if "local" in str(file) and str(file).split("_", 2)[1] in table_names
+            ],
             reverse=True,
         )
 
@@ -251,9 +259,15 @@ class ProjectProcessor:
 
     def get_movie_info(self):
         """
-        This function checks what movies from the movies csv are available
+        This function checks what movies from the movies csv are available and returns 
+        three df with those available in folder/server and movies.csv, only available
+        in movies.csv and only available in folder/server
         """
-        self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
+        (
+            self.available_movies_df,
+            self.no_available_movies_df,
+            self.no_info_movies_df,
+        ) = movie_utils.retrieve_movie_info_from_server(
             project=self.project,
             db_connection=self.db_connection,
             server_connection=self.server_connection,
@@ -273,17 +287,17 @@ class ProjectProcessor:
     def preview_media(self):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
-        function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
+        function `f` that takes in three arguments: `project`, `csv_paths`, and `available_movies_df`. The
         function `f` is an asynchronous function that takes in the value of the `movie_selected` widget
         and displays the movie preview
         """
-        movie_selected = kso_widgets.select_movie(self.server_movies_csv)
+        movie_selected = kso_widgets.select_movie(self.available_movies_df)
 
-        async def f(project, server_connection, server_movies_csv):
+        async def f(project, server_connection, available_movies_df):
             x = await kso_widgets.single_wait_for_change(movie_selected, "value")
             html, movie_path = movie_utils.preview_movie(
                 project=project,
-                available_movies_df=server_movies_csv,
+                available_movies_df=available_movies_df,
                 movie_i=x,
                 server_connection=server_connection,
             )
@@ -292,7 +306,7 @@ class ProjectProcessor:
             self.movie_path = movie_path
 
         asyncio.create_task(
-            f(self.project, self.server_connection, self.server_movies_csv)
+            f(self.project, self.server_connection, self.available_movies_df)
         )
 
     def check_meta_sync(self, meta_key: str):
@@ -329,12 +343,16 @@ class ProjectProcessor:
         movie_utils.check_movies_meta(
             project=self.project,
             csv_paths=self.csv_paths,
-            server_movies_csv=self.server_movies_csv,
-            conn=self.db_connection,
+            db_connection=self.db_connection,
+            available_movies_df=self.available_movies_df,
+            no_info_movies_df=self.no_info_movies_df,
             server_connection=self.server_connection,
             review_method=review_method,
             gpu_available=gpu_available,
         )
+
+    def concatenate_local_movies(self):
+        movie_utils.concatenate_local_movies(self.csv_paths)
 
     def check_species_meta(self):
         return db_utils.check_species_meta(
@@ -579,7 +597,7 @@ class ProjectProcessor:
 
         def on_button_clicked(b):
             self.generated_clips = t_utils.create_clips(
-                available_movies_df=self.server_movies_csv,
+                available_movies_df=self.available_movies_df,
                 movie_i=movie_name,
                 movie_path=movie_path,
                 clip_selection=clip_selection,
@@ -675,6 +693,7 @@ class ProjectProcessor:
         # populate the sql subjects table
         zoo_utils.sample_subjects_from_workflows(
             project=self.project,
+            server_connection=self.server_connection,
             db_connection=self.db_connection,
             workflow_widget_checks=self.workflow_widget.checks,
             workflows_df=self.zoo_info["workflows"],
@@ -794,7 +813,7 @@ class ProjectProcessor:
             if len(results) > 0:
                 self.frames_to_upload_df = pd.concat(results)
                 self.frames_to_upload_df["species_id"] = pd.Series(
-                    [t_utils.get_species_ids(self.project, species_list.value)]
+                    [t_utils.get_species_ids(self.db_connection, species_list.value)]
                     * len(self.frames_to_upload_df)
                 )
                 self.frames_to_upload_df = self.frames_to_upload_df.merge(
@@ -921,6 +940,7 @@ class ProjectProcessor:
             self.project,
             self.db_connection,
             class_df,
+            self.csv_paths,
             classified_by,
             self.zoo_info,
         )

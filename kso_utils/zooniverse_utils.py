@@ -21,6 +21,7 @@ from pathlib import Path
 
 # util imports
 from kso_utils.project_utils import Project
+from kso_utils.db_utils import add_db_info_to_df
 
 # Widget imports
 from IPython.display import display
@@ -292,11 +293,72 @@ class WidgetWorkflowSelection(widgets.VBox):
         return {w.description: w.value for w in self.bool_widget_holder.children}
 
 
+def get_workflow_labels(
+    workflow_df: pd.DataFrame, workflow_id: int, workflow_version: int
+):
+    """
+    > This function takes a df of workflows of interest and retrieves the labels and common names of the choices cit scientists have in a survey task in Zooniverse.
+    the function is a modified version of the 'get_workflow_info' function by @lcjohnso
+    https://github.com/zooniverse/Data-digging/blob/6e9dc5db6f6125316616c4b04ae5fc4223826a25/scripts_GeneralPython/get_workflow_info.pybiological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
+    :param workflow_df: df of the workflows of the Zooniverse project of interest,
+    :param workflow_id: integer of the workflow id of interest,
+    :param workflow_version: integer of the workflow version of interest.
+    :return: a df with the common name and label of the annotations for the workflow.
+    """
+    # initialize the output
+    workflow_info = {}
+
+    # parse the tasks column as a json so we can work with it (it just loads as a string)
+    workflow_df["tasks_json"] = [json.loads(q) for q in workflow_df["tasks"]]
+    workflow_df["strings_json"] = [json.loads(q) for q in workflow_df["strings"]]
+
+    # identify the row of the workflow dataframe we want to extract
+    is_theworkflow = (workflow_df["workflow_id"] == workflow_id) & (
+        workflow_df["version"] == workflow_version
+    )
+
+    # extract it
+    theworkflow = workflow_df[is_theworkflow]
+
+    # pandas is a little weird about accessing stuff sometimes
+    # we should only have 1 row in theworkflow but the row index will be retained
+    # from the full workflow_df, so we need to figure out what it is
+    i_wf = theworkflow.index[0]
+
+    # extract the tasks as a json
+    tasks = theworkflow["tasks_json"][i_wf]
+    strings = theworkflow["strings_json"][i_wf]
+
+    workflow_info = tasks.copy()
+
+    tasknames = workflow_info.keys()
+    workflow_info["tasknames"] = tasknames
+
+    # now that we've extracted the actual task names, add the first task
+    workflow_info["first_task"] = theworkflow["first_task"].values[0]
+
+    # now join workflow structure to workflow label content for each task
+
+    for task in tasknames:
+        # Create an empty dictionary to host the dfs of interest
+        label_common_name_dict = {"commonName": [], "label": []}
+
+        # Create an empty dictionary to host the dfs of interest
+        label_common_name_dict = {"commonName": [], "label": []}
+        for choice in workflow_info[task]["choices"]:
+            label_common_name_dict["label"].append(choice)
+            choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
+            label_common_name_dict["commonName"].append(choice_name)
+
+        if task == "T0":
+            break
+
+    return pd.DataFrame.from_dict(label_common_name_dict)
+
+
 ##########################
 # Classification-specific functions
 ##########################
-
-from kso_utils.db_utils import add_db_info_to_df
 
 
 def process_zoo_classifications(
@@ -318,7 +380,6 @@ def process_zoo_classifications(
     """
 
     ### Make sure all the classifications have existing subjects
-
     # Combine the classifications and subjects dataframes
     classes_df = add_db_info_to_df(
         project,
@@ -413,29 +474,27 @@ def process_zoo_classifications(
 
     # Specify the cols specific to each subject type
     if subject_type == "clip":
-        subject_cols1 = ["first_seen", "how_many"]
-        subject_cols2 = []
+        subject_cols = ["first_seen", "how_many"]
     else:
-        subject_cols1 = ["x", "y", "w", "h"]
-        subject_cols2 = ["frame_number", "movie_id"]
+        subject_cols = ["x", "y", "w", "h"]
 
     # Combine common columns for the flattened annotations with subject type specific
     annot_cols = ["classification_id", "label"]
-    annot_cols.extend(subject_cols1)
+    annot_cols.extend(subject_cols)
 
     # Create a data frame of the flatten annotations
     flat_annot_df = pd.DataFrame(rows_list, columns=annot_cols)
 
     # Ensure the empty cells are replace with NAN
-    flat_annot_df[subject_cols1] = (
-        flat_annot_df[subject_cols1]
+    flat_annot_df[subject_cols] = (
+        flat_annot_df[subject_cols]
         .astype(str)
         .apply(lambda x: x.str.strip())
         .replace("", np.nan)
     )
 
     # Ensure the subject type specific columns are numeric
-    flat_annot_df[subject_cols1] = flat_annot_df[subject_cols1].astype("float64")
+    flat_annot_df[subject_cols] = flat_annot_df[subject_cols].astype("float64")
 
     ### Combine the flatten the classifications with the subject information
 
@@ -468,7 +527,6 @@ def process_zoo_classifications(
             "retirement_reason",
         ]
     )
-    annot_cols.extend(subject_cols2)
 
     # Select only relevant columns
     annot_df = annot_df[annot_cols]
@@ -827,140 +885,145 @@ def add_subject_site_movie_info_to_class(
 
 def populate_subjects(
     project: Project,
+    server_connection: dict,
     db_connection,
     subjects: pd.DataFrame,
 ):
     """
     Populate the subjects table with the subject metadata
 
-    :param  project: the project object
+    :param project: the project object
+    :param server_connection: A dictionary with the client and sftp_client
     :param subjects: the subjects dataframe
     :param db_connection: SQL connection object
 
     """
 
-    from kso_utils.koster_utils import process_koster_subjects
-    from kso_utils.spyfish_utils import process_spyfish_subjects
-
     # Check if the Zooniverse project is the KSO
-    if project.Project_name == "Koster_Seafloor_Obs":
-        subjects = process_koster_subjects(subjects, db_connection)
-
-    else:
+    if not project.Project_name == "Koster_Seafloor_Obs":
         # Extract metadata from uploaded subjects
         subjects_df, subjects_meta = extract_metadata(subjects)
 
         # Combine metadata info with the subjects df
         subjects = pd.concat([subjects_df, subjects_meta], axis=1)
 
-        # Check if the Zooniverse project is the Spyfish
-        if project.Project_name == "Spyfish_Aotearoa":
-            subjects = process_spyfish_subjects(subjects, db_connection)
+    else:
+        from kso_utils.koster_utils import process_koster_subjects
 
-        # If project is not KSO or Spyfish standardise subject info
-        else:
-            # Create columns to match schema if they don't exist
-            subjects["frame_exp_sp_id"] = subjects.get("frame_exp_sp_id", np.nan)
-            subjects["frame_number"] = subjects.get("frame_number", np.nan)
-            subjects["subject_type"] = subjects.get("subject_type", np.nan)
+        subjects = process_koster_subjects(subjects, db_connection)
+        # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+    #     if "Subject_type" in subjects.columns:
+    #         subjects["subject_type"] = subjects[
+    #             ["subject_type", "Subject_type"]
+    #         ].apply(lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
+    #         subjects.drop(columns=["Subject_type"], inplace=True)
 
-            # Select only relevant metadata columns
-            subjects = subjects[
-                [
-                    "subject_id",
-                    "project_id",
-                    "workflow_id",
-                    "subject_set_id",
-                    "locations",
-                    "movie_id",
-                    "frame_number",
-                    "frame_exp_sp_id",
-                    "upl_seconds",
-                    "Subject_type",
-                    "subject_type",
-                    "#VideoFilename",
-                    "#clip_length",
-                    "classifications_count",
-                    "retired_at",
-                    "retirement_reason",
-                    "created_at",
-                ]
+    #     # Create columns to match schema if they don't exist
+    #     missing_cols = ["upl_seconds","#VideoFilename","#frame_number","#clip_length","movie_id"]
+    #     for i in missing_cols:
+    #         subjects[i] = subjects.get(i, np.nan)
+
+    #     # Add a subject type if it is missing
+    #     subjects["subject_type"] = subjects[["clip_start_time", "subject_type"]].apply(
+    #         lambda x: "frame" if np.isnan(x[0]) else "clip", 1
+    #     )
+    #     # Remove clip subjects with no clip_start_time info (from different projects)
+    #     subjects = subjects[
+    #         ~(
+    #             (subjects["subject_type"] == "clip")
+    #             & (subjects["clip_start_time"].isna())
+    #         )
+    #     ]
+    #     # Fix subjects where clip_start_time is not provided but upl_seconds is
+    #     if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
+    #         subjects["clip_start_time"] = subjects[
+    #             ["clip_start_time", "upl_seconds"]
+    #         ].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
+
+    # Check if the Zooniverse project is the Spyfish
+    if project.Project_name == "Spyfish_Aotearoa":
+        from kso_utils.spyfish_utils import process_spyfish_subjects
+
+        # Process the spyfish movies
+        subjects = process_spyfish_subjects(
+            project, server_connection, subjects, db_connection
+        )
+
+    # Ensure that subject_ids are not duplicated by workflow
+    subjects = subjects.drop_duplicates(subset="subject_id")
+
+    # Rename columns that start with "#"
+    hash_columns = {col: col.replace("#", "") for col in subjects.columns}
+
+    # Rename columns to match the db format
+    subjects = subjects.rename(columns=hash_columns)
+
+    # Rename common non-standard column names
+    rename_cols = {
+        "subject_id": "id",
+        "VideoFilename": "filename",
+        "upl_seconds": "clip_start_time",
+        "Subject_type": "subject_type",
+    }
+
+    # Rename columns to match the db format
+    subjects = subjects.rename(columns=rename_cols)
+
+    if "movie_id" not in subjects.columns:
+        from kso_utils.db_utils import get_df_from_db_table
+
+        ##### Match site code to name from movies sql and get movie_id to save it as "movie_id"
+        # Query id and filenames from the movies table
+        movies_df = get_df_from_db_table(db_connection, "movies")[["id", "filename"]]
+
+        # Rename columns to match subject df
+        movies_df = movies_df.rename(columns={"id": "movie_id"})
+
+        # Reference the movienames with the id movies table
+        subjects = pd.merge(subjects, movies_df, how="left", on="filename")
+
+    if subjects["subject_type"].value_counts().idxmax() == "clip":
+        # Calculate the clip_end_time
+        subjects["clip_end_time"] = (
+            subjects["clip_start_time"] + subjects["clip_length"]
+        )
+
+    elif subjects["subject_type"].value_counts().idxmax() == "frame":
+        ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
+        if "frame_exp_sp_id" in subjects.columns:
+            from kso_utils.db_utils import get_df_from_db_table
+
+            # Query id and sci. names from the species table
+            species_df = get_df_from_db_table(db_connection, "species")[
+                ["id", "scientificName"]
             ]
 
-            # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-            if "Subject_type" in subjects.columns:
-                subjects["subject_type"] = subjects[
-                    ["subject_type", "Subject_type"]
-                ].apply(lambda x: x[1] if isinstance(x[1], str) else x[0], 1)
-                subjects.drop(columns=["Subject_type"], inplace=True)
+            # Rename columns to match subject df
+            species_df = species_df.rename(columns={"id": "frame_exp_sp_id"})
 
-            # Rename columns to match the db format
-            subjects = subjects.rename(
-                columns={
-                    "#VideoFilename": "filename",
-                    "upl_seconds": "clip_start_time",
-                    "#frame_number": "frame_number",
-                }
+            # Reference the expected species on the uploaded subjects
+            subjects = pd.merge(
+                subjects,
+                species_df,
+                how="left",
+                on="frame_exp_sp_id",
             )
 
-            # Remove clip subjects with no clip_start_time info (from different projects)
-            subjects = subjects[
-                ~(
-                    (subjects["subject_type"] == "clip")
-                    & (subjects["clip_start_time"].isna())
-                )
-            ]
+    else:
+        right_types = ["frame", "clip"]
 
-            # Calculate the clip_end_time
-            subjects["clip_end_time"] = (
-                subjects["clip_start_time"] + subjects["#clip_length"]
-            )
+        # Count the number of rows to be excluded
+        logging.info(
+            f"{subjects[~subjects.subject_type.isin(right_types)].shape[0]}"
+            f" subjects missing the right subject_type info"
+        )
 
-    # Set subject_id information as id
-    subjects = subjects.rename(columns={"subject_id": "id"})
+        # Select only rows with the right subject_type info
+        subjects = subjects[subjects["subject_type"].isin(right_types)]
 
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(
         lambda x: literal_eval(x)["0"]
-    )
-
-    # Set movie_id column to None if no movies are linked to the subject
-    if project.movie_folder == "None" and project.server in ["LOCAL", "SNIC"]:
-        subjects["movie_id"] = None
-
-    # Fix subjects where clip_start_time is not provided but upl_seconds is
-    if "clip_start_time" in subjects.columns and "upl_seconds" in subjects.columns:
-        subjects["clip_start_time"] = subjects[
-            ["clip_start_time", "upl_seconds"]
-        ].apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], 1)
-
-    # Set the columns in the right order
-    subjects = subjects[
-        [
-            "id",
-            "subject_type",
-            "filename",
-            "clip_start_time",
-            "clip_end_time",
-            "frame_exp_sp_id",
-            "frame_number",
-            "workflow_id",
-            "subject_set_id",
-            "classifications_count",
-            "retired_at",
-            "retirement_reason",
-            "created_at",
-            "https_location",
-            "movie_id",
-        ]
-    ]
-
-    # Ensure that subject_ids are not duplicated by workflow
-    subjects = subjects.drop_duplicates(subset="id")
-
-    # Add a subject type if it is missing
-    subjects["subject_type"] = subjects[["clip_start_time", "subject_type"]].apply(
-        lambda x: "frame" if np.isnan(x[0]) else "clip", 1
     )
 
     # Warn users if original movies can't be traced
@@ -978,6 +1041,22 @@ def populate_subjects(
             f" The trouble filename of the movies are: {movie_missing.filename.unique()}"
         )
 
+    # Get the names required for the subject table
+    from kso_utils.db_utils import get_column_names_db
+
+    required_cols = list(get_column_names_db(db_connection, "subjects").values())
+
+    # Convert lists to sets and find the difference
+    difference = list(set(required_cols) - set(subjects.columns))
+
+    if difference:
+        logging.info(f"Creating empty values for the {difference} columns")
+        # Create columns to match schema if they don't exist
+        [subjects.__setitem__(i, subjects.get(i, np.nan)) for i in difference]
+
+    # Set the subject columns in the right order
+    subjects = subjects[required_cols]
+
     from kso_utils.db_utils import test_table, add_to_table, get_df_from_db_table
 
     # Test table validity
@@ -991,7 +1070,7 @@ def populate_subjects(
         num_fields=15,
     )
 
-    ##### Print how many subjects are in the db
+    ##### log how many subjects are in the db
     # Query id and subject type from the subjects table
     subjects_df = get_df_from_db_table(db_connection, "subjects")
 
@@ -1002,6 +1081,7 @@ def populate_subjects(
 
 def sample_subjects_from_workflows(
     project: Project,
+    server_connection: dict,
     db_connection,
     workflow_widget_checks,
     workflows_df: pd.DataFrame,
@@ -1011,7 +1091,8 @@ def sample_subjects_from_workflows(
     Retrieve a subset of the subjects from the workflows of interest and
     populate the sql subjects table
 
-    :param  project: the project object
+    :param project: the project object
+    :param server_connection: A dictionary with the client and sftp_client
     :param db_connection: SQL connection object
     :param workflow_widget_checks: the widget with information of the selected workflows
     :param workflows_df: dataframe with the project workflows information (retrieved from Zooniverse)
@@ -1046,7 +1127,7 @@ def sample_subjects_from_workflows(
 
     if len(subjects_series) > 0:
         # Fill or re-fill subjects table
-        populate_subjects(project, db_connection, subjects_series)
+        populate_subjects(project, server_connection, db_connection, subjects_series)
     else:
         logging.error("No subjects to populate database from the workflows selected.")
 
@@ -1274,8 +1355,8 @@ def extract_frames_for_zoo(
 
     # Combine the aggregated clips and subjects dataframes
     comb_df = db_utils.add_db_info_to_df(
-        project=self.project,
-        db_connection=self.db_connection,
+        project=project,
+        db_connection=db_connection,
         df=sp_agg_df,
         table_name="subjects",
         cols_interest="id, clip_start_time, movie_id",
@@ -1287,9 +1368,9 @@ def extract_frames_for_zoo(
     # Add information of the original movies associated with the subjects
     # (e.g. the movie that was clipped from)
     movies_df = movie_utils.retrieve_movie_info_from_server(
-        project=self.project,
-        server_connection=self.server_connection,
-        db_connection=self.db_connection,
+        project=project,
+        server_connection=server_connection,
+        db_connection=db_connection,
     )
 
     # Include movies' filepath and fps to the df
@@ -1338,7 +1419,7 @@ def extract_frames_for_zoo(
     comb_df = zoo_utils.check_frames_uploaded(self.project, comb_df)
 
     # Specify the temp location to store the frames
-    if self.project.server == "SNIC":
+    if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
         frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
@@ -1349,7 +1430,7 @@ def extract_frames_for_zoo(
     # and save the df with information about the frames in the projectprocessor
     self.generated_frames = movie_utils.extract_frames(
         project=self.project,
-        server_connection=self.server_connection,
+        server_connection=server_connection,
         df=comb_df,
         frames_folder=frames_folder,
     )
@@ -1477,7 +1558,7 @@ def modify_frames(
             [os.chmod(root, 0o777) for root, dirs, files in os.walk(mod_frames_folder)]
 
         #### Modify the clips###
-        # Read each clip and modify them (printing a progress bar)
+        # Read each clip and modify them (showing a progress bar)
         for index, row in tqdm(
             frames_to_upload_df.iterrows(), total=frames_to_upload_df.shape[0]
         ):

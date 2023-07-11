@@ -459,7 +459,7 @@ def choose_agg_parameters(subject_type: str = "clip"):
         # Display both widgets in a VBox
         display(agg_iua)
         display(description_widget)
-        
+
         return agg_users, min_users, agg_obj, agg_iou, agg_iua
     else:
         return agg_users, min_users
@@ -707,15 +707,29 @@ def choose_movie_review():
     """
     choose_movie_review_widget = widgets.RadioButtons(
         options=[
-            "Basic: Automatic check for empty fps/duration and sampling start/end cells in the movies.csv",
-            "Advanced: Basic + Check format and metadata of each movie",
+            "Basic: Checks for available movies and empty cells in movies.csv",
+            "Advanced: Basic + Check movies format and movies with missing information",
         ],
-        description="What method you want to use to review the movies:",
+        description="Select the movies review method:",
         disabled=False,
         layout=Layout(width="95%"),
         style={"description_width": "initial"},
     )
+    display(
+        HTML(
+            """<font size="2px">In the Basic review, we check:<br>
+            all movies in the "movies.csv" are in the "movie_folder",<br>
+            all movies in the "movie_folder" are in the "movies.csv" and,<br>
+            for empty cells in the fps, duration, sampling_start and sampling_end columns of the "movies.csv". If there are empty cells, retrieves the information and saves it into the movies.csv.<br><br>
+    In the Advanced review, in addition to the basic checks, we also check:<br>
+    the format, frame rate and codec of the movies are correct. If not, automatically standarises the movies.<br>
+    Note the advanced review can take a while to standarise all the movies<br>
+    </font>"""
+        )
+    )
+
     display(choose_movie_review_widget)
+
     return choose_movie_review_widget
 
 
