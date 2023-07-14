@@ -360,9 +360,6 @@ def frame_aggregation(
     clean_list = [clean_label(label) for label in class_list]
     train_rows = agg_df[agg_df.label.isin(clean_list)]
 
-    print(agg_df.label)
-    print(clean_list)
-
     # Rename columns if in different format
     train_rows = train_rows.rename(
         columns={"x": "x_position", "y": "y_position", "w": "width", "h": "height"}

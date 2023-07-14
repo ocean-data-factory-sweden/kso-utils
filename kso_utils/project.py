@@ -600,26 +600,14 @@ class ProjectProcessor:
             )
 
             def on_button_clicked(b):
-                self.generated_clips = t_utils.create_clips(
-                    available_movies_df=self.server_movies_csv,
-                    movie_i=movie_name,
-                    movie_path=movie_path,
-                    clip_selection=clip_selection,
-                    project=self.project,
-                    modification_details={},
-                    gpu_available=use_gpu,
-                    pool_size=pool_size,
-                )
-                mod_clips = t_utils.create_modified_clips(
-                    self.project,
-                    self.generated_clips.clip_path,
+                self.get_clips(
                     movie_name,
-                    clip_modification.checks,
+                    movie_path,
+                    clip_selection,
                     use_gpu,
                     pool_size,
+                    clip_modification,
                 )
-                # Temporary workaround to get both clip paths
-                self.generated_clips["modif_clip_path"] = mod_clips
 
             button.on_click(on_button_clicked)
             display(clip_modification)
@@ -628,26 +616,14 @@ class ProjectProcessor:
             clip_selection.kwargs = {"clip_length": 5, "clips_range": [0, 10]}
             clip_selection.result = {}
             clip_selection.result["clip_start_time"] = [0]
-            self.generated_clips = t_utils.create_clips(
-                available_movies_df=self.server_movies_csv,
-                movie_i=movie_name,
-                movie_path=movie_path,
-                clip_selection=clip_selection,
-                project=self.project,
-                modification_details={},
-                gpu_available=use_gpu,
-                pool_size=pool_size,
-            )
-            mod_clips = t_utils.create_modified_clips(
-                self.project,
-                self.generated_clips.clip_path,
+            self.get_clips(
                 movie_name,
-                clip_modification.checks,
+                movie_path,
+                clip_selection,
                 use_gpu,
                 pool_size,
+                clip_modification,
             )
-            # Temporary workaround to get both clip paths
-            self.generated_clips["modif_clip_path"] = mod_clips
 
         button.on_click(on_button_clicked)
         display(clip_modification)
@@ -1301,7 +1277,7 @@ class MLProjectProcessor(ProjectProcessor):
         return t_utils.choose_train_params(self.model_type)
 
     def train_yolov5(
-        self, exp_name, weights, project, epochs=50, batch_size=16, img_size=640
+        self, exp_name, weights, project, epochs=50, batch_size=16, img_size=[640, 640]
     ):
         if self.model_type == 1:
             self.modules["train"].run(
