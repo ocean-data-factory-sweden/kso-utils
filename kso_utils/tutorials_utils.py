@@ -1598,7 +1598,6 @@ def format_to_gbif(
             ["movie_id", "commonName"], keep="last"
         )
 
-
         # Rename columns to match Darwin Data Core Standards
         comb_df = comb_df.rename(
             columns={

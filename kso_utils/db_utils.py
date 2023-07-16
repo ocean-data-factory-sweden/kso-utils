@@ -191,7 +191,6 @@ def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
     return df
 
 
-
 def get_schema_table_names(conn: sqlite3.Connection):
     """
     > This function retrieves a list with table names of the sql db
@@ -205,7 +204,6 @@ def get_schema_table_names(conn: sqlite3.Connection):
     table_names = [table[0] for table in tables]
 
     return table_names
-
 
 
 def get_column_names_db(conn: sqlite3.Connection, table_i: str):
@@ -232,7 +230,7 @@ def cols_rename_to_schema(
     project: Project,
     table_name: str,
     df: pd.DataFrame,
-    reverse_lookup: bool=False,
+    reverse_lookup: bool = False,
 ):
     """
     > This function renames columns of a df (of one of the three intial project csv files)
@@ -249,21 +247,25 @@ def cols_rename_to_schema(
     # schema fields
     if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
         from kso_utils.spyfish_utils import get_spyfish_col_names
+
         col_names_lookup = get_spyfish_col_names(table_name)
 
     # Get the koster-specific column names and their correspondent
     # schema fields
     if project.Project_name == "Koster_Seafloor_Obs":
         from kso_utils.koster_utils import get_koster_col_names
+
         col_names_lookup = get_koster_col_names(table_name)
 
     # Rename project-specific columns using the dictionary
     if "col_names_lookup" in locals():
         if reverse_lookup:
             # Reverse the dictionaries if formatting from schema to csv
-            col_names_lookup = dict(zip(col_names_lookup.values(), col_names_lookup.keys()))
-        
-        df = df.rename(columns=col_names_lookup)    
+            col_names_lookup = dict(
+                zip(col_names_lookup.values(), col_names_lookup.keys())
+            )
+
+        df = df.rename(columns=col_names_lookup)
 
     return df
 
@@ -328,10 +330,7 @@ def populate_db(
 
 
 def process_test_csv(
-    conn: sqlite3.Connection, 
-    project: Project, 
-    local_df: pd.DataFrame, 
-    init_key=str
+    conn: sqlite3.Connection, project: Project, local_df: pd.DataFrame, init_key=str
 ):
     """
     > This function process a csv of interest and tests for compatibility with the
@@ -377,7 +376,7 @@ def process_test_csv(
         )
 
     # Create a dictionary with the table-specific column id and its schema match
-    id_lookup = {table_id: "id"}    
+    id_lookup = {table_id: "id"}
 
     # Rename id columns using the dictionary
     local_df = local_df.rename(columns=id_lookup)
@@ -400,7 +399,7 @@ def process_test_csv(
             f"{missing_cols} column(s) not found and"
             f" are required for the {init_key}'s schema table"
             f" The col names are:{column_names}"
-        )        
+        )
 
     # Select only columns that have fields in the sql table
     local_df = local_df[[c for c in required_columns if c in local_df.columns]]
@@ -438,7 +437,6 @@ def add_db_info_to_df(
     project: Project,
     conn: sqlite3.Connection,
     csv_paths: dict,
-
     df: pd.DataFrame,
     table_name: str,
     cols_interest: str = "*",
@@ -493,7 +491,6 @@ def add_db_info_to_df(
         left_on_col = "commonName"
         right_on_col = "commonName"
 
-
     else:
         logging.error(
             f"The table_name specified ({table_name}) doesn't have a merging option"
@@ -527,4 +524,3 @@ def get_species_ids(conn: sqlite3.Connection, species_list: list):
         )["id"].tolist()
 
     return species_ids
-

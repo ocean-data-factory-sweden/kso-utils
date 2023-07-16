@@ -210,10 +210,7 @@ def update_csv_server(
         logging.error(
             f"{orig_csv} couldn't be updated. Check writing permisions to the server."
         )
-    logging.info(
-        f"{orig_csv} updated to the server."
-    )
-
+    logging.info(f"{orig_csv} updated to the server.")
 
 
 def upload_file_server(
