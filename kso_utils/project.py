@@ -259,7 +259,7 @@ class ProjectProcessor:
 
     def get_movie_info(self):
         """
-        This function checks what movies from the movies csv are available and returns 
+        This function checks what movies from the movies csv are available and returns
         three df with those available in folder/server and movies.csv, only available
         in movies.csv and only available in folder/server
         """
@@ -717,7 +717,6 @@ class ProjectProcessor:
             self.workflow_widget.checks["Subject type: #0"],
             agg_params,
         )
-
 
     def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
         self.aggregated_zoo_classifications = zoo_utils.extract_frames_for_zoo()

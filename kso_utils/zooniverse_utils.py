@@ -235,7 +235,7 @@ def clean_label(label_string: str):
     pattern = r"[^A-Za-z0-9]+"
     cleaned_string = re.sub(pattern, "", label_string)
     return cleaned_string
-  
+
 
 ##########################
 # Workflow-specific functions
@@ -360,7 +360,8 @@ def get_workflow_labels(
 # Classification-specific functions
 ##########################
 
-    ### Flatten the classifications provided the cit. scientists
+### Flatten the classifications provided the cit. scientists
+
 
 def process_zoo_classifications(
     project: Project,
@@ -531,7 +532,6 @@ def process_zoo_classifications(
 
     # Select only relevant columns
     annot_df = annot_df[annot_cols]
-
 
     # Report the number of annotations flattened
     logging.info(
@@ -1152,9 +1152,9 @@ def set_zoo_clip_metadata(
     :param sitesdf: a df with the information of the sites of the project
     :param moviesdf: a df with the information of the movies of the project
     :return: upload_to_zoo, sitename, created_on
-   
+
     """
-    
+
     # Add spyfish-specific info
     if project.Project_name == "Spyfish_Aotearoa":
         # Rename the site columns to match standard cols names
@@ -1275,7 +1275,6 @@ def upload_clips_to_zooniverse(
 
     # Estimate the number of clips
     n_clips = upload_to_zoo.shape[0]
-
 
     # Create a new subject set to host the clips
     subject_set = SubjectSet()

@@ -66,11 +66,7 @@ def get_fps_duration(movie_path: str):
     return fps, duration
 
 
-def get_movie_path(
-    f_path: str, 
-    project: Project, 
-    server_connection: dict = None
-):
+def get_movie_path(f_path: str, project: Project, server_connection: dict = None):
     """
     Function to get the path (or url) of a movie
 
@@ -94,11 +90,7 @@ def get_movie_path(
         return f_path
 
 
-def movies_in_movie_folder(
-    project: Project, 
-    db_connection, 
-    server_connection: dict
-):
+def movies_in_movie_folder(project: Project, db_connection, server_connection: dict):
     """
     This function uses the project information and the database information, and returns
     a dataframe of the movies in the "movie_folder".
@@ -168,9 +160,7 @@ def movies_in_movie_folder(
 
 
 def retrieve_movie_info_from_server(
-    project: Project, 
-    db_connection, 
-    server_connection: dict
+    project: Project, db_connection, server_connection: dict
 ):
     """
     This function uses the project information and the database information, and returns a dataframe with the
@@ -332,11 +322,7 @@ def preview_movie(
         return HTML(html_code), movie_path
 
 
-def check_movie_uploaded(
-    project: Project, 
-    db_connection,
-    movie_i: str
-):
+def check_movie_uploaded(project: Project, db_connection, movie_i: str):
     """
     This function takes in a movie name and a dictionary containing the path to the database and returns
     a boolean value indicating whether the movie has already been uploaded to Zooniverse
@@ -742,11 +728,11 @@ def check_movies_meta(
     :param gpu_available: Boolean, whether or not a GPU is available
     """
 
-    
-     # Load the csv with movies information
-    df = pd.read_csv(csv_paths["local_movies_csv"])   
-    
+    # Load the csv with movies information
+    df = pd.read_csv(csv_paths["local_movies_csv"])
+
     from kso_utils.db_utils import cols_rename_to_schema
+
     # Rename the project-specific column names
     # that match schema standard names
     df = cols_rename_to_schema(
@@ -754,7 +740,7 @@ def check_movies_meta(
         table_name="movies",
         df=df,
     )
-    
+
     # Check all available movies in the server/storage have information in the movies.csv
     # Get a list of all the available movies
     if not no_info_movies_df.empty:
@@ -854,7 +840,9 @@ def check_movies_meta(
 
         # Fill out missing sampling end information
         if empty_sampling_end.any():
-            df_toreview.loc[empty_sampling_end, "sampling_end"] = df_toreview["duration"]
+            df_toreview.loc[empty_sampling_end, "sampling_end"] = df_toreview[
+                "duration"
+            ]
             mov_list = df_toreview[empty_sampling_end].filename.unique()
             logging.info(f"Added sampling_end of the movies {mov_list}")
 
@@ -886,7 +874,7 @@ def check_movies_meta(
             df_toreview.set_index("movie_id", inplace=True)
             df.update(df_toreview)
             df.reset_index(drop=False, inplace=True)
-            
+
             # Rename back the project-specific column names
             # that don't match schema standard names
             df = cols_rename_to_schema(
