@@ -626,7 +626,7 @@ def frame_aggregation(
                 if track_frames:
                     # Track n frames after object is detected
                     tboxes[named_tuple].extend(
-                        track_objects(
+                        track_frames(
                             video_dict[final_name],
                             grouped_fields[-1],
                             bboxes[named_tuple],
@@ -820,7 +820,7 @@ def createTrackerByName(trackerType: str):
     return tracker
 
 
-def track_objects(
+def track_frames(
     video, class_ids: list, bboxes: list, start_frame: int, last_frame: int
 ):
     """

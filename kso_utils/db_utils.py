@@ -191,6 +191,7 @@ def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
     return df
 
 
+
 def get_schema_table_names(conn: sqlite3.Connection):
     """
     > This function retrieves a list with table names of the sql db
@@ -206,6 +207,7 @@ def get_schema_table_names(conn: sqlite3.Connection):
     return table_names
 
 
+
 def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     """
     > This function returns the "column" names of the sql table of interest
@@ -214,6 +216,7 @@ def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     :param table_i: a string of the name of the table of interest
     :return: A list of column names of the table of interest
     """
+
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
 
@@ -435,6 +438,7 @@ def add_db_info_to_df(
     project: Project,
     conn: sqlite3.Connection,
     csv_paths: dict,
+
     df: pd.DataFrame,
     table_name: str,
     cols_interest: str = "*",
@@ -489,6 +493,7 @@ def add_db_info_to_df(
         left_on_col = "commonName"
         right_on_col = "commonName"
 
+
     else:
         logging.error(
             f"The table_name specified ({table_name}) doesn't have a merging option"
@@ -522,3 +527,4 @@ def get_species_ids(conn: sqlite3.Connection, species_list: list):
         )["id"].tolist()
 
     return species_ids
+

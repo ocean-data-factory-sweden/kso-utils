@@ -252,6 +252,7 @@ def retrieve_movie_info_from_server(
 
     # log the available movies
     n_movies = movies_df.shape[0]
+
     n_available_movies = available_movies_df.shape[0]
 
     if n_movies == n_available_movies:
