@@ -161,7 +161,7 @@ def ProcVid(proc_frame_func: Callable, vidPath: str):
     """
     cap = cv.VideoCapture(vidPath)
     if cap.isOpened() is False:
-        print("Error opening video stream or file")
+        logging.error("Error opening video stream or file")
         return
     n_frames = 0
     start = time.time()
@@ -450,9 +450,6 @@ def frame_aggregation(
     species_df = pd.read_sql_query("SELECT id, label FROM species", conn)
     species_df["clean_label"] = species_df.label.apply(clean_species_name)
     species_df["zoo_label"] = species_df.label.apply(clean_label)
-
-    print("this is species", species_df.zoo_label)
-    print("this is train", train_rows.label)
 
     # Add species_id to train_rows
     if "species_id" not in train_rows.columns:
