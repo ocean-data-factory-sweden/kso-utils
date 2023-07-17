@@ -1111,7 +1111,6 @@ class MLProjectProcessor(ProjectProcessor):
                 n_tracked_frames=n_tracked_frames,
                 agg_df=agg_df,
             )
-            assert False
 
         else:
             species_list = kso_widgets.choose_species(self.project)
