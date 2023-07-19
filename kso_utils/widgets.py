@@ -98,7 +98,7 @@ def choose_footage(
     """
     if project.server == "AWS":
         available_movies_df = movie_utils.retrieve_movie_info_from_server(
-            project=project, server_info=server_connection, db_connection=db_connection
+            project=project, server_connection=server_connection, db_connection=db_connection
         )
         movie_dict = {
             name: movie_utils.get_movie_path(f_path, project, server_connection)
