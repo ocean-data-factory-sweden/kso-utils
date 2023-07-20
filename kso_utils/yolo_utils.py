@@ -1161,7 +1161,7 @@ def track_objects(
     model_path = [
         f
         for f in Path(artifact_dir).iterdir()
-        if f.is_file() and ".pt" in str(f) and "osnet" not in str(f)
+        if f.is_file() and ".pt" in str(f) and "osnet" not in str(f) and "best" in str(f)
     ][0]
 
     best_model = Path(model_path)
