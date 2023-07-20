@@ -1349,6 +1349,7 @@ class MLProjectProcessor(ProjectProcessor):
                 if f.is_file()
                 and str(f).endswith((".pt", ".model"))
                 and "osnet" not in str(f)
+                and "best" in str(f)
             ][0],
             source=source,
             conf_thres=conf_thres,
