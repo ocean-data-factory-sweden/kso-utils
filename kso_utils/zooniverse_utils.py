@@ -21,6 +21,8 @@ from pathlib import Path
 
 # util imports
 from kso_utils.project_utils import Project
+import kso_utils.db_utils as db_utils
+import kso_utils.movie_utils as movie_utils
 
 # Widget imports
 from IPython.display import display
@@ -1239,7 +1241,10 @@ def upload_clips_to_zooniverse(
 ##########################
 def extract_frames_for_zoo(
     project: Project,
+    species_of_interest: list,
+    agg_df: pd.DataFrame,
     db_connection,
+    server_connection,
     n_frames_subject,
     subsample_up_to,
 ):
@@ -1254,7 +1259,7 @@ def extract_frames_for_zoo(
     :type subsample_up_to: int (optional)
     """
 
-    species_list = self.species_of_interest.value
+    species_list = species_of_interest
 
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
@@ -1263,7 +1268,7 @@ def extract_frames_for_zoo(
         )
 
     # Select only aggregated classifications of species of interest
-    sp_agg_df = self.agg_df[self.agg_df["label"].isin(species_list)]
+    sp_agg_df = agg_df[agg_df["label"].isin(species_list)]
 
     # Subsample up to n subjects per label
     if sp_agg_df["label"].value_counts().max() > subsample_up_to:
@@ -1274,8 +1279,8 @@ def extract_frames_for_zoo(
 
     # Combine the aggregated clips and subjects dataframes
     comb_df = db_utils.add_db_info_to_df(
-        project=self.project,
-        db_connection=self.db_connection,
+        project=project,
+        db_connection=db_connection,
         df=sp_agg_df,
         table_name="subjects",
         cols_interest="id, clip_start_time, movie_id",
@@ -1287,9 +1292,9 @@ def extract_frames_for_zoo(
     # Add information of the original movies associated with the subjects
     # (e.g. the movie that was clipped from)
     movies_df = movie_utils.retrieve_movie_info_from_server(
-        project=self.project,
-        server_connection=self.server_connection,
-        db_connection=self.db_connection,
+        project=project,
+        server_connection=server_connection,
+        db_connection=db_connection,
     )
 
     # Include movies' filepath and fps to the df
@@ -1304,8 +1309,8 @@ def extract_frames_for_zoo(
 
     # Combine the aggregated clips and species dataframes
     comb_df = db_utils.add_db_info_to_df(
-        project=self.project,
-        db_connection=self.db_connection,
+        project=project,
+        db_connection=db_connection,
         df=comb_df,
         table_name="species",
         cols_interest="id, label, scientificName",
@@ -1335,10 +1340,10 @@ def extract_frames_for_zoo(
     comb_df.drop(["subject_ids"], inplace=True, axis=1)
 
     # Check the frames haven't been uploaded to Zooniverse
-    comb_df = zoo_utils.check_frames_uploaded(self.project, comb_df)
+    comb_df = check_frames_uploaded(project, comb_df)
 
     # Specify the temp location to store the frames
-    if self.project.server == "SNIC":
+    if project.server == "SNIC":
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
         frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
@@ -1347,12 +1352,13 @@ def extract_frames_for_zoo(
 
     # Extract the frames from the videos, store them in the temp location
     # and save the df with information about the frames in the projectprocessor
-    self.generated_frames = movie_utils.extract_frames(
-        project=self.project,
-        server_connection=self.server_connection,
+    generated_frames = movie_utils.extract_frames(
+        project=project,
+        server_connection=server_connection,
         df=comb_df,
         frames_folder=frames_folder,
     )
+    return generated_frames
 
 
 # Function to gather information of frames already uploaded to Zooniverse
@@ -1371,14 +1377,14 @@ def check_frames_uploaded(
         if len(list_species) <= 1:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, \
-            frame_exp_sp_id FROM subjects WHERE scientificName=='{scientificName[0]}' AND subject_type='frame'",
+            frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
                 db_connection,
             )
 
         else:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
-            {tuple(scientificName)} AND subject_type='frame'",
+            {tuple(list_species)} AND subject_type='frame'",
                 db_connection,
             )
 

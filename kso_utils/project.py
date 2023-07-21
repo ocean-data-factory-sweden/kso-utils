@@ -700,7 +700,14 @@ class ProjectProcessor:
         )
 
     def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
-        self.aggregated_zoo_classifications = zoo_utils.extract_frames_for_zoo()
+        self.generated_frames = zoo_utils.extract_frames_for_zoo(
+            project=self.project,
+            db_connection=self.db_connection,
+            server_connection=self.server_connection,
+            agg_df=self.aggregated_zoo_classifications,
+            n_frames_subject=n_frames_subject,
+            subsample_up_to=subsample_up_to,
+        )
 
     def modify_zoo_frames(self):
         """
