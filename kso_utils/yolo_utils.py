@@ -18,7 +18,6 @@ import requests
 import wandb
 import imagesize
 import base64
-import torch
 import ffmpeg
 import ipywidgets as widgets
 from IPython.display import display, clear_output, HTML
@@ -34,7 +33,6 @@ from natsort import index_natsorted
 from kso_utils.project_utils import Project
 
 try:
-    import yolov5_tracker.track as track
     from yolov5.utils import torch_utils
     import yolov5.detect as detect
 except ModuleNotFoundError:
@@ -163,7 +161,7 @@ def ProcVid(proc_frame_func: Callable, vidPath: str):
     """
     cap = cv.VideoCapture(vidPath)
     if cap.isOpened() is False:
-        print("Error opening video stream or file")
+        logging.error("Error opening video stream or file")
         return
     n_frames = 0
     start = time.time()
@@ -347,6 +345,7 @@ def frame_aggregation(
     """
     # Establish connection to database
     from kso_utils.db_utils import create_connection
+    from kso_utils.zooniverse_utils import clean_label
 
     conn = create_connection(project.db_path)
 
@@ -358,7 +357,8 @@ def frame_aggregation(
         return
 
     # Select the aggregated classifications from the species of interest
-    train_rows = agg_df[agg_df.label.isin(class_list)]
+    clean_list = [clean_label(label) for label in class_list]
+    train_rows = agg_df[agg_df.label.isin(clean_list)]
 
     # Rename columns if in different format
     train_rows = train_rows.rename(
@@ -449,11 +449,12 @@ def frame_aggregation(
     # Clean species names
     species_df = pd.read_sql_query("SELECT id, label FROM species", conn)
     species_df["clean_label"] = species_df.label.apply(clean_species_name)
+    species_df["zoo_label"] = species_df.label.apply(clean_label)
 
     # Add species_id to train_rows
     if "species_id" not in train_rows.columns:
         train_rows["species_id"] = train_rows["label"].apply(
-            lambda x: species_df[species_df.label == x].id.values[0], 1
+            lambda x: species_df[species_df.zoo_label == x].id.values[0], 1
         )
         train_rows.drop(columns=["label"], axis=1, inplace=True)
 
@@ -869,7 +870,7 @@ def track_frames(
     return t_bbox
 
 
-def choose_baseline_model(download_path: str):
+def choose_baseline_model(download_path: str, test: bool = False):
     """
     It downloads the latest version of the baseline model from WANDB
     :return: The path to the baseline model.
@@ -923,6 +924,8 @@ def choose_baseline_model(download_path: str):
                 )
 
     model_widget.observe(on_change, names="value")
+    if test:
+        model_widget.value = model_dict["baseline-yolov5"]
     return model_widget
 
 
@@ -947,7 +950,7 @@ def setup_paths(output_folder: str, model_type: str):
             # Rewrite main path to images and labels
             with open(data_path, "r") as yamlfile:
                 cur_yaml = yaml.safe_load(yamlfile)
-                cur_yaml["path"] = output_folder
+                cur_yaml["path"] = str(Path(output_folder).resolve())
 
             if cur_yaml:
                 with open(data_path, "w") as yamlfile:
@@ -1006,7 +1009,7 @@ def add_data_wandb(path: str, name: str, run):
     run.log_artifact(my_data)
 
 
-def generate_csv_report(evaluation_path: str, wandb_log: bool = False):
+def generate_csv_report(evaluation_path: str, run, wandb_log: bool = False):
     """
     > We read the labels from the `labels` folder, and create a dictionary with the filename as the key,
     and the list of labels as the value. We then convert this dictionary to a dataframe, and write it to
@@ -1037,6 +1040,7 @@ def generate_csv_report(evaluation_path: str, wandb_log: bool = False):
     ).to_csv(csv_out, index=False)
     logging.info("Report created at {}".format(csv_out))
     if wandb_log:
+        wandb.init(resume="must", id=run.id)
         wandb.log({"predictions": wandb.Table(dataframe=detect_df)})
     return detect_df
 
@@ -1087,8 +1091,10 @@ def generate_tracking_report(tracker_dir: str, eval_dir: str):
 
 
 def generate_counts(
-    eval_dir: str, tracker_dir: str, artifact_dir: str, wandb_log: bool = False
+    eval_dir: str, tracker_dir: str, artifact_dir: str, run, wandb_log: bool = False
 ):
+    import torch
+
     model = torch.load(
         Path(
             [
@@ -1117,11 +1123,13 @@ def generate_counts(
             .reset_index()
         )
         if wandb_log:
+            wandb.init(resume="must", id=run.id)
             wandb.log({"tracking_counts": wandb.Table(dataframe=final_df)})
         return final_df
 
 
 def track_objects(
+    name: str,
     source_dir: str,
     artifact_dir: str,
     tracker_folder: str,
@@ -1142,6 +1150,9 @@ def track_objects(
     :param img_size: The size of the image to be used for tracking. The default is 720, defaults to 720 (optional)
     :return: The latest tracker folder
     """
+    import torch
+    import yolov5_tracker.track as track
+
     # Check that tracker folder specified exists
     if not os.path.exists(tracker_folder):
         logging.error("The tracker folder does not exist. Please try again")
@@ -1150,13 +1161,14 @@ def track_objects(
     model_path = [
         f
         for f in Path(artifact_dir).iterdir()
-        if f.is_file() and ".pt" in str(f) and "osnet" not in str(f)
+        if f.is_file() and ".pt" in str(f) and "osnet" not in str(f) and "best" in str(f)
     ][0]
 
     best_model = Path(model_path)
 
     if not gpu:
         track.run(
+            name=name,
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,
@@ -1169,6 +1181,7 @@ def track_objects(
         )
     else:
         track.run(
+            name=name,
             source=source_dir,
             conf_thres=conf_thres,
             yolo_weights=best_model,

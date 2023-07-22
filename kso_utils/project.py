@@ -53,6 +53,7 @@ class ProjectProcessor:
         self.annotations = pd.DataFrame()
         self.classifications = pd.DataFrame()
         self.generated_clips = pd.DataFrame()
+        self.species_of_interest = []
 
         # Import modules
         self.modules = g_utils.import_modules([])
@@ -235,6 +236,7 @@ class ProjectProcessor:
         self,
         sheet_df: pd.DataFrame,
         meta_name: str,
+        test: bool = False,
     ):
         return kso_widgets.update_meta(
             project=self.project,
@@ -244,6 +246,7 @@ class ProjectProcessor:
             df=getattr(self, "local_" + meta_name + "_csv"),
             meta_name=meta_name,
             csv_paths=self.csv_paths,
+            test=test,
         )
 
     def map_sites(self):
@@ -270,7 +273,7 @@ class ProjectProcessor:
         """
         return movie_utils.get_movie_path(filepath, self)
 
-    def preview_media(self):
+    def preview_media(self, test: bool = False):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
         function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
@@ -279,21 +282,39 @@ class ProjectProcessor:
         """
         movie_selected = kso_widgets.select_movie(self.server_movies_csv)
 
-        async def f(project, server_connection, server_movies_csv):
-            x = await kso_widgets.single_wait_for_change(movie_selected, "value")
-            html, movie_path = movie_utils.preview_movie(
-                project=project,
-                available_movies_df=server_movies_csv,
-                movie_i=x,
-                server_connection=server_connection,
-            )
-            display(html)
-            self.movie_selected = x
-            self.movie_path = movie_path
+        if not test:
 
-        asyncio.create_task(
+            async def f(project, server_connection, server_movies_csv):
+                x = await kso_widgets.single_wait_for_change(movie_selected, "value")
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
+            asyncio.create_task(
+                f(self.project, self.server_connection, self.server_movies_csv)
+            )
+
+        else:
+
+            def f(project, server_connection, server_movies_csv):
+                x = movie_selected.options[0]
+                html, movie_path = movie_utils.preview_movie(
+                    project=project,
+                    available_movies_df=server_movies_csv,
+                    movie_i=x,
+                    server_connection=server_connection,
+                )
+                display(html)
+                self.movie_selected = x
+                self.movie_path = movie_path
+
             f(self.project, self.server_connection, self.server_movies_csv)
-        )
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -499,7 +520,7 @@ class ProjectProcessor:
     # t3
     #############
 
-    def connect_zoo_project(self, generate_export: bool = False):
+    def connect_zoo_project(self, generate_export: bool = False, zoo_cred=False):
         """
         This function connects to Zooniverse, saves the connection
         to the project processor and retrieves
@@ -514,7 +535,7 @@ class ProjectProcessor:
         else:
             if self.project.Zooniverse_number is not None:
                 # connect to Zooniverse
-                self.zoo_project = zoo_utils.connect_zoo_project(self.project)
+                self.zoo_project = zoo_utils.connect_zoo_project(self.project, zoo_cred=zoo_cred)
             else:
                 logging.error("This project is not registered with Zooniverse.")
                 return
@@ -538,6 +559,36 @@ class ProjectProcessor:
             project=self.project, db_connection=self.db_connection, movie_i=movie_name
         )
 
+    def get_clips(
+        self,
+        movie_name,
+        movie_path,
+        clip_selection,
+        use_gpu,
+        pool_size,
+        clip_modification,
+    ):
+        self.generated_clips = t_utils.create_clips(
+            available_movies_df=self.server_movies_csv,
+            movie_i=movie_name,
+            movie_path=movie_path,
+            clip_selection=clip_selection,
+            project=self.project,
+            modification_details={},
+            gpu_available=use_gpu,
+            pool_size=pool_size,
+        )
+        mod_clips = t_utils.create_modified_clips(
+            self.project,
+            self.generated_clips.clip_path,
+            movie_name,
+            clip_modification.checks,
+            use_gpu,
+            pool_size,
+        )
+        # Temporary workaround to get both clip paths
+        self.generated_clips["modif_clip_path"] = mod_clips
+
     def generate_zoo_clips(
         self,
         movie_name,
@@ -545,6 +596,7 @@ class ProjectProcessor:
         use_gpu: bool = False,
         pool_size: int = 4,
         is_example: bool = False,
+        test: bool = False,
     ):
         """
         > This function takes a movie name and path, and returns a list of clips from that movie
@@ -569,39 +621,40 @@ class ProjectProcessor:
         )
         clip_modification = kso_widgets.clip_modification_widget()
 
-        button = widgets.Button(
-            description="Click to extract clips.",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.generated_clips = t_utils.create_clips(
-                available_movies_df=self.server_movies_csv,
-                movie_i=movie_name,
-                movie_path=movie_path,
-                clip_selection=clip_selection,
-                project=self.project,
-                modification_details={},
-                gpu_available=use_gpu,
-                pool_size=pool_size,
+        if not test:
+            button = widgets.Button(
+                description="Click to extract clips.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
             )
-            mod_clips = t_utils.create_modified_clips(
-                self.project,
-                self.generated_clips.clip_path,
+
+            def on_button_clicked(b):
+                self.get_clips(
+                    movie_name,
+                    movie_path,
+                    clip_selection,
+                    use_gpu,
+                    pool_size,
+                    clip_modification,
+                )
+
+            button.on_click(on_button_clicked)
+            display(clip_modification)
+            display(button)
+        else:
+            clip_selection.kwargs = {"clip_length": 5, "clips_range": [0, 10]}
+            clip_selection.result = {}
+            clip_selection.result["clip_start_time"] = [0]
+            self.get_clips(
                 movie_name,
-                clip_modification.checks,
+                movie_path,
+                clip_selection,
                 use_gpu,
                 pool_size,
+                clip_modification,
             )
-            # Temporary workaround to get both clip paths
-            self.generated_clips["modif_clip_path"] = mod_clips
-
-        button.on_click(on_button_clicked)
-        display(clip_modification)
-        display(button)
 
     def upload_zoo_subjects(self, subject_type: str):
         """
@@ -663,7 +716,7 @@ class ProjectProcessor:
         )
         display(self.workflow_widget)
 
-    def process_zoo_classifications(self):
+    def process_zoo_classifications(self, test: bool = False):
         """
         It samples subjects from the workflows selected, populates the subjects db,
         sample the classifications from the workflows of interest,
@@ -671,12 +724,21 @@ class ProjectProcessor:
 
         """
 
+        if test:
+            workflow_checks = {
+                "Workflow name: #0": "Development workflow",
+                "Subject type: #0": "clip",
+                "Minimum workflow version: #0": 1.0,
+            }
+        else:
+            workflow_checks = self.workflow_widget.checks
+
         # Retrieve a subset of the subjects from the workflows of interest and
         # populate the sql subjects table
         zoo_utils.sample_subjects_from_workflows(
             project=self.project,
             db_connection=self.db_connection,
-            workflow_widget_checks=self.workflow_widget.checks,
+            workflow_widget_checks=workflow_checks,
             workflows_df=self.zoo_info["workflows"],
             subjects_df=self.zoo_info["subjects"],
         )
@@ -688,20 +750,41 @@ class ProjectProcessor:
             db_connection=self.db_connection,
             csv_paths=self.csv_paths,
             classifications_data=self.zoo_info["classifications"],
-            subject_type=self.workflow_widget.checks["Subject type: #0"],
+            subject_type=workflow_checks["Subject type: #0"],
         )
 
-    def aggregate_zoo_classifications(self, agg_params):
+    def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
+        zoo_utils.connect_zoo_project(generate_export=generate_export, zoo_cred=zoo_cred)
+        self.workflow_widget = zoo_utils.WidgetMaker(self.zoo_info["workflows"])
+        display(self.workflow_widget)
+
+    def aggregate_zoo_classifications(self, agg_params, test: bool = False):
+        if test:
+            workflow_checks = {
+                "Workflow name: #0": "Development workflow",
+                "Subject type: #0": "clip",
+                "Minimum workflow version: #0": 1.0,
+            }
+        else:
+            workflow_checks = self.workflow_widget.checks
         self.aggregated_zoo_classifications = zoo_utils.aggregate_classifications(
             self.project,
             self.processed_zoo_classifications,
-            self.workflow_widget.checks["Subject type: #0"],
+            workflow_checks["Subject type: #0"],
             agg_params,
         )
 
-    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
+    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False):
+        if test:
+            species_list = db_utils.get_df_from_db_table(
+                    self.db_connection, "species"
+                ).label.tolist()
+        else:
+            species_list = self.species_of_interest
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
+            zoo_info=self.zoo_info,
+            species_list=species_list,
             db_connection=self.db_connection,
             server_connection=self.server_connection,
             agg_df=self.aggregated_zoo_classifications,
@@ -709,7 +792,7 @@ class ProjectProcessor:
             subsample_up_to=subsample_up_to,
         )
 
-    def modify_zoo_frames(self):
+    def modify_zoo_frames(self, test: bool = False):
         """
         This function takes a dataframe of frames to upload, a species of interest, a project, and a
         dictionary of modifications to make to the frames, and returns a dataframe of modified frames.
@@ -717,25 +800,35 @@ class ProjectProcessor:
 
         frame_modification = kso_widgets.clip_modification_widget()
 
-        button = widgets.Button(
-            description="Click to modify frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-        )
-
-        def on_button_clicked(b):
-            self.modified_frames = zoo_utils.modify_frames(
+        if test:
+            self.generated_frames = zoo_utils.modify_frames(
                 project=self.project,
-                frames_to_upload_df=self.generated_frames.df.reset_index(drop=True),
-                species_i=self.species_of_interest.value,
+                frames_to_upload_df=self.generated_frames.reset_index(drop=True),
+                species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
             )
+        else:
+            button = widgets.Button(
+                description="Click to modify frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+            )
 
-        button.on_click(on_button_clicked)
-        display(frame_modification)
-        display(button)
+            def on_button_clicked(b):
+                self.generated_frames = zoo_utils.modify_frames(
+                    project=self.project,
+                    frames_to_upload_df=self.frames_to_upload_df.df.reset_index(
+                        drop=True
+                    ),
+                    species_i=self.species_of_interest,
+                    modification_details=frame_modification.checks,
+                )
+
+            button.on_click(on_button_clicked)
+            display(frame_modification)
+            display(button)
 
     def generate_custom_frames(
         self,
@@ -894,7 +987,22 @@ class ProjectProcessor:
         # Display the displays the processed classifications for a given subject
         t_utils.explore_classifications_per_subject(
             self.processed_zoo_classifications,
-            self.workflow_widget.checks["Subject type: #0"],
+            self.workflow_widget.checks["Subject type: #0"])
+    
+    def get_classifications(
+        self,
+        workflow_dict: dict,
+        workflows_df: pd.DataFrame,
+        subj_type: str,
+        class_df: pd.DataFrame,
+    ):
+        return zoo_utils.get_classifications(
+            project=self.project,
+            conn=self.db_connection,
+            workflow_dict=workflow_dict,
+            workflows_df=workflows_df,
+            subj_type=subj_type,
+            class_df=class_df,
         )
 
     def download_classications_csv(self, class_df):
@@ -949,6 +1057,7 @@ class MLProjectProcessor(ProjectProcessor):
         weights_path: str = None,
         output_path: str = None,
         classes: list = [],
+        test: bool = False,
     ):
         self.__dict__ = project_process.__dict__.copy()
         self.project_name = self.project.Project_name.lower().replace(" ", "_")
@@ -978,9 +1087,8 @@ class MLProjectProcessor(ProjectProcessor):
 
         model_selected = t_utils.choose_model_type()
 
-        async def f():
-            x = await kso_widgets.single_wait_for_change(model_selected, "value")
-            self.model_type = x
+        if test:
+            self.model_type = 1
             self.modules.update(self.load_yolov5_modules())
             if all(["train", "detect", "val"]) in self.modules:
                 self.train, self.run, self.test = (
@@ -988,8 +1096,20 @@ class MLProjectProcessor(ProjectProcessor):
                     self.modules["detect"],
                     self.modules["val"],
                 )
+        else:
 
-        asyncio.create_task(f())
+            async def f():
+                x = await kso_widgets.single_wait_for_change(model_selected, "value")
+                self.model_type = x
+                self.modules.update(self.load_yolov5_modules())
+                if all(["train", "detect", "val"]) in self.modules:
+                    self.train, self.run, self.test = (
+                        self.modules["train"],
+                        self.modules["detect"],
+                        self.modules["val"],
+                    )
+
+            asyncio.create_task(f())
 
     def load_yolov5_modules(self):
         # Model-specific imports
@@ -1025,20 +1145,14 @@ class MLProjectProcessor(ProjectProcessor):
         remove_nulls: bool = False,
         track_frames: bool = False,
         n_tracked_frames: int = 0,
+        test: bool = False,
     ):
-        species_widget = kso_widgets.choose_species(agg_df)
 
-        button = widgets.Button(
-            description="Aggregate frames",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
-            style={"description_width": "initial"},
-        )
+        if test:
+            self.species_of_interest = db_utils.get_df_from_db_table(
+                self.db_connection, "species"
+            ).label.tolist()
 
-        def on_button_clicked(b):
-            self.species_of_interest = species_widget.value
             # code for prepare dataset for machine learning
             yolo_utils.frame_aggregation(
                 project=self.project,
@@ -1054,8 +1168,37 @@ class MLProjectProcessor(ProjectProcessor):
                 agg_df=agg_df,
             )
 
-        button.on_click(on_button_clicked)
-        display(button)
+        else:
+            species_list = kso_widgets.choose_species(self.project)
+
+            button = widgets.Button(
+                description="Aggregate frames",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
+                style={"description_width": "initial"},
+            )
+
+            def on_button_clicked(b):
+                self.species_of_interest = species_list.value
+                # code for prepare dataset for machine learning
+                yolo_utils.frame_aggregation(
+                    project=self.project,
+                    server_connection=self.server_connection,
+                    db_connection=self.db_connection,
+                    out_path=out_path,
+                    perc_test=perc_test,
+                    class_list=self.species_of_interest,
+                    img_size=img_size,
+                    remove_nulls=remove_nulls,
+                    track_frames=track_frames,
+                    n_tracked_frames=n_tracked_frames,
+                    agg_df=agg_df,
+                )
+
+            button.on_click(on_button_clicked)
+            display(button)
 
     def choose_entity(self, alt_name: bool = False):
         if self.team_name is None:
@@ -1173,24 +1316,31 @@ class MLProjectProcessor(ProjectProcessor):
         )
         scp.close()
 
-    def setup_paths(self):
+    def setup_paths(self, test: bool = False):
         if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
-        self.data_path, self.hyp_path = yolo_utils.setup_paths(
-            self.output_path, self.model_type
-        )
+        if test:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                os.path.join(self.output_path, "ml-template-data"), self.model_type
+            )
+        else:
+            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+                self.output_path, self.model_type
+            )
 
     def choose_train_params(self):
         return t_utils.choose_train_params(self.model_type)
 
-    def train_yolov5(self, exp_name, weights, epochs=50, batch_size=16, img_size=640):
+    def train_yolov5(
+        self, exp_name, weights, project, epochs=50, batch_size=16, img_size=[640, 640]
+    ):
         if self.model_type == 1:
             self.modules["train"].run(
                 entity=self.team_name,
                 data=self.data_path,
                 hyp=self.hyp_path,
                 weights=weights,
-                project=self.project_name,
+                project=project,
                 name=exp_name,
                 imgsz=img_size,
                 batch_size=int(batch_size),
@@ -1213,10 +1363,10 @@ class MLProjectProcessor(ProjectProcessor):
         else:
             logging.error("Segmentation model training not yet supported.")
 
-    def eval_yolov5(self, exp_name: str, model_folder: str, conf_thres: float):
+    def eval_yolov5(self, exp_name: str, conf_thres: float):
         # Find trained model weights
-        project_path = str(Path(self.output_path, self.project_name))
-        self.tuned_weights = f"{Path(project_path, model_folder, 'weights', 'best.pt')}"
+        project_path = os.path.join(self.output_path, self.project_name, exp_name)
+        self.tuned_weights = f"{Path(project_path, 'weights', 'best.pt')}"
         try:
             self.modules["val"].run(
                 data=self.data_path,
@@ -1235,6 +1385,7 @@ class MLProjectProcessor(ProjectProcessor):
 
     def detect_yolov5(
         self,
+        exp_name: str,
         source: str,
         save_dir: str,
         conf_thres: float,
@@ -1254,25 +1405,27 @@ class MLProjectProcessor(ProjectProcessor):
                 if f.is_file()
                 and str(f).endswith((".pt", ".model"))
                 and "osnet" not in str(f)
+                and "best" in str(f)
             ][0],
             source=source,
             conf_thres=conf_thres,
             save_txt=True,
             save_conf=True,
             project=save_dir,
-            name="detect",
-            half=True,
+            name=exp_name,
             nosave=not save_output,
         )
 
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
         yolo_utils.set_config(conf_thres, model, eval_dir)
         yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
-        wandb.finish()
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir, self.run, wandb_log=True
+        )
 
     def track_individuals(
         self,
+        name: str,
         source: str,
         artifact_dir: str,
         eval_dir: str,
@@ -1280,6 +1433,7 @@ class MLProjectProcessor(ProjectProcessor):
         img_size: tuple = (540, 540),
     ):
         latest_tracker = yolo_utils.track_objects(
+            name=name,
             source_dir=source,
             artifact_dir=artifact_dir,
             tracker_folder=eval_dir,
@@ -1290,18 +1444,28 @@ class MLProjectProcessor(ProjectProcessor):
         yolo_utils.add_data_wandb(
             Path(latest_tracker).parent.absolute(), "tracker_output", self.run
         )
-        self.csv_report = yolo_utils.generate_csv_report(eval_dir, wandb_log=True)
-        self.tracking_report = yolo_utils.generate_counts(
-            eval_dir, latest_tracker, artifact_dir, wandb_log=True
+        self.csv_report = yolo_utils.generate_csv_report(
+            eval_dir, self.run, wandb_log=True
         )
-        self.modules["wandb"].finish()
+        self.tracking_report = yolo_utils.generate_counts(
+            eval_dir, latest_tracker, artifact_dir, self.run, wandb_log=True
+        )
+        # self.modules["wandb"].finish()
 
-    def enhance_yolov5(self, conf_thres: float, img_size=[640, 640]):
+    def enhance_yolov5(
+        self, in_path: str, project_path: str, conf_thres: float, img_size=[640, 640]
+    ):
+        from datetime import datetime
+
+        run_name = f"enhance_run_{datetime.now()}"
+        self.run_path = os.path.join(project_path, run_name)
         if self.model_type == 1:
             logging.info("Enhancement running...")
             self.modules["detect"].run(
                 weights=self.tuned_weights,
-                source=str(Path(self.output_path, "images")),
+                source=str(Path(in_path, "images")),
+                project=project_path,
+                name=run_name,
                 imgsz=img_size,
                 conf_thres=conf_thres,
                 save_txt=True,
@@ -1316,10 +1480,10 @@ class MLProjectProcessor(ProjectProcessor):
                 "Enhancements not supported for segmentation models at this time."
             )
 
-    def enhance_replace(self, run_folder: str):
+    def enhance_replace(self, data_path: str):
         if self.model_type == 1:
-            os.rename(f"{self.output_path}/labels", f"{self.output_path}/labels_org")
-            os.rename(f"{run_folder}/labels", f"{self.output_path}/labels")
+            os.rename(f"{data_path}/labels", f"{data_path}/labels_org")
+            os.rename(f"{self.run_path}/labels", f"{data_path}/labels")
         else:
             logging.error("This option is not supported for other model types.")
 
@@ -1356,7 +1520,8 @@ class MLProjectProcessor(ProjectProcessor):
             logging.info("Please note: Using models from adi-ohad-heb-uni account.")
             full_path = "adi-ohad-heb-uni/project-wildlife-ai"
         else:
-            full_path = f"{self.team_name}/{self.project_name}"
+            project_name = self.project.Project_name.replace(" ", "_")
+            full_path = f"{self.team_name}/{project_name.lower()}"
         api = wandb.Api()
         try:
             api.artifact_type(type_name="model", project=full_path).collections()

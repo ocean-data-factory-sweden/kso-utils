@@ -456,11 +456,12 @@ def add_db_info_to_df(
     elif table_name == "subjects":
         # Ensure subject_ids format is int
         df["subject_ids"] = df["subject_ids"].astype(int)
+        df1 = df[list(set(df.columns).difference(set(sql_df.columns)))]
         sql_df["id"] = sql_df["id"].astype(int)
 
         # Combine the original and sqldf dfs
         comb_df = pd.merge(
-            df, sql_df, how="left", left_on="subject_ids", right_on="id"
+            df1, sql_df, how="left", left_on="subject_ids", right_on="id"
         ).drop(columns=["id"])
 
     # Merge sites table
