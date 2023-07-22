@@ -457,34 +457,6 @@ def select_movie(available_movies_df: pd.DataFrame):
     display(select_movie_widget)
     return select_movie_widget
 
-
-def choose_species(df: pd.DataFrame):
-    """
-    This function generates a widget to select the species of interest
-    :param df: a df of classifications swith the species of interest in the column "label"
-
-    """
-    # Get a list of the species available
-    species_list = df.label.unique()
-
-    # Roadblock to check if species list is empty
-    if len(species_list) == 0:
-        raise ValueError(
-            "Your database contains no species, please add at least one species before continuing."
-        )
-
-    # Generate the widget
-    w = widgets.SelectMultiple(
-        options=species_list,
-        value=[species_list[0]],
-        description="Species",
-        disabled=False,
-    )
-
-    display(w)
-    return w
-
-
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     """
     > This function enables users to select the folder of interest to retrieve or save files to/from.

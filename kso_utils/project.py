@@ -53,6 +53,7 @@ class ProjectProcessor:
         self.annotations = pd.DataFrame()
         self.classifications = pd.DataFrame()
         self.generated_clips = pd.DataFrame()
+        self.species_of_interest = []
 
         # Import modules
         self.modules = g_utils.import_modules([])
@@ -519,7 +520,7 @@ class ProjectProcessor:
     # t3
     #############
 
-    def connect_zoo_project(self, generate_export: bool = False):
+    def connect_zoo_project(self, generate_export: bool = False, zoo_cred=False):
         """
         This function connects to Zooniverse, saves the connection
         to the project processor and retrieves
@@ -534,7 +535,7 @@ class ProjectProcessor:
         else:
             if self.project.Zooniverse_number is not None:
                 # connect to Zooniverse
-                self.zoo_project = zoo_utils.connect_zoo_project(self.project)
+                self.zoo_project = zoo_utils.connect_zoo_project(self.project, zoo_cred=zoo_cred)
             else:
                 logging.error("This project is not registered with Zooniverse.")
                 return
@@ -557,6 +558,36 @@ class ProjectProcessor:
         movie_utils.check_movie_uploaded(
             project=self.project, db_connection=self.db_connection, movie_i=movie_name
         )
+
+    def get_clips(
+        self,
+        movie_name,
+        movie_path,
+        clip_selection,
+        use_gpu,
+        pool_size,
+        clip_modification,
+    ):
+        self.generated_clips = t_utils.create_clips(
+            available_movies_df=self.server_movies_csv,
+            movie_i=movie_name,
+            movie_path=movie_path,
+            clip_selection=clip_selection,
+            project=self.project,
+            modification_details={},
+            gpu_available=use_gpu,
+            pool_size=pool_size,
+        )
+        mod_clips = t_utils.create_modified_clips(
+            self.project,
+            self.generated_clips.clip_path,
+            movie_name,
+            clip_modification.checks,
+            use_gpu,
+            pool_size,
+        )
+        # Temporary workaround to get both clip paths
+        self.generated_clips["modif_clip_path"] = mod_clips
 
     def generate_zoo_clips(
         self,
@@ -625,10 +656,6 @@ class ProjectProcessor:
                 clip_modification,
             )
 
-        button.on_click(on_button_clicked)
-        display(clip_modification)
-        display(button)
-
     def upload_zoo_subjects(self, subject_type: str):
         """
         This function uploads clips or frames to Zooniverse, depending on the subject_type argument
@@ -689,7 +716,7 @@ class ProjectProcessor:
         )
         display(self.workflow_widget)
 
-    def process_zoo_classifications(self):
+    def process_zoo_classifications(self, test: bool = False):
         """
         It samples subjects from the workflows selected, populates the subjects db,
         sample the classifications from the workflows of interest,
@@ -697,12 +724,21 @@ class ProjectProcessor:
 
         """
 
+        if test:
+            workflow_checks = {
+                "Workflow name: #0": "Development workflow",
+                "Subject type: #0": "clip",
+                "Minimum workflow version: #0": 1.0,
+            }
+        else:
+            workflow_checks = self.workflow_widget.checks
+
         # Retrieve a subset of the subjects from the workflows of interest and
         # populate the sql subjects table
         zoo_utils.sample_subjects_from_workflows(
             project=self.project,
             db_connection=self.db_connection,
-            workflow_widget_checks=self.workflow_widget.checks,
+            workflow_widget_checks=workflow_checks,
             workflows_df=self.zoo_info["workflows"],
             subjects_df=self.zoo_info["subjects"],
         )
@@ -714,21 +750,41 @@ class ProjectProcessor:
             db_connection=self.db_connection,
             csv_paths=self.csv_paths,
             classifications_data=self.zoo_info["classifications"],
-            subject_type=self.workflow_widget.checks["Subject type: #0"],
+            subject_type=workflow_checks["Subject type: #0"],
         )
 
-    def aggregate_zoo_classifications(self, agg_params):
+    def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
+        zoo_utils.connect_zoo_project(generate_export=generate_export, zoo_cred=zoo_cred)
+        self.workflow_widget = zoo_utils.WidgetMaker(self.zoo_info["workflows"])
+        display(self.workflow_widget)
+
+    def aggregate_zoo_classifications(self, agg_params, test: bool = False):
+        if test:
+            workflow_checks = {
+                "Workflow name: #0": "Development workflow",
+                "Subject type: #0": "clip",
+                "Minimum workflow version: #0": 1.0,
+            }
+        else:
+            workflow_checks = self.workflow_widget.checks
         self.aggregated_zoo_classifications = zoo_utils.aggregate_classifications(
             self.project,
             self.processed_zoo_classifications,
-            self.workflow_widget.checks["Subject type: #0"],
+            workflow_checks["Subject type: #0"],
             agg_params,
         )
 
-    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100):
+    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False):
+        if test:
+            species_list = db_utils.get_df_from_db_table(
+                    self.db_connection, "species"
+                ).label.tolist()
+        else:
+            species_list = self.species_of_interest
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
             zoo_info=self.zoo_info,
+            species_list=species_list,
             db_connection=self.db_connection,
             server_connection=self.server_connection,
             agg_df=self.aggregated_zoo_classifications,
@@ -747,8 +803,8 @@ class ProjectProcessor:
         if test:
             self.generated_frames = zoo_utils.modify_frames(
                 project=self.project,
-                frames_to_upload_df=self.generated_frames.df.reset_index(drop=True),
-                species_i=self.species_of_interest.value,
+                frames_to_upload_df=self.generated_frames.reset_index(drop=True),
+                species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
             )
         else:
@@ -940,7 +996,7 @@ class ProjectProcessor:
         subj_type: str,
         class_df: pd.DataFrame,
     ):
-        return zu_utils.get_classifications(
+        return zoo_utils.get_classifications(
             project=self.project,
             conn=self.db_connection,
             workflow_dict=workflow_dict,
@@ -1357,7 +1413,6 @@ class MLProjectProcessor(ProjectProcessor):
             save_conf=True,
             project=save_dir,
             name=exp_name,
-            half=True,
             nosave=not save_output,
         )
 
