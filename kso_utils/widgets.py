@@ -6,6 +6,7 @@ import subprocess
 import pandas as pd
 import numpy as np
 import cv2
+import math
 
 # widget imports
 import ipysheet
@@ -61,6 +62,272 @@ def single_wait_for_change(widget, value):
 ######################################################################
 #####################Common widgets###################################
 ######################################################################
+
+
+def choose_folder(start_path: str = ".", folder_type: str = ""):
+    """
+    > This function enables users to select the folder of interest to retrieve or save files to/from.
+
+    :param start_path: a string with the path of the origin for the folder
+    :param folder_type: a string with the names of the type of folder required
+    :return: A path of the folder of interest
+    """
+    # Specify the output folder
+    fc = FileChooser(start_path)
+    fc.title = f"Choose location of {folder_type}"
+    display(fc)
+    return fc
+
+
+def choose_footage(
+    project: Project,
+    server_connection: dict,
+    db_connection,
+    start_path: str = ".",
+    folder_type: str = "",
+):
+    """
+    > This function enables users to select movies for ML purposes.
+
+    :param project: the project object
+    :param server_connection: a dictionary with the connection to the server
+    :param db_connection: SQL connection object
+    :param start_path: a string with the path of the origin for the folder
+    :param folder_type: a string with the names of the type of folder required
+    :return: A path of the folder of interest
+    """
+    if project.server == "AWS":
+        available_movies_df = movie_utils.retrieve_movie_info_from_server(
+            project=project, server_connection=server_connection, db_connection=db_connection
+        )
+        movie_dict = {
+            name: movie_utils.get_movie_path(f_path, project, server_connection)
+            for name, f_path in available_movies_df[["filename", "fpath"]].values
+        }
+        movie_widget = widgets.SelectMultiple(
+            options=[(name, movie) for name, movie in movie_dict.items()],
+            description="Select movie(s):",
+            ensure_option=False,
+            disabled=False,
+            layout=widgets.Layout(width="50%"),
+            style={"description_width": "initial"},
+        )
+
+        display(movie_widget)
+        return movie_widget
+
+    else:
+        # Specify the output folder
+        fc = FileChooser(start_path)
+        fc.title = f"Choose location of {folder_type}"
+        display(fc)
+        return fc
+
+
+def select_random_clips(project: Project, movie_i: str):
+    """
+    > The function `select_random_clips` takes in a movie name and a dictionary containing information
+    about the database, and returns a dictionary containing the starting points of the clips and the
+    length of the clips.
+
+    :param project: the project object
+    :param movie_i: the name of the movie of interest
+    :type movie_i: str
+    :return: A dictionary with the starting points of the clips and the length of the clips.
+    """
+    # Create connection to db
+    conn = create_connection(project.db_path)
+
+    # Query info about the movie of interest
+    movie_df = pd.read_sql_query(
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'",
+        conn,
+    )
+
+    # Select n number of clips at random
+    def n_random_clips(clip_length, n_clips):
+        # Create a list of starting points for n number of clips
+        duration_movie = math.floor(movie_df["duration"].values[0])
+        starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
+
+        # Seave the outputs in a dictionary
+        random_clips_info = {
+            # The starting points of the clips
+            "clip_start_time": starting_clips,
+            # The length of the clips
+            "random_clip_length": clip_length,
+        }
+
+        logging.info(
+            f"The initial seconds of the examples will be: {random_clips_info['clip_start_time']}"
+        )
+
+        return random_clips_info
+
+    # Select the number of clips to upload
+    clip_length_number = widgets.interactive(
+        n_random_clips,
+        clip_length=select_clip_length(),
+        n_clips=widgets.IntSlider(
+            value=1,
+            min=1,
+            max=5,
+            step=1,
+            description="Number of random clips:",
+            disabled=False,
+            layout=widgets.Layout(width="40%"),
+            style={"description_width": "initial"},
+        ),
+    )
+
+    display(clip_length_number)
+    return clip_length_number
+
+
+def select_clip_length():
+    """
+    > This function creates a dropdown widget that allows the user to select the length of the clips
+    :return: The widget is being returned.
+    """
+    # Widget to record the length of the clips
+    ClipLength_widget = widgets.Dropdown(
+        options=[10, 5],
+        value=10,
+        description="Length of clips:",
+        style={"description_width": "initial"},
+        ensure_option=True,
+        disabled=False,
+    )
+
+    return ClipLength_widget
+
+
+def select_clip_n_len(project: Project, movie_i: str):
+    """
+    This function allows the user to select the length of the clips to upload to the database
+
+    :param project: the project object
+    :param movie_i: the name of the movie you want to upload
+    :return: The number of clips to upload
+    """
+
+    # Create connection to db
+    conn = create_connection(project.db_path)
+
+    # Query info about the movie of interest
+    movie_df = pd.read_sql_query(
+        f"SELECT filename, duration, sampling_start, sampling_end FROM movies WHERE filename='{movie_i}'",
+        conn,
+    )
+
+    # Display in hours, minutes and seconds
+    def to_clips(clip_length, clips_range):
+        # Calculate the number of clips
+        clips = int((clips_range[1] - clips_range[0]) / clip_length)
+
+        logging.info(f"Number of clips to upload: {clips}")
+
+        return clips
+
+    # Select the number of clips to upload
+    clip_length_number = widgets.interactive(
+        to_clips,
+        clip_length=select_clip_length(),
+        clips_range=widgets.IntRangeSlider(
+            value=[movie_df.sampling_start.values, movie_df.sampling_end.values],
+            min=0,
+            max=int(movie_df.duration.values),
+            step=1,
+            description="Range in seconds:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="90%"),
+        ),
+    )
+
+    display(clip_length_number)
+    return clip_length_number
+
+
+def choose_species(project: Project):
+    """
+    This function generates a widget to select the species of interest
+    :param project: the project object
+
+    """
+    # Create connection to db
+    conn = create_connection(project.db_path)
+
+    # Get a list of the species available
+    species_list = pd.read_sql_query("SELECT label from species", conn)[
+        "label"
+    ].tolist()
+
+    # Roadblock to check if species list is empty
+    if len(species_list) == 0:
+        raise ValueError(
+            "Your database contains no species, please add at least one species before continuing."
+        )
+
+    # Generate the widget
+    w = widgets.SelectMultiple(
+        options=species_list,
+        value=[species_list[0]],
+        description="Species",
+        disabled=False,
+    )
+
+    display(w)
+    return w
+
+
+def map_sites(project: Project, csv_paths: dict):
+    """
+    > This function takes a dictionary of database information and a project object as input, and
+    returns a map of the sites in the database
+
+    :param project: The project object
+    :param csv_paths: a dictionary with the paths of the csv files used to initiate te db
+    :return: A map with all the sites plotted on it.
+    """
+    if project.server in ["SNIC", "LOCAL"]:
+        # Set initial location to Gothenburg
+        init_location = [57.708870, 11.974560]
+
+    else:
+        # Set initial location to Taranaki
+        init_location = [-39.296109, 174.063916]
+
+    # Create the initial kso map
+    kso_map = folium.Map(location=init_location, width=900, height=600)
+
+    # Read the csv file with site information
+    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
+
+    # Combine information of interest into a list to display for each site
+    sites_df["site_info"] = sites_df.values.tolist()
+
+    # Save the names of the columns
+    df_cols = sites_df.columns
+
+    # Add each site to the map
+    sites_df.apply(
+        lambda row: folium.CircleMarker(
+            location=[
+                row[df_cols.str.contains("Latitude")],
+                row[df_cols.str.contains("Longitude")],
+            ],
+            radius=14,
+            popup=row["site_info"],
+            tooltip=row[df_cols.str.contains("siteName", case=False)],
+        ).add_to(kso_map),
+        axis=1,
+    )
+
+    # Add a minimap to the corner for reference
+    kso_map = kso_map.add_child(MiniMap())
+
+    # Return the map
+    return kso_map
 
 
 def choose_project(
@@ -189,34 +456,6 @@ def select_movie(available_movies_df: pd.DataFrame):
 
     display(select_movie_widget)
     return select_movie_widget
-
-
-def choose_species(df: pd.DataFrame):
-    """
-    This function generates a widget to select the species of interest
-    :param df: a df of classifications swith the species of interest in the column "label"
-
-    """
-    # Get a list of the species available
-    species_list = df.label.unique()
-
-    # Roadblock to check if species list is empty
-    if len(species_list) == 0:
-        raise ValueError(
-            "Your database contains no species, please add at least one species before continuing."
-        )
-
-    # Generate the widget
-    w = widgets.SelectMultiple(
-        options=species_list,
-        value=[species_list[0]],
-        description="Species",
-        disabled=False,
-    )
-
-    display(w)
-    return w
-
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     """
@@ -741,6 +980,7 @@ def update_meta(
     df: pd.DataFrame,
     meta_name: str,
     csv_paths: dict,
+    test=False,
 ):
     """
     `update_meta` takes a new table, a meta name, and updates the local and server meta files
@@ -770,9 +1010,12 @@ def update_meta(
 
     # Save changes in survey csv locally and in the server
     async def f(sheet_df, df, meta_name):
-        x = await wait_for_change(
-            confirm_button, deny_button
-        )  # <---- Pass both buttons into the function
+        if not test:
+            x = await wait_for_change(
+                confirm_button, deny_button
+            )  # <---- Pass both buttons into the function
+        else:
+            x = "Yes, details are correct"
         if (
             x == "Yes, details are correct"
         ):  # <--- use if statement to trigger different events for the two buttons
@@ -824,7 +1067,10 @@ def update_meta(
     display(
         widgets.HBox([confirm_button, deny_button])
     )  # <----Display both buttons in an HBox
-    asyncio.create_task(f(sheet_df, df, meta_name))
+    if not test:
+        asyncio.create_task(f(sheet_df, df, meta_name))
+    else:
+        f(sheet_df=sheet_df, df=df, meta_name=meta_name)
 
 
 def open_csv(
@@ -840,18 +1086,18 @@ def open_csv(
     :return: A (subset) dataframe with the information of interest and the same data in an interactive sheet
     """
     # Extract the first and last row to display
-    range_start = int(df_range_rows.label[0])
-    range_end = int(df_range_rows.label[1])
+    range_start = int(df_range_rows[0])
+    range_end = int(df_range_rows[1])
 
     # Display the range of sites selected
     logging.info(f"Displaying # {range_start} to # {range_end}")
 
     # Filter the dataframe based on the selection: rows and columns
     df_filtered_row = df.filter(items=range(range_start, range_end), axis=0)
-    if not len(df_range_columns.label) == 0:
-        df_filtered = df_filtered_row.filter(items=df_range_columns.label, axis=1)
+    if not len(df_range_columns) == 0:
+        df_filtered = df_filtered_row.filter(items=df_range_columns, axis=1)
         # Display columns
-        logging.info(f"Displaying {df_range_columns.label}")
+        logging.info(f"Displaying {df_range_columns}")
     else:
         df_filtered = df_filtered_row.filter(items=df.columns, axis=1)
         # Display columns

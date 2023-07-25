@@ -13,6 +13,7 @@ import gdown
 import datetime
 import ffmpeg
 import shutil
+import sqlite3
 from tqdm import tqdm
 from panoptes_client import Panoptes, panoptes, Subject, SubjectSet
 from panoptes_client import Project as zooProject
@@ -22,6 +23,10 @@ from pathlib import Path
 # util imports
 from kso_utils.project_utils import Project
 from kso_utils.db_utils import add_db_info_to_df
+import kso_utils.db_utils as db_utils
+import kso_utils.movie_utils as movie_utils
+import kso_utils.server_utils as server_utils
+from kso_utils.tutorials_utils import WidgetMaker
 
 # Widget imports
 from IPython.display import display
@@ -47,15 +52,23 @@ class AuthenticationError(Exception):
     pass
 
 
-def connect_zoo_project(project: Project):
+def connect_zoo_project(project: Project, zoo_cred=False):
     """
     It takes a project name as input, and returns a Zooniverse project object
+
+    zoo_cred is an argument that can pass [username, password] to log in into zooniverse.
+    This is used in the automatic tests in gitlab called autotests.py.
+    when it is set to False, then the credentials are retrieved from the interacitve widget.
 
     :param project: the KSO project you are working
     :return: A Zooniverse project object.
     """
-    # Save your Zooniverse user name and password.
-    zoo_user, zoo_pass = zoo_credentials()
+    if zoo_cred == False:
+        # Save your Zooniverse user name and password.
+        zoo_user, zoo_pass = zoo_credentials()
+    else:
+        zoo_user = zoo_cred[0]
+        zoo_pass = zoo_cred[1]
 
     # Get the project-specific zooniverse number
     project_n = project.Zooniverse_number
@@ -883,6 +896,125 @@ def add_subject_site_movie_info_to_class(
 # Subject-specific functions
 ##########################
 
+def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
+    # The function that takes a list of workflow names and returns a list of workflow
+    # ids.
+    return [
+        workflows_df[workflows_df.display_name == wf_name].workflow_id.unique()[0]
+        for wf_name in workflow_names
+    ]
+
+def get_classifications(
+    project: Project,
+    conn: sqlite3.Connection,
+    workflow_dict: dict,
+    workflows_df: pd.DataFrame,
+    subj_type: str,
+    class_df: pd.DataFrame,
+):
+    """
+    It takes in a dictionary of workflows, a dataframe of workflows, the type of subject (frame or
+    clip), a dataframe of classifications, the path to the database, and the project name. It returns a
+    dataframe of classifications
+
+    :param project: the project object
+    :param conn: SQL connection object
+    :param workflow_dict: a dictionary of the workflows you want to retrieve classifications for. The
+        keys are the workflow names, and the values are the workflow IDs, workflow versions, and the minimum
+        number of classifications per subject
+    :type workflow_dict: dict
+    :param workflows_df: the dataframe of workflows from the Zooniverse project
+    :type workflows_df: pd.DataFrame
+    :param subj_type: "frame" or "clip"
+    :param class_df: the dataframe of classifications from the database
+    :return: A dataframe with the classifications for the specified project and workflow.
+    """
+
+    names, workflow_versions = [], []
+    for i in range(0, len(workflow_dict), 3):
+        names.append(list(workflow_dict.values())[i])
+        workflow_versions.append(list(workflow_dict.values())[i + 2])
+
+    workflow_ids = get_workflow_ids(workflows_df, names)
+
+    # Filter classifications of interest
+    classes = []
+    for id, version in zip(workflow_ids, workflow_versions):
+        class_df_id = class_df[
+            (class_df.workflow_id == id) & (class_df.workflow_version >= version)
+        ].reset_index(drop=True)
+        classes.append(class_df_id)
+    classes_df = pd.concat(classes)
+
+    # Add information about the subject
+    # Query id and subject type from the subjects table
+    subjects_df = db_utils.get_df_from_db_table(conn, "subjects")
+
+    if subj_type == "frame":
+        # Select only frame subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+        # Select columns relevant for frame subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "frame_number",
+                "movie_id",
+            ]
+        ]
+
+    else:
+        # Select only clip subjects
+        subjects_df = subjects_df[subjects_df["subject_type"] == "clip"]
+
+        # Select columns relevant for clip subjects
+        subjects_df = subjects_df[
+            [
+                "id",
+                "subject_type",
+                "https_location",
+                "filename",
+                "clip_start_time",
+                "movie_id",
+            ]
+        ]
+
+    # Ensure id format matches classification's subject_id
+    classes_df["subject_ids"] = classes_df["subject_ids"].astype("Int64")
+    subjects_df["id"] = subjects_df["id"].astype("Int64")
+
+    # Add subject information based on subject_ids
+    classes_df = pd.merge(
+        classes_df,
+        subjects_df,
+        how="left",
+        left_on="subject_ids",
+        right_on="id",
+    )
+
+    if classes_df[["subject_type", "https_location"]].isna().any().any():
+        # Exclude classifications from missing subjects
+        filtered_class_df = classes_df.dropna(
+            subset=["subject_type", "https_location"], how="any"
+        ).reset_index(drop=True)
+
+        # Report on the issue
+        logging.info(
+            f"There are {(classes_df.shape[0]-filtered_class_df.shape[0])}"
+            f" classifications out of {classes_df.shape[0]}"
+            f" missing subject info. Maybe the subjects have been removed from Zooniverse?"
+        )
+
+        classes_df = filtered_class_df
+
+    logging.info(
+        f"{classes_df.shape[0]} Zooniverse classifications have been retrieved"
+    )
+
+    return classes_df
 
 def populate_subjects(
     project: Project,
@@ -1322,7 +1454,11 @@ def upload_clips_to_zooniverse(
 ##########################
 def extract_frames_for_zoo(
     project: Project,
+    species_list: list,
+    zoo_info: dict,
+    agg_df: pd.DataFrame,
     db_connection,
+    server_connection,
     n_frames_subject,
     subsample_up_to,
 ):
@@ -1337,16 +1473,19 @@ def extract_frames_for_zoo(
     :type subsample_up_to: int (optional)
     """
 
-    species_list = self.species_of_interest.value
-
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
         raise ValueError(
             "No species were selected. Please select at least one species before continuing."
         )
+    
+    # Match format of species name to Zooniverse labels
+    species_names_zoo = [
+        clean_label(species_name) for species_name in species_list
+    ]
 
     # Select only aggregated classifications of species of interest
-    sp_agg_df = self.agg_df[self.agg_df["label"].isin(species_list)]
+    sp_agg_df = agg_df[agg_df["label"].isin(species_names_zoo)]
 
     # Subsample up to n subjects per label
     if sp_agg_df["label"].value_counts().max() > subsample_up_to:
@@ -1355,11 +1494,17 @@ def extract_frames_for_zoo(
         )
         sp_agg_df = sp_agg_df.groupby("label").sample(subsample_up_to)
 
+    # Get csv paths
+    csv_paths = server_utils.download_init_csv(
+            project, ["movies", "species", "photos", "surveys", "sites"], server_connection
+        )
+
     # Combine the aggregated clips and subjects dataframes
     comb_df = db_utils.add_db_info_to_df(
         project=project,
         db_connection=db_connection,
         df=sp_agg_df,
+        csv_paths=csv_paths,
         table_name="subjects",
         cols_interest="id, clip_start_time, movie_id",
     )
@@ -1376,7 +1521,7 @@ def extract_frames_for_zoo(
     )
 
     # Include movies' filepath and fps to the df
-    comb_df = comb_df.merge(movies_df, on="movie_id")
+    comb_df = comb_df.merge(movies_df, on="movie_id", suffixes=('', '_df2'))
 
     # Prevent trying to extract frames from movies that are not accessible
     if len(comb_df[~comb_df.exists]) > 0:
@@ -1387,9 +1532,10 @@ def extract_frames_for_zoo(
 
     # Combine the aggregated clips and species dataframes
     comb_df = db_utils.add_db_info_to_df(
-        project=self.project,
-        db_connection=self.db_connection,
+        project=project,
+        db_connection=db_connection,
         df=comb_df,
+        csv_paths=csv_paths,
         table_name="species",
         cols_interest="id, label, scientificName",
     )
@@ -1418,7 +1564,7 @@ def extract_frames_for_zoo(
     comb_df.drop(["subject_ids"], inplace=True, axis=1)
 
     # Check the frames haven't been uploaded to Zooniverse
-    comb_df = zoo_utils.check_frames_uploaded(self.project, comb_df)
+    comb_df = check_frames_uploaded(project, comb_df)
 
     # Specify the temp location to store the frames
     if project.server == "SNIC":
@@ -1427,15 +1573,19 @@ def extract_frames_for_zoo(
         frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
     else:
         frames_folder = "_".join(species_list) + "_frames/"
+        if len(frames_folder) > 260:
+            curr = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+            frames_folder = f"{curr}_various_frames/"
 
     # Extract the frames from the videos, store them in the temp location
     # and save the df with information about the frames in the projectprocessor
-    self.generated_frames = movie_utils.extract_frames(
-        project=self.project,
+    generated_frames = movie_utils.extract_frames(
+        project=project,
         server_connection=server_connection,
         df=comb_df,
         frames_folder=frames_folder,
     )
+    return generated_frames
 
 
 # Function to gather information of frames already uploaded to Zooniverse
@@ -1454,14 +1604,14 @@ def check_frames_uploaded(
         if len(list_species) <= 1:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, \
-            frame_exp_sp_id FROM subjects WHERE scientificName=='{scientificName[0]}' AND subject_type='frame'",
+            frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
                 db_connection,
             )
 
         else:
             uploaded_frames_df = pd.read_sql_query(
                 f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
-            {tuple(scientificName)} AND subject_type='frame'",
+            {tuple(list_species)} AND subject_type='frame'",
                 db_connection,
             )
 
