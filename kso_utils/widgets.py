@@ -98,7 +98,9 @@ def choose_footage(
     """
     if project.server == "AWS":
         available_movies_df = movie_utils.retrieve_movie_info_from_server(
-            project=project, server_connection=server_connection, db_connection=db_connection
+            project=project,
+            server_connection=server_connection,
+            db_connection=db_connection,
         )
         movie_dict = {
             name: movie_utils.get_movie_path(f_path, project, server_connection)
@@ -451,6 +453,7 @@ def select_movie(available_movies_df: pd.DataFrame):
 
     display(select_movie_widget)
     return select_movie_widget
+
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     """

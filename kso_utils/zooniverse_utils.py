@@ -896,6 +896,7 @@ def add_subject_site_movie_info_to_class(
 # Subject-specific functions
 ##########################
 
+
 def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
     # The function that takes a list of workflow names and returns a list of workflow
     # ids.
@@ -903,6 +904,7 @@ def get_workflow_ids(workflows_df: pd.DataFrame, workflow_names: list):
         workflows_df[workflows_df.display_name == wf_name].workflow_id.unique()[0]
         for wf_name in workflow_names
     ]
+
 
 def get_classifications(
     project: Project,
@@ -1015,6 +1017,7 @@ def get_classifications(
     )
 
     return classes_df
+
 
 def populate_subjects(
     project: Project,
@@ -1478,11 +1481,9 @@ def extract_frames_for_zoo(
         raise ValueError(
             "No species were selected. Please select at least one species before continuing."
         )
-    
+
     # Match format of species name to Zooniverse labels
-    species_names_zoo = [
-        clean_label(species_name) for species_name in species_list
-    ]
+    species_names_zoo = [clean_label(species_name) for species_name in species_list]
 
     # Select only aggregated classifications of species of interest
     sp_agg_df = agg_df[agg_df["label"].isin(species_names_zoo)]
@@ -1496,8 +1497,8 @@ def extract_frames_for_zoo(
 
     # Get csv paths
     csv_paths = server_utils.download_init_csv(
-            project, ["movies", "species", "photos", "surveys", "sites"], server_connection
-        )
+        project, ["movies", "species", "photos", "surveys", "sites"], server_connection
+    )
 
     # Combine the aggregated clips and subjects dataframes
     comb_df = db_utils.add_db_info_to_df(
@@ -1521,7 +1522,7 @@ def extract_frames_for_zoo(
     )
 
     # Include movies' filepath and fps to the df
-    comb_df = comb_df.merge(movies_df, on="movie_id", suffixes=('', '_df2'))
+    comb_df = comb_df.merge(movies_df, on="movie_id", suffixes=("", "_df2"))
 
     # Prevent trying to extract frames from movies that are not accessible
     if len(comb_df[~comb_df.exists]) > 0:
@@ -1574,7 +1575,7 @@ def extract_frames_for_zoo(
     else:
         frames_folder = "_".join(species_list) + "_frames/"
         if len(frames_folder) > 260:
-            curr = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+            curr = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
             frames_folder = f"{curr}_various_frames/"
 
     # Extract the frames from the videos, store them in the temp location

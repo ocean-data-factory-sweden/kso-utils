@@ -297,6 +297,7 @@ class ProjectProcessor:
         movie_selected = kso_widgets.select_movie(self.available_movies_df)
 
         if not test:
+
             async def f(project, server_connection, available_movies_df):
                 x = await kso_widgets.single_wait_for_change(movie_selected, "value")
                 html, movie_path = movie_utils.preview_movie(
@@ -328,7 +329,7 @@ class ProjectProcessor:
                 self.movie_path = movie_path
 
             f(self.project, self.server_connection, self.available_movies_df)
-            
+
     def check_meta_sync(self, meta_key: str):
         """
         It checks if the local and server versions of a metadata file are the same
@@ -552,7 +553,9 @@ class ProjectProcessor:
         else:
             if self.project.Zooniverse_number is not None:
                 # connect to Zooniverse
-                self.zoo_project = zoo_utils.connect_zoo_project(self.project, zoo_cred=zoo_cred)
+                self.zoo_project = zoo_utils.connect_zoo_project(
+                    self.project, zoo_cred=zoo_cred
+                )
             else:
                 logging.error("This project is not registered with Zooniverse.")
                 return
@@ -640,11 +643,11 @@ class ProjectProcessor:
 
         if not test:
             button = widgets.Button(
-            description="Click to extract clips.",
-            disabled=False,
-            display="flex",
-            flex_flow="column",
-            align_items="stretch",
+                description="Click to extract clips.",
+                disabled=False,
+                display="flex",
+                flex_flow="column",
+                align_items="stretch",
             )
 
             def on_button_clicked(b):
@@ -658,7 +661,7 @@ class ProjectProcessor:
                     gpu_available=use_gpu,
                     pool_size=pool_size,
                 )
-            
+
             button.on_click(on_button_clicked)
             display(clip_modification)
             display(button)
@@ -776,7 +779,9 @@ class ProjectProcessor:
         )
 
     def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
-        zoo_utils.connect_zoo_project(generate_export=generate_export, zoo_cred=zoo_cred)
+        zoo_utils.connect_zoo_project(
+            generate_export=generate_export, zoo_cred=zoo_cred
+        )
         self.workflow_widget = zoo_utils.WidgetMaker(self.zoo_info["workflows"])
         display(self.workflow_widget)
 
@@ -796,11 +801,13 @@ class ProjectProcessor:
             agg_params,
         )
 
-    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False):
+    def extract_zoo_frames(
+        self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False
+    ):
         if test:
             species_list = db_utils.get_df_from_db_table(
-                    self.db_connection, "species"
-                ).label.tolist()
+                self.db_connection, "species"
+            ).label.tolist()
         else:
             species_list = self.species_of_interest
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
@@ -1009,8 +1016,9 @@ class ProjectProcessor:
         # Display the displays the processed classifications for a given subject
         t_utils.explore_classifications_per_subject(
             self.processed_zoo_classifications,
-            self.workflow_widget.checks["Subject type: #0"])
-    
+            self.workflow_widget.checks["Subject type: #0"],
+        )
+
     def get_classifications(
         self,
         workflow_dict: dict,
@@ -1178,7 +1186,6 @@ class MLProjectProcessor(ProjectProcessor):
         n_tracked_frames: int = 0,
         test: bool = False,
     ):
-
         if test:
             self.species_of_interest = db_utils.get_df_from_db_table(
                 self.db_connection, "species"
