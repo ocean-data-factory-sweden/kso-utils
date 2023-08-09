@@ -377,7 +377,7 @@ class ProjectProcessor:
 
     def check_species_meta(self):
         return db_utils.check_species_meta(
-            csv_paths=self.csv_paths, db_connection=self.db_connection
+            csv_paths=self.csv_paths, conn=self.db_connection
         )
 
     def check_sites_meta(self):
