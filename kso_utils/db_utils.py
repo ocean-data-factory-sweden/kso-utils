@@ -496,8 +496,9 @@ def add_db_info_to_df(
             f"The table_name specified ({table_name}) doesn't have a merging option"
         )
 
-    # Ensure column to merge dfs on is int
-    df[left_on_col] = df[left_on_col].astype(float).astype(int)
+    # Ensure id columns that are going to be used to merge are int
+    if "id" in left_on_col:
+        df[left_on_col] = df[left_on_col].astype(float).astype(int)
 
     # Combine the original and sqldf dfs
     comb_df = pd.merge(
