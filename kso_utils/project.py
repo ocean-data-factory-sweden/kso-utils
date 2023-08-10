@@ -832,7 +832,7 @@ class ProjectProcessor:
             self.modified_frames = zoo_utils.modify_frames(
                 project=self.project,
                 frames_to_upload_df=self.generated_frames.reset_index(drop=True),
-                species_i=self.species_of_interest.value,
+                species_i=self.species_of_interest,
                 modification_details=frame_modification.checks,
             )
         else:

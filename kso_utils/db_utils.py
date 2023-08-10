@@ -422,7 +422,7 @@ def check_species_meta(csv_paths: dict, conn: sqlite3.Connection):
     species_df = pd.read_csv(csv_paths["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    field_names = list(get_column_names_db(conn, init_key).values())
+    field_names = list(get_column_names_db(conn, "species").values())
 
     # Select the basic fields for the db check
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]
