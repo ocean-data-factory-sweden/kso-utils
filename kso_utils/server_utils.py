@@ -215,6 +215,7 @@ def update_csv_server(
         logging.error(
             f"{orig_csv} couldn't be updated. Check writing permisions to the server."
         )
+    logging.info(f"{orig_csv} updated to the server.")
 
 
 def upload_file_server(
@@ -556,7 +557,7 @@ def mount_snic(
         snic_path,
     )
     stdin, stdout, stderr = client.exec_command(cmd)
-    # Print output and errors (if any)
+    # Log output and errors (if any)
     logging.info("Output:", stdout.read().decode("utf-8"))
     logging.error("Errors:", stderr.read().decode("utf-8"))
     # Verify that the remote directory is mounted

@@ -79,7 +79,7 @@ class ProjectProcessor:
         return repr(self.__dict__)
 
     def keys(self):
-        """Print keys of ProjectProcessor object"""
+        """Log keys of ProjectProcessor object"""
         logging.debug("Stored variable names.")
         return list(self.__dict__.keys())
 
@@ -163,10 +163,18 @@ class ProjectProcessor:
         # Connect to the database and add the db connection to project
         self.db_connection = db_utils.create_connection(self.project.db_path)
 
+        # Retrieves the table names of the sql db
+        table_names = db_utils.get_schema_table_names(self.db_connection)
+
         # Select only attributes of the propjectprocessor that are df of local csvs
-        # (sorted in reverse alphabetically to load sites before movies)
+        # (sorted in reverse alphabetically to load sites before movies) and
+        # have a table in the sql db
         local_dfs = sorted(
-            [str(file) for file in list(self.keys()) if "local" in str(file)],
+            [
+                str(file)
+                for file in list(self.keys())
+                if "local" in str(file) and str(file).split("_", 2)[1] in table_names
+            ],
             reverse=True,
         )
 
@@ -254,9 +262,15 @@ class ProjectProcessor:
 
     def get_movie_info(self):
         """
-        This function checks what movies from the movies csv are available
+        This function checks what movies from the movies csv are available and returns
+        three df with those available in folder/server and movies.csv, only available
+        in movies.csv and only available in folder/server
         """
-        self.server_movies_csv = movie_utils.retrieve_movie_info_from_server(
+        (
+            self.available_movies_df,
+            self.no_available_movies_df,
+            self.no_info_movies_df,
+        ) = movie_utils.retrieve_movie_info_from_server(
             project=self.project,
             db_connection=self.db_connection,
             server_connection=self.server_connection,
@@ -276,19 +290,19 @@ class ProjectProcessor:
     def preview_media(self, test: bool = False):
         """
         > The function `preview_media` is a function that takes in a `self` argument and returns a
-        function `f` that takes in three arguments: `project`, `csv_paths`, and `server_movies_csv`. The
+        function `f` that takes in three arguments: `project`, `csv_paths`, and `available_movies_df`. The
         function `f` is an asynchronous function that takes in the value of the `movie_selected` widget
         and displays the movie preview
         """
-        movie_selected = kso_widgets.select_movie(self.server_movies_csv)
+        movie_selected = kso_widgets.select_movie(self.available_movies_df)
 
         if not test:
 
-            async def f(project, server_connection, server_movies_csv):
+            async def f(project, server_connection, available_movies_df):
                 x = await kso_widgets.single_wait_for_change(movie_selected, "value")
                 html, movie_path = movie_utils.preview_movie(
                     project=project,
-                    available_movies_df=server_movies_csv,
+                    available_movies_df=available_movies_df,
                     movie_i=x,
                     server_connection=server_connection,
                 )
@@ -297,16 +311,16 @@ class ProjectProcessor:
                 self.movie_path = movie_path
 
             asyncio.create_task(
-                f(self.project, self.server_connection, self.server_movies_csv)
+                f(self.project, self.server_connection, self.available_movies_df)
             )
 
         else:
 
-            def f(project, server_connection, server_movies_csv):
+            def f(project, server_connection, available_movies_df):
                 x = movie_selected.options[0]
                 html, movie_path = movie_utils.preview_movie(
                     project=project,
-                    available_movies_df=server_movies_csv,
+                    available_movies_df=available_movies_df,
                     movie_i=x,
                     server_connection=server_connection,
                 )
@@ -314,7 +328,7 @@ class ProjectProcessor:
                 self.movie_selected = x
                 self.movie_path = movie_path
 
-            f(self.project, self.server_connection, self.server_movies_csv)
+            f(self.project, self.server_connection, self.available_movies_df)
 
     def check_meta_sync(self, meta_key: str):
         """
@@ -350,16 +364,20 @@ class ProjectProcessor:
         movie_utils.check_movies_meta(
             project=self.project,
             csv_paths=self.csv_paths,
-            server_movies_csv=self.server_movies_csv,
-            conn=self.db_connection,
+            db_connection=self.db_connection,
+            available_movies_df=self.available_movies_df,
+            no_info_movies_df=self.no_info_movies_df,
             server_connection=self.server_connection,
             review_method=review_method,
             gpu_available=gpu_available,
         )
 
+    def concatenate_local_movies(self):
+        movie_utils.concatenate_local_movies(self.csv_paths)
+
     def check_species_meta(self):
         return db_utils.check_species_meta(
-            csv_paths=self.csv_paths, db_connection=self.db_connection
+            csv_paths=self.csv_paths, conn=self.db_connection
         )
 
     def check_sites_meta(self):
@@ -535,7 +553,9 @@ class ProjectProcessor:
         else:
             if self.project.Zooniverse_number is not None:
                 # connect to Zooniverse
-                self.zoo_project = zoo_utils.connect_zoo_project(self.project, zoo_cred=zoo_cred)
+                self.zoo_project = zoo_utils.connect_zoo_project(
+                    self.project, zoo_cred=zoo_cred
+                )
             else:
                 logging.error("This project is not registered with Zooniverse.")
                 return
@@ -631,13 +651,15 @@ class ProjectProcessor:
             )
 
             def on_button_clicked(b):
-                self.get_clips(
-                    movie_name,
-                    movie_path,
-                    clip_selection,
-                    use_gpu,
-                    pool_size,
-                    clip_modification,
+                self.generated_clips = t_utils.create_clips(
+                    available_movies_df=self.available_movies_df,
+                    movie_i=movie_name,
+                    movie_path=movie_path,
+                    clip_selection=clip_selection,
+                    project=self.project,
+                    modification_details={},
+                    gpu_available=use_gpu,
+                    pool_size=pool_size,
                 )
 
             button.on_click(on_button_clicked)
@@ -647,13 +669,15 @@ class ProjectProcessor:
             clip_selection.kwargs = {"clip_length": 5, "clips_range": [0, 10]}
             clip_selection.result = {}
             clip_selection.result["clip_start_time"] = [0]
-            self.get_clips(
-                movie_name,
-                movie_path,
-                clip_selection,
-                use_gpu,
-                pool_size,
-                clip_modification,
+            self.generated_clips = t_utils.create_clips(
+                available_movies_df=self.available_movies_df,
+                movie_i=movie_name,
+                movie_path=movie_path,
+                clip_selection=clip_selection,
+                project=self.project,
+                modification_details={},
+                gpu_available=use_gpu,
+                pool_size=pool_size,
             )
 
     def upload_zoo_subjects(self, subject_type: str):
@@ -737,6 +761,7 @@ class ProjectProcessor:
         # populate the sql subjects table
         zoo_utils.sample_subjects_from_workflows(
             project=self.project,
+            server_connection=self.server_connection,
             db_connection=self.db_connection,
             workflow_widget_checks=workflow_checks,
             workflows_df=self.zoo_info["workflows"],
@@ -754,7 +779,9 @@ class ProjectProcessor:
         )
 
     def choose_workflows(self, generate_export: bool = False, zoo_cred=False):
-        zoo_utils.connect_zoo_project(generate_export=generate_export, zoo_cred=zoo_cred)
+        zoo_utils.connect_zoo_project(
+            generate_export=generate_export, zoo_cred=zoo_cred
+        )
         self.workflow_widget = zoo_utils.WidgetMaker(self.zoo_info["workflows"])
         display(self.workflow_widget)
 
@@ -774,13 +801,14 @@ class ProjectProcessor:
             agg_params,
         )
 
-    def extract_zoo_frames(self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False):
+    def extract_zoo_frames(
+        self, n_frames_subject: int = 3, subsample_up_to: int = 100, test: bool = False
+    ):
         if test:
-            species_list = db_utils.get_df_from_db_table(
-                    self.db_connection, "species"
-                ).label.tolist()
+            species_list = self.aggregated_zoo_classifications.label.unique().tolist()
         else:
-            species_list = self.species_of_interest
+            species_list = self.species_of_interest.value
+
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
             zoo_info=self.zoo_info,
@@ -801,7 +829,7 @@ class ProjectProcessor:
         frame_modification = kso_widgets.clip_modification_widget()
 
         if test:
-            self.generated_frames = zoo_utils.modify_frames(
+            self.modified_frames = zoo_utils.modify_frames(
                 project=self.project,
                 frames_to_upload_df=self.generated_frames.reset_index(drop=True),
                 species_i=self.species_of_interest,
@@ -817,12 +845,10 @@ class ProjectProcessor:
             )
 
             def on_button_clicked(b):
-                self.generated_frames = zoo_utils.modify_frames(
+                self.modified_frames = zoo_utils.modify_frames(
                     project=self.project,
-                    frames_to_upload_df=self.frames_to_upload_df.df.reset_index(
-                        drop=True
-                    ),
-                    species_i=self.species_of_interest,
+                    frames_to_upload_df=self.generated_frames.reset_index(drop=True),
+                    species_i=self.species_of_interest.value,
                     modification_details=frame_modification.checks,
                 )
 
@@ -894,7 +920,7 @@ class ProjectProcessor:
             if len(results) > 0:
                 self.frames_to_upload_df = pd.concat(results)
                 self.frames_to_upload_df["species_id"] = pd.Series(
-                    [t_utils.get_species_ids(self.project, species_list.value)]
+                    [t_utils.get_species_ids(self.db_connection, species_list.value)]
                     * len(self.frames_to_upload_df)
                 )
                 self.frames_to_upload_df = self.frames_to_upload_df.merge(
@@ -987,8 +1013,9 @@ class ProjectProcessor:
         # Display the displays the processed classifications for a given subject
         t_utils.explore_classifications_per_subject(
             self.processed_zoo_classifications,
-            self.workflow_widget.checks["Subject type: #0"])
-    
+            self.workflow_widget.checks["Subject type: #0"],
+        )
+
     def get_classifications(
         self,
         workflow_dict: dict,
@@ -1036,9 +1063,18 @@ class ProjectProcessor:
             self.project,
             self.db_connection,
             class_df,
+            self.csv_paths,
             classified_by,
             self.zoo_info,
         )
+
+        # Download the processed classifications as a csv file
+        csv_filename = (
+            self.project.Project_name + str(datetime.date.today()) + "occurrence.csv"
+        )
+        occurrence_df.to_csv(csv_filename, index=False)
+
+        logging.info(f"The occurences have been downloaded to {csv_filename}")
 
         # Download the processed classifications as a csv file
         csv_filename = (
@@ -1147,7 +1183,6 @@ class MLProjectProcessor(ProjectProcessor):
         n_tracked_frames: int = 0,
         test: bool = False,
     ):
-
         if test:
             self.species_of_interest = db_utils.get_df_from_db_table(
                 self.db_connection, "species"

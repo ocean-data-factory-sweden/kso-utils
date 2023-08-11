@@ -98,7 +98,9 @@ def choose_footage(
     """
     if project.server == "AWS":
         available_movies_df = movie_utils.retrieve_movie_info_from_server(
-            project=project, server_connection=server_connection, db_connection=db_connection
+            project=project,
+            server_connection=server_connection,
+            db_connection=db_connection,
         )
         movie_dict = {
             name: movie_utils.get_movie_path(f_path, project, server_connection)
@@ -248,19 +250,14 @@ def select_clip_n_len(project: Project, movie_i: str):
     return clip_length_number
 
 
-def choose_species(project: Project):
+def choose_species(df: pd.DataFrame):
     """
     This function generates a widget to select the species of interest
-    :param project: the project object
+    :param df: a df of classifications swith the species of interest in the column "label"
 
     """
-    # Create connection to db
-    conn = create_connection(project.db_path)
-
     # Get a list of the species available
-    species_list = pd.read_sql_query("SELECT label from species", conn)[
-        "label"
-    ].tolist()
+    species_list = df.label.unique()
 
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
@@ -456,6 +453,7 @@ def select_movie(available_movies_df: pd.DataFrame):
 
     display(select_movie_widget)
     return select_movie_widget
+
 
 def choose_folder(start_path: str = ".", folder_type: str = ""):
     """
@@ -946,15 +944,29 @@ def choose_movie_review():
     """
     choose_movie_review_widget = widgets.RadioButtons(
         options=[
-            "Basic: Automatic check for empty fps/duration and sampling start/end cells in the movies.csv",
-            "Advanced: Basic + Check format and metadata of each movie",
+            "Basic: Checks for available movies and empty cells in movies.csv",
+            "Advanced: Basic + Check movies format and movies with missing information",
         ],
-        description="What method you want to use to review the movies:",
+        description="Select the movies review method:",
         disabled=False,
         layout=Layout(width="95%"),
         style={"description_width": "initial"},
     )
+    display(
+        HTML(
+            """<font size="2px">In the Basic review, we check:<br>
+            all movies in the "movies.csv" are in the "movie_folder",<br>
+            all movies in the "movie_folder" are in the "movies.csv" and,<br>
+            for empty cells in the fps, duration, sampling_start and sampling_end columns of the "movies.csv". If there are empty cells, retrieves the information and saves it into the movies.csv.<br><br>
+    In the Advanced review, in addition to the basic checks, we also check:<br>
+    the format, frame rate and codec of the movies are correct. If not, automatically standarises the movies.<br>
+    Note the advanced review can take a while to standarise all the movies<br>
+    </font>"""
+        )
+    )
+
     display(choose_movie_review_widget)
+
     return choose_movie_review_widget
 
 

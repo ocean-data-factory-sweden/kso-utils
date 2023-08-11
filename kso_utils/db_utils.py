@@ -191,12 +191,11 @@ def get_df_from_db_table(conn: sqlite3.Connection, table_name: str):
     return df
 
 
-def check_table_name(conn: sqlite3.Connection, table_name: str):
+def get_schema_table_names(conn: sqlite3.Connection):
     """
-    > This function checks if a table name exists in the sql db
+    > This function retrieves a list with table names of the sql db
 
     :param conn: SQL connection object
-    :param table_name: a string of the name of the table of interest
     """
 
     cursor = conn.cursor()
@@ -204,12 +203,7 @@ def check_table_name(conn: sqlite3.Connection, table_name: str):
     tables = cursor.fetchall()
     table_names = [table[0] for table in tables]
 
-    if table_name in table_names:
-        pass
-    else:
-        logging.error(
-            f"The table_name specified ({table_name}) doesn't exist in the sql database"
-        )
+    return table_names
 
 
 def get_column_names_db(conn: sqlite3.Connection, table_i: str):
@@ -221,16 +215,59 @@ def get_column_names_db(conn: sqlite3.Connection, table_i: str):
     :return: A list of column names of the table of interest
     """
 
-    # Check if the table name exists in the sql db
-    check_table_name(conn, table_i)
-
     # Get the data of the table of interest
     data = conn.execute(f"SELECT * FROM {table_i}")
 
-    # Get the names of the columns inside the table of interest
-    field_names = [i[0] for i in data.description]
+    # Save in a dictionary the column names of the table
+    field_names = {}
+    for i in data.description:
+        field_names[i[0]] = i[0]
 
     return field_names
+
+
+def cols_rename_to_schema(
+    project: Project,
+    table_name: str,
+    df: pd.DataFrame,
+    reverse_lookup: bool = False,
+):
+    """
+    > This function renames columns of a df (of one of the three intial project csv files)
+    to match the names used in the schema. This deals with csv files having different
+    project-specific column names
+
+    :param project: The project object
+    :param df: a dataframe with the information of the local csv
+    :param table_name: The name of the table in the database where the data is stored
+    :param reverse_lookup: a boolean value to reverse the dict if formatting from schema to csv
+    """
+
+    # Get the spyfish-specific column names and their correspondent
+    # schema fields
+    if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
+        from kso_utils.spyfish_utils import get_spyfish_col_names
+
+        col_names_lookup = get_spyfish_col_names(table_name)
+
+    # Get the koster-specific column names and their correspondent
+    # schema fields
+    if project.Project_name == "Koster_Seafloor_Obs":
+        from kso_utils.koster_utils import get_koster_col_names
+
+        col_names_lookup = get_koster_col_names(table_name)
+
+    # Rename project-specific columns using the dictionary
+    if "col_names_lookup" in locals():
+        if reverse_lookup:
+            # Reverse the dictionaries if formatting from schema to csv
+            col_names_lookup = dict(
+                zip(col_names_lookup.values(), col_names_lookup.keys())
+            )
+
+        df = df.rename(columns=col_names_lookup)
+
+    return df
 
 
 # Utility functions for common database operations
@@ -275,7 +312,10 @@ def populate_db(
 
     # Process the csv of interest and tests for compatibility with sql table
     local_df = process_test_csv(
-        conn=conn, project=project, local_df=local_df, init_key=init_key
+        conn=conn,
+        project=project,
+        local_df=local_df,
+        init_key=init_key,
     )
 
     # Only populate the tables if df is not empty
@@ -302,84 +342,67 @@ def process_test_csv(
     :param init_key: a string corresponding to the name of the initial key of the local csv
     :return: a string of the category of interest and the processed dataframe
     """
-    from kso_utils.spyfish_utils import process_spyfish_sites, process_spyfish_movies
-    from kso_utils.koster_utils import process_koster_movies_csv
-    from kso_utils.sgu_utils import process_sgu_photos_csv
 
-    # Save the category of interest and process the df
+    # Rename potential project-specific column names to "standard" schema names
+    local_df = cols_rename_to_schema(
+        project=project,
+        table_name=init_key,
+        df=local_df,
+    )
+
+    # Set the id of the df of interest
     if init_key == "sites":
-        # Specify the id of the df of interest
-        field_names = ["site_id"]
-
-        # Modify the local_df if Spyfish Aotearoa
-        if project.Project_name == "Spyfish_Aotearoa":
-            # Rename columns to match schema fields
-            local_df = process_spyfish_sites(local_df)
+        table_id = "site_id"
 
     elif init_key == "movies":
-        # Specify the id of the df of interest
-        field_names = ["movie_id"]
-
-        # Modify the local_df if Spyfish Aotearoa
-        if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
-            local_df = process_spyfish_movies(local_df)
-
-        # Modify the local_df if Koster
-        if project.Project_name == "Koster_Seafloor_Obs":
-            local_df = process_koster_movies_csv(local_df)
-
+        table_id = "movie_id"
         # Reference movies with their respective sites
         sites_df = get_df_from_db_table(conn, "sites")[["id", "siteName"]].rename(
             columns={"id": "site_id"}
         )
 
-        # Merge local (aka movies) and sites dfs
+        # Merge df (aka movies) and sites dfs
         local_df = pd.merge(local_df, sites_df, how="left", on="siteName")
 
-        # Prevent column_name error
-        if "author" not in local_df.columns:
-            local_df = local_df.rename(columns={"Author": "author"})
-
-        # Use the filename to set the fpath if it doesn't exist
-        if "fpath" not in local_df.columns:
-            local_df["fpath"] = local_df["filename"]
-
     elif init_key == "species":
-        # Specify the id of the df of interest
-        field_names = ["species_id"]
-
-        # Rename columns to match sql fields
-        local_df = local_df.rename(columns={"commonName": "label"})
+        table_id = "species_id"
 
     elif init_key == "photos":
-        # Specify the id of the df of interest
-        field_names = ["ID"]
-
-        # Check if the project is the SGU
-        if project.Project_name == "SGU":
-            # Process the local photos df
-            local_df = process_sgu_photos_csv(project)
+        table_id = "ID"
 
     else:
         logging.error(
             f"{init_key} has not been processed because the db schema does not have a table for it"
         )
 
-        # create an Empty DataFrame object
-        local_df = pd.DataFrame()
+    # Create a dictionary with the table-specific column id and its schema match
+    id_lookup = {table_id: "id"}
 
-        return local_df
+    # Rename id columns using the dictionary
+    local_df = local_df.rename(columns=id_lookup)
 
-    # Rename any columns that start with a capitalise letter to match db schema
-    cols = local_df.columns
-    local_df.columns = [word[0].lower() + word[1:] for word in cols]
+    ##################
+    ##Roadblock to ensure cols match schema
+    ##################
+    # Get the "standard" schema column names of the table of interest
+    col_names_dic = get_column_names_db(conn, init_key)
 
-    # Add the names of the basic columns in the sql db
-    field_names = field_names + get_column_names_db(conn, init_key)
-    field_names.remove("id")
+    # Check the column names of the df are standard
+    column_names = local_df.columns
+    required_columns = col_names_dic.values()
 
-    # Select relevant fields
-    local_df = local_df[[c for c in field_names if c in local_df.columns]]
+    # Modify the dictionary if the df has different column names
+    if not all(col in column_names for col in required_columns):
+        missing_cols = [col for col in required_columns if col not in column_names]
+        # Log the issue
+        logging.error(
+            f"{missing_cols} column(s) not found and"
+            f" are required for the {init_key}'s schema table"
+            f" The col names are:{column_names}"
+        )
+
+    # Select only columns that have fields in the sql table
+    local_df = local_df[[c for c in required_columns if c in local_df.columns]]
 
     # Roadblock to prevent empty rows in id_columns
     test_table(local_df, init_key, [local_df.columns[0]])
@@ -387,22 +410,19 @@ def process_test_csv(
     return local_df
 
 
-def check_species_meta(
-    csv_paths: dict,
-    db_connection: sqlite3.Connection,
-):
+def check_species_meta(csv_paths: dict, conn: sqlite3.Connection):
     """
     > The function `check_species_meta` loads the csv with species information and checks if it is empty
 
     :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
-    :param db_connection: SQL connection object
+    :param conn: SQL connection object
     """
 
     # Load the csv with movies information
     species_df = pd.read_csv(csv_paths["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    field_names = get_column_names_db(db_connection, "species")
+    field_names = list(get_column_names_db(conn, "species").values())
 
     # Select the basic fields for the db check
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]
@@ -415,8 +435,8 @@ def check_species_meta(
 
 def add_db_info_to_df(
     project: Project,
-    db_connection,
-    csv_paths,
+    conn: sqlite3.Connection,
+    csv_paths: dict,
     df: pd.DataFrame,
     table_name: str,
     cols_interest: str = "*",
@@ -426,64 +446,82 @@ def add_db_info_to_df(
     the df
 
     :param project: The project object
-    :param db_connection: SQL connection object
+    :param conn: SQL connection object
     :param csv_paths: a dictionary with the paths of the csv files with info to initiate the db
     :param df: a dataframe with the information of the local csv to populate from
     :param table_name: The name of the table in the database where the data is stored
     :param cols_interest: list,
     """
-    # Check if the table name exists in the sql db
-    check_table_name(db_connection, table_name)
-
     # Retrieve the sql as a df
     query = f"SELECT {cols_interest} FROM {table_name}"
-    sql_df = pd.read_sql_query(query, db_connection)
+    sql_df = pd.read_sql_query(query, conn)
 
-    from kso_utils.spyfish_utils import add_spyfish_survey_info
+    # Set the column to merge dfs on right to "id" as default
+    right_on_col = "id"
 
-    # Merge movies table
+    # Set movies table
     if table_name == "movies":
         # Add survey information as part of the movie info
         if "local_surveys_csv" in csv_paths.keys():
+            from kso_utils.spyfish_utils import add_spyfish_survey_info
+
             sql_df = add_spyfish_survey_info(sql_df, csv_paths)
 
-        # Combine the original and sqldf dfs
-        comb_df = pd.merge(
-            df, sql_df, how="left", left_on="movie_id", right_on="id"
-        ).drop(columns=["id"])
+        # Save the name of the column to merge dfs on
+        left_on_col = "movie_id"
 
-    # Merge subjects table
+    # Set subjects table
     elif table_name == "subjects":
-        # Ensure subject_ids format is int
-        df["subject_ids"] = df["subject_ids"].astype(int)
-        df1 = df[list(set(df.columns).difference(set(sql_df.columns)))]
-        sql_df["id"] = sql_df["id"].astype(int)
+        # Save the name of the columns to merge dfs on
+        left_on_col = "subject_ids"
 
-        # Combine the original and sqldf dfs
-        comb_df = pd.merge(
-            df1, sql_df, how="left", left_on="subject_ids", right_on="id"
-        ).drop(columns=["id"])
-
-    # Merge sites table
+    # Set sites table
     elif table_name == "sites":
-        # Combine the original and sqldf dfs
-        comb_df = pd.merge(
-            df, sql_df, how="left", left_on="site_id", right_on="id"
-        ).drop(columns=["id"])
+        # Save the name of the columns to merge dfs on
+        left_on_col = "site_id"
 
-    # Merge species table
+    # Set species table
     elif table_name == "species":
         from kso_utils.zooniverse_utils import clean_label
 
         # Match format of species name to Zooniverse labels
-        sql_df["label"] = sql_df["label"].apply(clean_label)
+        sql_df["commonName"] = sql_df["commonName"].apply(clean_label)
 
-        # Combine the original and sqldf dfs
-        comb_df = pd.merge(df, sql_df, how="left", on="label").drop(columns=["id"])
+        # Save the name of the columns to merge dfs on
+        left_on_col = "commonName"
+        right_on_col = "commonName"
 
     else:
         logging.error(
             f"The table_name specified ({table_name}) doesn't have a merging option"
         )
 
+    # Ensure id columns that are going to be used to merge are int
+    if "id" in left_on_col:
+        df[left_on_col] = df[left_on_col].astype(float).astype(int)
+
+    # Combine the original and sqldf dfs
+    comb_df = pd.merge(
+        df, sql_df, how="left", left_on=left_on_col, right_on=right_on_col
+    )
+    # Drop the id column to prevent duplicated column issues
+    comb_df = comb_df.drop(columns=["id"], errors="ignore")
+
     return comb_df
+
+
+# Function to match species selected to species id
+def get_species_ids(conn: sqlite3.Connection, species_list: list):
+    """
+    # Get ids of species of interest
+    """
+    if len(species_list) == 1:
+        species_ids = pd.read_sql_query(
+            f'SELECT id FROM species WHERE label=="{species_list[0]}"', conn
+        )["id"].tolist()
+    else:
+        species_ids = pd.read_sql_query(
+            f"SELECT id FROM species WHERE label IN {tuple(species_list)}", conn
+        )["id"].tolist()
+
+    return species_ids

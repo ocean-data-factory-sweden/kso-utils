@@ -979,69 +979,6 @@ def get_annotations_viewer(data_path: str, species_list: list):
     return w_container
 
 
-def get_workflow_labels(
-    workflow_df: pd.DataFrame, workflow_id: int, workflow_version: int
-):
-    """
-    > This function takes a df of workflows of interest and retrieves the labels and common names of the choices cit scientists have in a survey task in Zooniverse.
-    the function is a modified version of the 'get_workflow_info' function by @lcjohnso
-    https://github.com/zooniverse/Data-digging/blob/6e9dc5db6f6125316616c4b04ae5fc4223826a25/scripts_GeneralPython/get_workflow_info.pybiological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
-    :param workflow_df: df of the workflows of the Zooniverse project of interest,
-    :param workflow_id: integer of the workflow id of interest,
-    :param workflow_version: integer of the workflow version of interest.
-    :return: a df with the common name and label of the annotations for the workflow.
-    """
-    # initialize the output
-    workflow_info = {}
-
-    # parse the tasks column as a json so we can work with it (it just loads as a string)
-    workflow_df["tasks_json"] = [json.loads(q) for q in workflow_df["tasks"]]
-    workflow_df["strings_json"] = [json.loads(q) for q in workflow_df["strings"]]
-
-    # identify the row of the workflow dataframe we want to extract
-    is_theworkflow = (workflow_df["workflow_id"] == workflow_id) & (
-        workflow_df["version"] == workflow_version
-    )
-
-    # extract it
-    theworkflow = workflow_df[is_theworkflow]
-
-    # pandas is a little weird about accessing stuff sometimes
-    # we should only have 1 row in theworkflow but the row index will be retained
-    # from the full workflow_df, so we need to figure out what it is
-    i_wf = theworkflow.index[0]
-
-    # extract the tasks as a json
-    tasks = theworkflow["tasks_json"][i_wf]
-    strings = theworkflow["strings_json"][i_wf]
-
-    workflow_info = tasks.copy()
-
-    tasknames = workflow_info.keys()
-    workflow_info["tasknames"] = tasknames
-
-    # now that we've extracted the actual task names, add the first task
-    workflow_info["first_task"] = theworkflow["first_task"].values[0]
-
-    # now join workflow structure to workflow label content for each task
-
-    for task in tasknames:
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-        for i_c, choice in enumerate(workflow_info[task]["choices"].keys()):
-            c_label = strings[workflow_info[task]["choices"][choice]["label"]]
-            label_common_name_dict["commonName"].append(choice)
-            label_common_name_dict["label"].append(c_label)
-
-        if task == "T0":
-            break
-
-    return pd.DataFrame.from_dict(label_common_name_dict)
-
-
 def choose_test_prop():
     """
     > The function `choose_test_prop()` creates a slider widget that allows the user to choose the
@@ -1599,40 +1536,21 @@ def create_modified_clips(
         logging.info("No modification selected")
 
 
-# Function to match species selected to species id
-def get_species_ids(project: Project, species_list: list):
-    """
-    # Get ids of species of interest
-    """
-    db_path = project.db_path
-    from kso_utils.db_utils import create_connection
-
-    conn = create_connection(db_path)
-    if len(species_list) == 1:
-        species_ids = pd.read_sql_query(
-            f'SELECT id FROM species WHERE label=="{species_list[0]}"', conn
-        )["id"].tolist()
-    else:
-        species_ids = pd.read_sql_query(
-            f"SELECT id FROM species WHERE label IN {tuple(species_list)}", conn
-        )["id"].tolist()
-    return species_ids
-
-
 def format_to_gbif(
     project: Project,
     db_connection,
     df: pd.DataFrame,
+    csv_paths: dict,
     classified_by: str,
     zoo_info_dict: dict = {},
 ):
     """
     > This function takes a df of biological observations classified by citizen scientists, biologists or ML algorithms and returns a df of species occurrences to publish in GBIF/OBIS.
     :param project: the project object
-    :param db_connection:
+    :param db_connection: SQL connection object
+    :param csv_paths: a dictionary with the paths of the csvs used to initiate the db
     :param df: the dataframe containing the aggregated classifications
     :param classified_by: the entity who classified the object of interest, either "citizen_scientists", "biologists" or "ml_algorithms"
-    :param subject_type: str,
     :param zoo_info_dict: dictionary with the workflow/subjects/classifications retrieved from Zooniverse project
     :return: a df of species occurrences to publish in GBIF/OBIS.
     """
@@ -1649,7 +1567,7 @@ def format_to_gbif(
         work_df["workflow_version"] = work_df["workflow_version"] - 1
 
         # Store df of all the common names and the labels into a list of df
-        from kso_utils.tutorials_utils import get_workflow_labels
+        from kso_utils.zooniverse_utils import get_workflow_labels
 
         commonName_labels_list = [
             get_workflow_labels(zoo_info_dict["workflows"], x, y)
@@ -1659,30 +1577,15 @@ def format_to_gbif(
         # Concatenate the dfs and select only unique common names and the labels
         commonName_labels_df = pd.concat(commonName_labels_list).drop_duplicates()
 
-        # Rename the columns as they are the other way aorund (potentially only in Spyfish?)
-        vernacularName_labels_df = commonName_labels_df.rename(
-            columns={
-                "commonName": "label",
-                "label": "vernacularName",
-            }
-        )
-
         # Combine the labels with the commonNames of the classifications
-        comb_df = pd.merge(df, vernacularName_labels_df, how="left", on="label")
+        comb_df = pd.merge(df, commonName_labels_df, how="left", on="label")
 
-        from kso_utils.db_utils import get_df_from_db_table
+        from kso_utils.db_utils import add_db_info_to_df
 
         # Query info about the species of interest
-        species_df = get_df_from_db_table(db_connection, "species")
-
-        # Rename the column to match Darwin core std
-        species_df = species_df.rename(
-            columns={
-                "label": "vernacularName",
-            }
+        comb_df = add_db_info_to_df(
+            project, db_connection, csv_paths, comb_df, "species"
         )
-        # Combine the aggregated classifications and species information
-        comb_df = pd.merge(comb_df, species_df, how="left", on="vernacularName")
 
         # Identify the second of the original movie when the species first appears
         comb_df["second_in_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
@@ -1692,7 +1595,7 @@ def format_to_gbif(
 
         # Select the max count of each species on each movie
         comb_df = comb_df.sort_values("how_many").drop_duplicates(
-            ["movie_id", "vernacularName"], keep="last"
+            ["movie_id", "commonName"], keep="last"
         )
 
         # Rename columns to match Darwin Data Core Standards
@@ -1700,6 +1603,7 @@ def format_to_gbif(
             columns={
                 "created_on": "eventDate",
                 "how_many": "individualCount",
+                "commonName": "vernacularName",
             }
         )
 
@@ -1716,6 +1620,7 @@ def format_to_gbif(
             + comb_df["vernacularName"].astype(str)
         )
 
+        # Set the basis of record as machine observation
         comb_df["basisOfRecord"] = "MachineObservation"
 
         # If coord uncertainity doesn't exist set to 30 metres
