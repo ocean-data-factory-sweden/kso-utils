@@ -422,7 +422,7 @@ def check_species_meta(csv_paths: dict, conn: sqlite3.Connection):
     species_df = pd.read_csv(csv_paths["local_species_csv"])
 
     # Retrieve the names of the basic columns in the sql db
-    field_names = list(get_column_names_db(conn, init_key).values())
+    field_names = list(get_column_names_db(conn, "species").values())
 
     # Select the basic fields for the db check
     df_to_db = species_df[[c for c in species_df.columns if c in field_names]]
@@ -496,8 +496,9 @@ def add_db_info_to_df(
             f"The table_name specified ({table_name}) doesn't have a merging option"
         )
 
-    # Ensure column to merge dfs on is int
-    df[left_on_col] = df[left_on_col].astype(float).astype(int)
+    # Ensure id columns that are going to be used to merge are int
+    if "id" in left_on_col:
+        df[left_on_col] = df[left_on_col].astype(float).astype(int)
 
     # Combine the original and sqldf dfs
     comb_df = pd.merge(

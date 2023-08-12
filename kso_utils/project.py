@@ -377,7 +377,7 @@ class ProjectProcessor:
 
     def check_species_meta(self):
         return db_utils.check_species_meta(
-            csv_paths=self.csv_paths, db_connection=self.db_connection
+            csv_paths=self.csv_paths, conn=self.db_connection
         )
 
     def check_sites_meta(self):
@@ -808,8 +808,10 @@ class ProjectProcessor:
             species_list = db_utils.get_df_from_db_table(
                 self.db_connection, "species"
             ).label.tolist()
+
         else:
-            species_list = self.species_of_interest
+            species_list = self.species_of_interest.value
+
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
             zoo_info=self.zoo_info,
@@ -830,7 +832,7 @@ class ProjectProcessor:
         frame_modification = kso_widgets.clip_modification_widget()
 
         if test:
-            self.generated_frames = zoo_utils.modify_frames(
+            self.modified_frames = zoo_utils.modify_frames(
                 project=self.project,
                 frames_to_upload_df=self.generated_frames.reset_index(drop=True),
                 species_i=self.species_of_interest,
@@ -846,12 +848,10 @@ class ProjectProcessor:
             )
 
             def on_button_clicked(b):
-                self.generated_frames = zoo_utils.modify_frames(
+                self.modified_frames = zoo_utils.modify_frames(
                     project=self.project,
-                    frames_to_upload_df=self.frames_to_upload_df.df.reset_index(
-                        drop=True
-                    ),
-                    species_i=self.species_of_interest,
+                    frames_to_upload_df=self.generated_frames.reset_index(drop=True),
+                    species_i=self.species_of_interest.value,
                     modification_details=frame_modification.checks,
                 )
 

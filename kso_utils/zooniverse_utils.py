@@ -1482,47 +1482,38 @@ def extract_frames_for_zoo(
             "No species were selected. Please select at least one species before continuing."
         )
 
-    # Match format of species name to Zooniverse labels
-    species_names_zoo = [clean_label(species_name) for species_name in species_list]
-
     # Select only aggregated classifications of species of interest
-    sp_agg_df = agg_df[agg_df["label"].isin(species_names_zoo)]
+    sp_agg_df = agg_df[agg_df["label"].isin(species_list)].reset_index(drop=True)
 
     # Subsample up to n subjects per label
     if sp_agg_df["label"].value_counts().max() > subsample_up_to:
         logging.info(
             f"Subsampling up to {subsample_up_to} subjects of the species selected"
         )
-        sp_agg_df = sp_agg_df.groupby("label").sample(subsample_up_to)
 
-    # Get csv paths
-    csv_paths = server_utils.download_init_csv(
-        project, ["movies", "species", "photos", "surveys", "sites"], server_connection
-    )
+        # randomise the order and select up to n per group
+        sp_agg_df = sp_agg_df.sample(frac=1).groupby("label").head(subsample_up_to)
 
-    # Combine the aggregated clips and subjects dataframes
-    comb_df = db_utils.add_db_info_to_df(
-        project=project,
-        db_connection=db_connection,
-        df=sp_agg_df,
-        csv_paths=csv_paths,
-        table_name="subjects",
-        cols_interest="id, clip_start_time, movie_id",
-    )
 
     # Identify the second of the original movie when the species first appears
-    comb_df["first_seen_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
+    sp_agg_df["first_seen_movie"] = (
+        sp_agg_df["clip_start_time"] + sp_agg_df["first_seen"]
+    )
 
     # Add information of the original movies associated with the subjects
     # (e.g. the movie that was clipped from)
-    movies_df = movie_utils.retrieve_movie_info_from_server(
+    (
+        movies_df,
+        no_available_movies_df,
+        no_info_movies_df,
+    ) = movie_utils.retrieve_movie_info_from_server(
         project=project,
         server_connection=server_connection,
         db_connection=db_connection,
     )
 
     # Include movies' filepath and fps to the df
-    comb_df = comb_df.merge(movies_df, on="movie_id", suffixes=("", "_df2"))
+    comb_df = sp_agg_df.merge(movies_df, on="movie_id", suffixes=("", "_df2"))
 
     # Prevent trying to extract frames from movies that are not accessible
     if len(comb_df[~comb_df.exists]) > 0:
@@ -1531,14 +1522,22 @@ def extract_frames_for_zoo(
             "{len(frames_df)} subjects with original movies that are not accessible"
         )
 
+    # Get csv paths
+    csv_paths = server_utils.download_init_csv(
+        project, ["movies", "species", "photos", "surveys", "sites"], server_connection
+    )
+
+    # Create a commonName col based on the zoo label to match schema format
+    comb_df["commonName"] = comb_df["label"]
+
     # Combine the aggregated clips and species dataframes
     comb_df = db_utils.add_db_info_to_df(
         project=project,
-        db_connection=db_connection,
+        conn=db_connection,
         df=comb_df,
         csv_paths=csv_paths,
         table_name="species",
-        cols_interest="id, label, scientificName",
+        cols_interest="id, commonName, scientificName",
     )
 
     # Create a list with the frames to be extracted and save into frame_number column
