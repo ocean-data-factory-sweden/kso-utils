@@ -864,6 +864,7 @@ class ProjectProcessor:
         output_path: str,
         num_frames: int = None,
         frames_skip: int = None,
+        backend: str = "cv",
     ):
         """
         This function generates custom frames from input movie files and saves them in an output directory.
@@ -884,6 +885,12 @@ class ProjectProcessor:
         containing `output_dir`, `num_frames`, and `frames_skip`. The `parallel_map` function is a custom
         function that applies the given function to each element of a list of movie_files.
         """
+        if backend not in ["av", "cv"]:
+            raise ValueError(
+                "Unsupported backend. "
+                "Choose either 'av' or 'cv' for pyav and OpenCV."
+            )
+
         frame_modification = kso_widgets.clip_modification_widget()
         species_list = kso_widgets.choose_species(self.project)
 
@@ -915,12 +922,13 @@ class ProjectProcessor:
                     [skip_end] * len(movie_files),
                     [num_frames] * len(movie_files),
                     [frames_skip] * len(movie_files),
+                    [backend] * len(movie_files),
                 ),
             )
             if len(results) > 0:
                 self.frames_to_upload_df = pd.concat(results)
                 self.frames_to_upload_df["species_id"] = pd.Series(
-                    [t_utils.get_species_ids(self.db_connection, species_list.value)]
+                    [db_utils.get_species_ids(self.db_connection, species_list.value)]
                     * len(self.frames_to_upload_df)
                 )
                 self.frames_to_upload_df = self.frames_to_upload_df.merge(
@@ -948,6 +956,7 @@ class ProjectProcessor:
                 self.frames_to_upload_df = pd.DataFrame()
             self.project.output_path = output_path
             self.generated_frames = zoo_utils.modify_frames(
+                project=self.project,
                 frames_to_upload_df=self.frames_to_upload_df.reset_index(drop=True),
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,

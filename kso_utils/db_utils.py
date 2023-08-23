@@ -517,11 +517,11 @@ def get_species_ids(conn: sqlite3.Connection, species_list: list):
     """
     if len(species_list) == 1:
         species_ids = pd.read_sql_query(
-            f'SELECT id FROM species WHERE label=="{species_list[0]}"', conn
+            f'SELECT id FROM species WHERE commonName=="{species_list[0]}"', conn
         )["id"].tolist()
     else:
         species_ids = pd.read_sql_query(
-            f"SELECT id FROM species WHERE label IN {tuple(species_list)}", conn
+            f"SELECT id FROM species WHERE commonName IN {tuple(species_list)}", conn
         )["id"].tolist()
 
     return species_ids

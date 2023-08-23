@@ -27,6 +27,7 @@ scikit_learn==1.2.2
 scp==0.14.1
 setuptools==67.6.1
 split-folders==0.5.1
+SQLAlchemy==2.0.20
 tqdm==4.64.1
 wandb==0.13.2
 csv-diff==1.1

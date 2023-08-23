@@ -1678,8 +1678,8 @@ def modify_frames(
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
-        mod_frames_folder = Path(
-            folder_name, "modified_" + "_".join(species_i) + "_frames/"
+        mod_frames_folder = str(
+            Path(folder_name, "modified_" + "_".join(species_i) + "_frames/")
         )
     else:
         mod_frames_folder = "modified_" + "_".join(species_i) + "_frames/"
