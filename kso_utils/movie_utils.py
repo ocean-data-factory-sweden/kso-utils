@@ -197,18 +197,18 @@ def retrieve_movie_info_from_server(
             normalized_string = unicodedata.normalize("NFC", string)
             for s in string_options:
                 normalized_s = unicodedata.normalize("NFC", s)
-                if normalized_string == normalized_s:
+                if normalized_string in normalized_s:
                     return s
             return None
 
-        # If there is a url or filepath directly, use the full path instead of the filename
-        if os.path.isdir(movies_df["fpath"].iloc[0]) or (
-            parsed_url.scheme and parsed_url.netloc
-        ):
-            movies_df["fpath"] = movies_df["fpath"].apply(
-                lambda x: get_match(x, server_df["fpath"].unique()),
-                1,
-            )
+        # If there is a url or filepath directly, use the full path instead of the filename (currently ignored, test for Koster case)
+        #if os.path.isdir(movies_df["fpath"].iloc[0]) or (
+        #    parsed_url.scheme or parsed_url.netloc or 1==1
+        #):
+        movies_df["fpath"] = movies_df["fpath"].apply(
+          lambda x: get_match(x, mov_folder_df["fpath"].unique()),
+          1,
+        )
 
     # Merge the server path to the filepath
     all_movies_df = movies_df.merge(
