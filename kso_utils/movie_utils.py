@@ -202,12 +202,12 @@ def retrieve_movie_info_from_server(
             return None
 
         # If there is a url or filepath directly, use the full path instead of the filename (currently ignored, test for Koster case)
-        #if os.path.isdir(movies_df["fpath"].iloc[0]) or (
+        # if os.path.isdir(movies_df["fpath"].iloc[0]) or (
         #    parsed_url.scheme or parsed_url.netloc or 1==1
-        #):
+        # ):
         movies_df["fpath"] = movies_df["fpath"].apply(
-          lambda x: get_match(x, mov_folder_df["fpath"].unique()),
-          1,
+            lambda x: get_match(x, mov_folder_df["fpath"].unique()),
+            1,
         )
 
     # Merge the server path to the filepath
