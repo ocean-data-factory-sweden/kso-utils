@@ -22,7 +22,6 @@ import asyncio
 # util imports
 from kso_utils.video_reader import VideoReader
 from kso_utils.project_utils import Project
-from kso_utils.project import ProjectProcessor
 import kso_utils.movie_utils as movie_utils
 from kso_utils.db_utils import create_connection
 import kso_utils.tutorials_utils as t_utils
