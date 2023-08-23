@@ -20,7 +20,9 @@ from pathlib import Path
 import asyncio
 
 # util imports
+from kso_utils.video_reader import VideoReader
 from kso_utils.project_utils import Project
+from kso_utils.project import ProjectProcessor
 import kso_utils.movie_utils as movie_utils
 from kso_utils.db_utils import create_connection
 import kso_utils.tutorials_utils as t_utils
@@ -250,14 +252,19 @@ def select_clip_n_len(project: Project, movie_i: str):
     return clip_length_number
 
 
-def choose_species(df: pd.DataFrame):
+def choose_species(project: Project):
     """
     This function generates a widget to select the species of interest
-    :param df: a df of classifications swith the species of interest in the column "label"
+    :param project: the project object
 
     """
+    # Create connection to db
+    conn = create_connection(project.db_path)
+
     # Get a list of the species available
-    species_list = df.label.unique()
+    species_list = pd.read_sql_query("SELECT commonName from species", conn)[
+        "commonName"
+    ].tolist()
 
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
@@ -1170,7 +1177,7 @@ def choose_new_videos_to_upload():
 
 
 # Select n number of clips at random
-def n_random_clips(clip_length, n_clips):
+def n_random_clips(clip_length, n_clips, movie_df):
     # Create a list of starting points for n number of clips
     duration_movie = int(movie_df["duration"].values[0])
     starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
@@ -1443,6 +1450,7 @@ def extract_custom_frames(
     skip_end=None,
     num_frames=None,
     frame_skip=None,
+    backend: str = "cv",
 ):
     """
     This function extracts frames from a video file and saves them as JPEG images.
@@ -1455,24 +1463,44 @@ def extract_custom_frames(
     between extracted frames. For example, if frame_skip is set to 10, then every 10th frame will be
     extracted. If frame_skip is not provided, then all frames will be extracted
     """
-    # Open the input movie file
-    cap = cv2.VideoCapture(input_path)
 
-    # Get base filename
-    input_stem = Path(input_path).stem
+    if backend == "cv":
+        # Open the input movie file
+        cap = cv2.VideoCapture(input_path)
 
-    # Get the total number of frames in the movie
-    num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    skip_start = int(skip_start * fps)
-    skip_end = int(skip_end * fps)
+        # Get base filename
+        input_stem = Path(input_path).stem
+
+        # Get the total number of frames in the movie
+        num_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        skip_start = int(skip_start * fps)
+        skip_end = int(skip_end * fps)
+
+    elif backend == "av":
+        # Open the input movie file
+        reader = VideoReader(path=input_path)
+
+        # Get base filename
+        input_stem = Path(input_path).stem
+
+        # Get the total number of frames in the movie
+        num_frames_total = reader._n_frames
+        fps = reader._fps
+        skip_start = int(skip_start * fps)
+        skip_end = int(skip_end * fps)
+    else:
+        raise ValueError("Unsupported backend.")
 
     frame_start = 0 if skip_start is None else skip_start
     frame_end = num_frames_total if skip_end is None else num_frames_total - skip_end
 
     # Determine which frames to extract based on the input parameters
     if num_frames is not None:
-        frames_to_extract = random.sample(range(frame_start, frame_end), num_frames)
+        # Note: current workaround uses every 500 frames to avoid frame seeking error
+        frames_to_extract = random.sample(
+            range(frame_start, frame_end, 500), num_frames
+        )
     elif frame_skip is not None:
         frames_to_extract = range(frame_start, frame_end, frame_skip)
     else:
@@ -1480,15 +1508,42 @@ def extract_custom_frames(
 
     output_files, input_movies = [], []
 
-    # Loop through the frames and extract the selected ones
-    for frame_idx in frames_to_extract:
-        # Set the frame index for the next frame to read
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    if backend == "cv":
+        # Loop through the frames and extract the selected ones
+        for frame_idx in frames_to_extract:
+            # Set the frame index for the next frame to read
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
 
-        # Read the next frame
-        ret, frame = cap.read()
+            # Read the next frame
+            ret, frame = cap.read()
 
-        if ret:
+            if ret:
+                # Construct the output filename for this frame
+                output_filename = os.path.join(
+                    output_dir, f"{input_stem}_frame_{frame_idx}.jpg"
+                )
+
+                # Write the frame to a JPEG file
+                cv2.imwrite(output_filename, frame)
+
+                # Add output filename to list of files
+                output_files.append(output_filename)
+
+                # Add movie filename to list
+                input_movies.append(Path(input_path).name)
+
+        # Release the video capture object
+        cap.release()
+
+    elif backend == "av":
+        # Loop through the frames and extract the selected ones
+        for frame_idx in frames_to_extract:
+            # Set the frame index for the next frame to read
+            frame = reader.request_frame(frame_idx)
+
+            # Get the image
+            frame = frame.image
+
             # Construct the output filename for this frame
             output_filename = os.path.join(
                 output_dir, f"{input_stem}_frame_{frame_idx}.jpg"
@@ -1502,9 +1557,6 @@ def extract_custom_frames(
 
             # Add movie filename to list
             input_movies.append(Path(input_path).name)
-
-    # Release the video capture object
-    cap.release()
 
     return pd.DataFrame(
         np.column_stack([input_movies, output_files, frames_to_extract]),
