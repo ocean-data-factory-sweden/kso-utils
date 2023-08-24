@@ -201,13 +201,13 @@ def retrieve_movie_info_from_server(
                     return s
             return None
 
-        # If there is a url or filepath directly, use the full path instead of the filename (currently ignored, test for Koster case)
-        #if os.path.isdir(movies_df["fpath"].iloc[0]) or (
+        # If there is a url or filepath directly, use the full path instead of the filename
+        # if os.path.isdir(movies_df["fpath"].iloc[0]) or (
         #    parsed_url.scheme or parsed_url.netloc or 1==1
-        #):
+        # ):
         movies_df["fpath"] = movies_df["fpath"].apply(
-          lambda x: get_match(x, mov_folder_df["fpath"].unique()),
-          1,
+            lambda x: get_match(x, mov_folder_df["fpath"].unique()),
+            1,
         )
 
     # Merge the server path to the filepath
@@ -747,6 +747,27 @@ def check_movies_meta(
         logging.info(
             f"There are {no_info_movies_df.shape[0]} movies in the movie_folder"
             f" that are not in the movies.csv. Their paths are: {no_info_movies_df.fpath.unique()}"
+        )
+
+    if project.server == "SNIC":
+        # Find closest matching filename (may differ due to Swedish character encoding)
+        parsed_url = urllib.parse.urlparse(df["fpath"].iloc[0])
+
+        def get_match(string, string_options):
+            normalized_string = unicodedata.normalize("NFC", string)
+            for s in string_options:
+                normalized_s = unicodedata.normalize("NFC", s)
+                if normalized_string in normalized_s:
+                    return s
+            return None
+
+        # If there is a url or filepath directly, use the full path instead of the filename
+        # if os.path.isdir(movies_df["fpath"].iloc[0]) or (
+        #    parsed_url.scheme or parsed_url.netloc or 1==1
+        # ):
+        df["fpath"] = df["fpath"].apply(
+            lambda x: get_match(x, available_movies_df["fpath"].unique()),
+            1,
         )
 
     # Add information about whether the movies are available in the movie_folder

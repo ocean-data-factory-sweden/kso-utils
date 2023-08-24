@@ -200,8 +200,8 @@ def update_csv_server(
         # local_fpath = project.csv_folder + updated_csv
         # Special implementation with two dummy folders for SNIC case since local and server
         # are essentially the same for now.
-        local_fpath = f"{snic_path}/tmp_dir/local_dir_dev/" + updated_csv
-        remote_fpath = f"{snic_path}/tmp_dir/server_dir_dev/" + orig_csv
+        local_fpath = f"{project.csv_folder}" + updated_csv
+        remote_fpath = f"{project.csv_folder}" + orig_csv
         upload_object_to_snic(
             sftp_client=server_connection["sftp_client"],
             local_fpath=local_fpath,
