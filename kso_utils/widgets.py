@@ -1176,8 +1176,9 @@ def choose_new_videos_to_upload():
 
 
 # Select n number of clips at random
-def n_random_clips(clip_length, n_clips, movie_df):
+def n_random_clips(clip_length, n_clips):
     # Create a list of starting points for n number of clips
+    # movie_df is currently missing here
     duration_movie = int(movie_df["duration"].values[0])
     starting_clips = random.sample(range(0, duration_movie, clip_length), n_clips)
 
