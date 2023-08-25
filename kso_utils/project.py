@@ -657,10 +657,25 @@ class ProjectProcessor:
                     movie_path=movie_path,
                     clip_selection=clip_selection,
                     project=self.project,
-                    modification_details={},
+                    modification_details=clip_modification.checks,
                     gpu_available=use_gpu,
                     pool_size=pool_size,
                 )
+
+                mod_clips = t_utils.create_modified_clips(
+                    self.project,
+                    self.generated_clips.clip_path,
+                    movie_name,
+                    clip_modification.checks,
+                    use_gpu,
+                    pool_size,
+                )
+                # Temporary workaround to get both clip paths
+                self.generated_clips["modif_clip_path"] = mod_clips
+                # Ensure that site_id is an integer
+                self.generated_clips["site_id"] = self.generated_clips[
+                    "site_id"
+                ].astype(np.int64)
 
             button.on_click(on_button_clicked)
             display(clip_modification)

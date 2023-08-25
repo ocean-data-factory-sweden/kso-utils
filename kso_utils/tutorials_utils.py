@@ -239,7 +239,8 @@ def modify_clips(
     if gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
-        b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
+        # Commenting out b_v as it causes gpu runs to fail
+        # b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
 
         subprocess.call(
             [
@@ -254,8 +255,8 @@ def modify_clips(
                 "copy",
                 "-c:v",
                 "h264_nvenc",
-                "-b:v",
-                b_v,
+                # "-b:v",
+                # b_v,
                 output_clip_path,
             ]
         )
@@ -394,7 +395,8 @@ def extract_clips(
     elif modification_details and gpu_available:
         # Unnest the modification detail dict
         df = pd.json_normalize(modification_details, sep="_")
-        b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
+        # Commenting out b_v as it causes gpu runs to fail
+        # b_v = df.filter(regex="bv$", axis=1).values[0][0] + "M"
 
         subprocess.call(
             [
@@ -416,8 +418,8 @@ def extract_clips(
                 "copy",
                 "-c:v",
                 "h264_nvenc",
-                "-b:v",
-                b_v,
+                # "-b:v",
+                # b_v,
                 str(output_clip_path),
             ]
         )
