@@ -651,13 +651,14 @@ class ProjectProcessor:
             )
 
             def on_button_clicked(b):
+                print(clip_modification.checks)
                 self.generated_clips = t_utils.create_clips(
                     available_movies_df=self.available_movies_df,
                     movie_i=movie_name,
                     movie_path=movie_path,
                     clip_selection=clip_selection,
                     project=self.project,
-                    modification_details=clip_modification.checks,
+                    modification_details={},
                     gpu_available=use_gpu,
                     pool_size=pool_size,
                 )
@@ -672,10 +673,6 @@ class ProjectProcessor:
                 )
                 # Temporary workaround to get both clip paths
                 self.generated_clips["modif_clip_path"] = mod_clips
-                # Ensure that site_id is an integer
-                self.generated_clips["site_id"] = self.generated_clips[
-                    "site_id"
-                ].astype(np.int64)
 
             button.on_click(on_button_clicked)
             display(clip_modification)
@@ -774,7 +771,7 @@ class ProjectProcessor:
 
         # Retrieve a subset of the subjects from the workflows of interest and
         # populate the sql subjects table
-        zoo_utils.sample_subjects_from_workflows(
+        selected_zoo_workflows = zoo_utils.sample_subjects_from_workflows(
             project=self.project,
             server_connection=self.server_connection,
             db_connection=self.db_connection,
@@ -791,6 +788,7 @@ class ProjectProcessor:
             csv_paths=self.csv_paths,
             classifications_data=self.zoo_info["classifications"],
             subject_type=workflow_checks["Subject type: #0"],
+            selected_zoo_workflows=selected_zoo_workflows,
         )
 
     def choose_workflows(self, generate_export: bool = False, zoo_cred=False):

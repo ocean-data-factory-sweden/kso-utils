@@ -28,7 +28,6 @@ def get_koster_col_names(table_name: str):
         col_names_dic = {
             "SamplingStart": "sampling_start",
             "SamplingEnd": "sampling_end",
-            "filename": "fpath",
         }
     else:
         # Create empty data frame as there are no project-specific
@@ -85,6 +84,8 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
     :return: a pandas DataFrame containing information about clips that were uploaded manually, along
     with their metadata and processed information.
     """
+    from kso_utils.zooniverse_utils import extract_metadata
+
     # Select clips uploaded manually
     man_clips_df = (
         subjects_df[
@@ -101,11 +102,13 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
     # Extract metadata from manually uploaded clips
     man_clips_df, man_clips_meta = extract_metadata(man_clips_df)
 
-    # Process the metadata of manually uploaded clips
-    man_clips_meta = process_manual_clips(man_clips_meta)
+    if len(man_clips_meta) > 0:
 
-    # Combine metadata info with the subjects df
-    man_clips_df = pd.concat([man_clips_df, man_clips_meta], axis=1)
+        # Process the metadata of manually uploaded clips
+        man_clips_meta = process_manual_clips(man_clips_meta)
+
+        # Combine metadata info with the subjects df
+        man_clips_df = pd.concat([man_clips_df, man_clips_meta], axis=1)
 
     return man_clips_df
 
@@ -289,11 +292,15 @@ def process_koster_subjects(subjects: pd.DataFrame, conn: sqlite3.Connection):
         subjects, manual_date=manual_date, auto_date=auto_date
     )
 
-    # Include movie_ids to the metadata
-    manual_subjects_df = get_movies_id(manual_subjects_df, conn=conn)
+    if len(manual_subjects_df) > 0:
+        # Include movie_ids to the metadata
+        manual_subjects_df = get_movies_id(manual_subjects_df, conn=conn)
 
-    # Combine all uploaded subjects
-    subjects = pd.merge(manual_subjects_df, auto_subjects_df, how="outer")
+        # Combine all uploaded subjects
+        subjects = pd.merge(manual_subjects_df, auto_subjects_df, how="outer")
+
+    else:
+        subjects = auto_subjects_df
 
     return subjects
 

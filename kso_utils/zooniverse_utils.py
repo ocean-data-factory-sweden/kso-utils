@@ -382,6 +382,7 @@ def process_zoo_classifications(
     csv_paths: dict,
     classifications_data: pd.DataFrame,
     subject_type: str,
+    selected_zoo_workflows: list,
 ):
     """
     This function takes in a dataframe of classifications and returns a dataframe of annotations.
@@ -411,6 +412,9 @@ def process_zoo_classifications(
     classes_df = classes_df.dropna(subset=["subject_type"], how="any").reset_index(
         drop=True
     )
+
+    # Select only classification from the workflows of interest
+    classes_df = classes_df[classes_df.workflow_id.isin(selected_zoo_workflows)].copy()
 
     # Report the number of classifications retrieved
     logging.info(
@@ -506,6 +510,7 @@ def process_zoo_classifications(
         .astype(str)
         .apply(lambda x: x.str.strip())
         .replace("", np.nan)
+        .replace("None", np.nan)
     )
 
     # Ensure the subject type specific columns are numeric
@@ -545,6 +550,9 @@ def process_zoo_classifications(
 
     # Select only relevant columns
     annot_df = annot_df[annot_cols]
+
+    # Select only classification from the workflows of interest
+    annot_df = annot_df[annot_df.workflow_id.isin(selected_zoo_workflows)].copy()
 
     # Report the number of annotations flattened
     logging.info(
@@ -1093,6 +1101,27 @@ def populate_subjects(
     # Rename columns to match the db format
     subjects = subjects.rename(columns=hash_columns)
 
+    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+    if "Subject_type" in subjects.columns:
+        subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
+            lambda x: x[1] if isinstance(x[1], str) else x[0], 1
+        )
+        subjects.drop(columns=["Subject_type"], inplace=True)
+
+    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+    if "upl_seconds" in subjects.columns:
+        subjects["clip_start_time"] = subjects[
+            ["clip_start_time", "upl_seconds"]
+        ].apply(lambda x: x[1] if not np.isnan(x[1]) else x[0], 1)
+        subjects.drop(columns=["upl_seconds"], inplace=True)
+
+    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
+    if "VideoFilename" in subjects.columns:
+        subjects["filename"] = subjects[["filename", "VideoFilename"]].apply(
+            lambda x: x[1] if isinstance(x[1], str) else x[0], 1
+        )
+        subjects.drop(columns=["VideoFilename"], inplace=True)
+
     # Rename common non-standard column names
     rename_cols = {
         "subject_id": "id",
@@ -1265,6 +1294,8 @@ def sample_subjects_from_workflows(
         populate_subjects(project, server_connection, db_connection, subjects_series)
     else:
         logging.error("No subjects to populate database from the workflows selected.")
+
+    return selected_zoo_workflows
 
 
 ##########################
