@@ -608,6 +608,10 @@ class ProjectProcessor:
         )
         # Temporary workaround to get both clip paths
         self.generated_clips["modif_clip_path"] = mod_clips
+        # Temporary workaround to ensure site_id is an integer
+        self.generated_clips["site_id"] = self.generated_clips["site_id"].astype(
+            np.int64
+        )
 
     def generate_zoo_clips(
         self,
@@ -1062,7 +1066,8 @@ class ProjectProcessor:
 
         # Download the processed classifications as a csv file
         csv_filename = (
-            self.project.Project_name
+            self.project.csv_folder
+            + self.project.Project_name
             + str(datetime.date.today())
             + "classifications.csv"
         )
@@ -1092,15 +1097,10 @@ class ProjectProcessor:
 
         # Download the processed classifications as a csv file
         csv_filename = (
-            self.project.Project_name + str(datetime.date.today()) + "occurrence.csv"
-        )
-        occurrence_df.to_csv(csv_filename, index=False)
-
-        logging.info(f"The occurences have been downloaded to {csv_filename}")
-
-        # Download the processed classifications as a csv file
-        csv_filename = (
-            self.project.Project_name + str(datetime.date.today()) + "occurrence.csv"
+            self.project.csv_folder
+            + self.project.Project_name
+            + str(datetime.date.today())
+            + "occurrence.csv"
         )
         occurrence_df.to_csv(csv_filename, index=False)
 
