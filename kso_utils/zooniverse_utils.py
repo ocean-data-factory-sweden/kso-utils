@@ -1102,21 +1102,21 @@ def populate_subjects(
     subjects = subjects.rename(columns=hash_columns)
 
     # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-    if "Subject_type" in subjects.columns:
+    if "Subject_type" in subjects.columns and "subject_type" in subjects.columns:
         subjects["subject_type"] = subjects[["subject_type", "Subject_type"]].apply(
             lambda x: x[1] if isinstance(x[1], str) else x[0], 1
         )
         subjects.drop(columns=["Subject_type"], inplace=True)
 
-    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-    if "upl_seconds" in subjects.columns:
+    # Fix similar weird bug to above (Jannes)
+    if "upl_seconds" in subjects.columns and "clip_start_time" in subjects.columns:
         subjects["clip_start_time"] = subjects[
             ["clip_start_time", "upl_seconds"]
         ].apply(lambda x: x[1] if not np.isnan(x[1]) else x[0], 1)
         subjects.drop(columns=["upl_seconds"], inplace=True)
 
-    # Fix weird bug where Subject_type is used instead of subject_type for the column name for some clips
-    if "VideoFilename" in subjects.columns:
+    # Fix similar weird bug to above (Jannes)
+    if "VideoFilename" in subjects.columns and "filename" in subjects.columns:
         subjects["filename"] = subjects[["filename", "VideoFilename"]].apply(
             lambda x: x[1] if isinstance(x[1], str) else x[0], 1
         )
