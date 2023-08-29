@@ -103,7 +103,6 @@ def manual_subjects(subjects_df: pd.DataFrame, manual_date: str, auto_date: str)
     man_clips_df, man_clips_meta = extract_metadata(man_clips_df)
 
     if len(man_clips_meta) > 0:
-
         # Process the metadata of manually uploaded clips
         man_clips_meta = process_manual_clips(man_clips_meta)
 
