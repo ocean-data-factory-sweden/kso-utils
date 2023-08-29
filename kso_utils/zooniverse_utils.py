@@ -1762,11 +1762,11 @@ def modify_frames(
                 if len(crf_value) > 0:
                     # Note: now using q option as crf not supported by ffmpeg build
                     crf_prompt = str(max([int(i) for i in crf_value]))
-                    full_prompt += f".output('{row['modif_frame_path']}', q={crf_prompt}, pix_fmt='yuv420p')"
-                else:
                     full_prompt += (
-                        f".output('{row['modif_frame_path']}', q=20, pix_fmt='yuv420p')"
+                        f".output('{row['modif_frame_path']}', q={crf_prompt})"
                     )
+                else:
+                    full_prompt += f".output('{row['modif_frame_path']}', q=20)"
                 # Run the modification
                 try:
                     logging.info(full_prompt)
