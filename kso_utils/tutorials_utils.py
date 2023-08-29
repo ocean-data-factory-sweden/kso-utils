@@ -650,13 +650,21 @@ def view_subject(subject_id: int, class_df: pd.DataFrame, subject_type: str):
             im = draw_annotations_in_frame(im, class_df_subject)
 
         # Remove previous temp image if exist
-        if os.access(".", os.W_OK):
+        try:
+            with open("test.txt", "w") as temp_file:
+                temp_file.write("Testing write access.")
             temp_image_path = "temp.jpg"
-        else:
+        except:
             # Specify volume allocated by SNIC
             snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
             temp_image_path = f"{snic_path}/tmp_dir/temp.jpg"
 
+        finally:
+            # Remove temporary file
+            if os.path.exists("test.txt"):
+                os.remove("test.txt")
+
+        # Remove temp image if it exists
         if os.path.exists(temp_image_path):
             os.remove(temp_image_path)
 
