@@ -1392,9 +1392,17 @@ def create_clips(
         ]
 
         if not clip_selection.result == len(list_clip_start[0]):
-            logging.info(
-                "There was an issue estimating the starting seconds for the clips"
-            )
+            if clip_selection.result < len(list_clip_start[0]):
+                # Choose random starting points based on the number of samples (example clips, by default this is 3)
+                list_clip_start = [
+                    np.random.choice(
+                        list_clip_start[0], size=clip_selection.result, replace=False
+                    )
+                ]
+            else:
+                logging.info(
+                    "There was an issue estimating the starting seconds for the clips."
+                )
 
     else:
         # Clipping specific sections of a video at random (e.g. starting at 10, 20, 180)

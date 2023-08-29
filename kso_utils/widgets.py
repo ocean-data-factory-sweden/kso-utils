@@ -1198,9 +1198,12 @@ def n_random_clips(clip_length, n_clips):
 
 
 # Display in hours, minutes and seconds
-def to_clips(clip_length, clips_range):
+def to_clips(clip_length, clips_range, is_example: bool):
     # Calculate the number of clips
-    clips = int((clips_range[1] - clips_range[0]) / clip_length)
+    if is_example:
+        clips = 3
+    else:
+        clips = int((clips_range[1] - clips_range[0]) / clip_length)
 
     logging.info(f"Number of clips to upload: {clips}")
 
@@ -1221,7 +1224,6 @@ def select_n_clips(
     :param project: the project object
     :param db_connection: SQL connection object
     :param movie_i: the name of the movie of interest
-    :param is_example: a boolean value to specify whether the clips should be selected at random or not
     :return: A dictionary with the starting points of the clips and the length of the clips.
     """
 
@@ -1231,39 +1233,24 @@ def select_n_clips(
         db_connection,
     )
 
-    if is_example:
-        # Select the number of clips to upload
-        clip_length_number = widgets.interactive(
-            n_random_clips,
-            clip_length=select_clip_length(),
-            n_clips=widgets.IntSlider(
-                value=3,
-                min=1,
-                max=5,
-                step=1,
-                description="Number of random clips:",
-                disabled=False,
-                layout=widgets.Layout(width="40%"),
-                style={"description_width": "initial"},
-            ),
-        )
-
-    else:
-        # Select the number of clips to upload
-        clip_length_number = widgets.interactive(
-            to_clips,
-            clip_length=select_clip_length(),
-            clips_range=widgets.IntRangeSlider(
-                value=[movie_df.sampling_start.values, movie_df.sampling_end.values],
-                min=0,
-                max=int(movie_df.duration.values),
-                step=1,
-                description="Range in seconds:",
-                style={"description_width": "initial"},
-                layout=widgets.Layout(width="90%"),
-            ),
-        )
-
+    # Select the number of clips to upload
+    # Create a boolean widget and hide it so that it can be added to the interactive layout
+    example_widget = widgets.Checkbox(value=is_example, description="Random examples")
+    example_widget.layout.visibility = "hidden"
+    clip_length_number = widgets.interactive(
+        to_clips,
+        is_example=example_widget,
+        clip_length=select_clip_length(),
+        clips_range=widgets.IntRangeSlider(
+            value=[movie_df.sampling_start.values, movie_df.sampling_end.values],
+            min=0,
+            max=int(movie_df.duration.values),
+            step=1,
+            description="Range in seconds:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="90%"),
+        ),
+    )
     display(clip_length_number)
     return clip_length_number
 
@@ -1362,7 +1349,6 @@ def select_modification():
         style={"description_width": "initial"},
     )
 
-    display(select_modification_widget)
     return select_modification_widget
 
 
