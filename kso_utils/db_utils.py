@@ -24,10 +24,11 @@ def create_connection(db_file: str):
     """
     conn = None
     try:
+        if not os.path.exists(os.path.dirname(db_file)):
+            os.mkdir(os.path.dirname(db_file))
+            os.chmod(os.path.dirname(db_file), 0o777)
         conn = sqlite3.connect(db_file)
         conn.execute("PRAGMA foreign_keys = 1")
-        # Force database file to be writable to allow
-        # sharing between users (SNIC in particular)
         os.chmod(db_file, 0o777)
         return conn
     except sqlite3.Error as e:
