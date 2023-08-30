@@ -24,7 +24,7 @@ def create_connection(db_file: str):
     """
     conn = None
     try:
-        if not os.path.exists(os.path.dirname(db_file))
+        if not os.path.exists(os.path.dirname(db_file)):
             if not os.path.dirname(db_file) == '':
                 os.mkdir(os.path.dirname(db_file))
                 os.chmod(os.path.dirname(db_file), 0o777)
