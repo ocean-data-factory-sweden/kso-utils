@@ -29,7 +29,6 @@ import kso_utils.project_utils as project_utils
 import kso_utils.db_utils as db_utils
 import kso_utils.movie_utils as movie_utils
 import kso_utils.server_utils as server_utils
-import kso_utils.yolo_utils as yolo_utils
 import kso_utils.zooniverse_utils as zoo_utils
 import kso_utils.general as g_utils
 import kso_utils.widgets as kso_widgets
@@ -1106,6 +1105,7 @@ class MLProjectProcessor(ProjectProcessor):
             pass
 
         self.modules = g_utils.import_modules([])
+        self.modules.update(g_utils.import_modules(["yolo_utils"], utils=True))
         self.modules.update(
             g_utils.import_modules(["torch", "wandb", "yaml", "yolov5"], utils=False)
         )
@@ -1180,7 +1180,7 @@ class MLProjectProcessor(ProjectProcessor):
             ).label.tolist()
 
             # code for prepare dataset for machine learning
-            yolo_utils.frame_aggregation(
+            self.modules["yolo_utils"].frame_aggregation(
                 project=self.project,
                 server_connection=self.server_connection,
                 db_connection=self.db_connection,
@@ -1209,7 +1209,7 @@ class MLProjectProcessor(ProjectProcessor):
             def on_button_clicked(b):
                 self.species_of_interest = species_list.value
                 # code for prepare dataset for machine learning
-                yolo_utils.frame_aggregation(
+                self.modules["yolo_utils"].frame_aggregation(
                     project=self.project,
                     server_connection=self.server_connection,
                     db_connection=self.db_connection,
@@ -1346,11 +1346,11 @@ class MLProjectProcessor(ProjectProcessor):
         if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
         if test:
-            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+            self.data_path, self.hyp_path = self.modules["yolo_utils"].setup_paths(
                 os.path.join(self.output_path, "ml-template-data"), self.model_type
             )
         else:
-            self.data_path, self.hyp_path = yolo_utils.setup_paths(
+            self.data_path, self.hyp_path = self.modules["yolo_utils"].setup_paths(
                 self.output_path, self.model_type
             )
 
@@ -1443,9 +1443,11 @@ class MLProjectProcessor(ProjectProcessor):
         )
 
     def save_detections_wandb(self, conf_thres: float, model: str, eval_dir: str):
-        yolo_utils.set_config(conf_thres, model, eval_dir)
-        yolo_utils.add_data_wandb(eval_dir, "detection_output", self.run)
-        self.csv_report = yolo_utils.generate_csv_report(
+        self.modules["yolo_utils"].set_config(conf_thres, model, eval_dir)
+        self.modules["yolo_utils"].add_data_wandb(
+            eval_dir, "detection_output", self.run
+        )
+        self.csv_report = self.modules["yolo_utils"].generate_csv_report(
             eval_dir, self.run, wandb_log=True
         )
 
@@ -1458,7 +1460,7 @@ class MLProjectProcessor(ProjectProcessor):
         conf_thres: float,
         img_size: tuple = (540, 540),
     ):
-        latest_tracker = yolo_utils.track_objects(
+        latest_tracker = self.modules["yolo_utils"].track_objects(
             name=name,
             source_dir=source,
             artifact_dir=artifact_dir,
@@ -1467,13 +1469,13 @@ class MLProjectProcessor(ProjectProcessor):
             img_size=img_size,
             gpu=True if self.modules["torch"].cuda.is_available() else False,
         )
-        yolo_utils.add_data_wandb(
+        self.modules["yolo_utils"].add_data_wandb(
             Path(latest_tracker).parent.absolute(), "tracker_output", self.run
         )
-        self.csv_report = yolo_utils.generate_csv_report(
+        self.csv_report = self.modules["yolo_utils"].generate_csv_report(
             eval_dir, self.run, wandb_log=True
         )
-        self.tracking_report = yolo_utils.generate_counts(
+        self.tracking_report = self.modules["yolo_utils"].generate_counts(
             eval_dir, latest_tracker, artifact_dir, self.run, wandb_log=True
         )
         # self.modules["wandb"].finish()
