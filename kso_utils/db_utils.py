@@ -26,6 +26,9 @@ def create_connection(db_file: str):
     try:
         conn = sqlite3.connect(db_file)
         conn.execute("PRAGMA foreign_keys = 1")
+        # Force database file to be writable to allow
+        # sharing between users (SNIC in particular)
+        os.chmod(db_file, 0o777)
         return conn
     except sqlite3.Error as e:
         logging.error(e)
