@@ -12,8 +12,8 @@ from more_itertools import first
 import numpy as np
 import sys
 
-KeyType = TypeVar('KeyType')
-ItemType = TypeVar('ItemType')
+KeyType = TypeVar("KeyType")
+ItemType = TypeVar("ItemType")
 BGRImageArray = np.ndarray
 TimeIntervalTuple = Tuple[Optional[float], Optional[float]]
 
@@ -26,9 +26,8 @@ def get_memory_footprint(item: Any) -> int:
         return sys.getsizeof(item)  # Only returns pointer-size, no recursion
 
 
-
 class CacheDict(Generic[KeyType, ItemType]):
-    """ A simple buffer that just keeps a cache of recent entries
+    """A simple buffer that just keeps a cache of recent entries
     Example
         cache = ItemCache(buffer_len=3)
         cache[1]='aaa'
@@ -36,9 +35,13 @@ class CacheDict(Generic[KeyType, ItemType]):
         cache[7]='ccc'
     """
 
-    def __init__(self, buffer_length: Optional[int] = None, buffer_size_bytes: Optional[int] = None,
-                 calculate_size_once=True, always_allow_one_item: bool = False):
-
+    def __init__(
+        self,
+        buffer_length: Optional[int] = None,
+        buffer_size_bytes: Optional[int] = None,
+        calculate_size_once=True,
+        always_allow_one_item: bool = False,
+    ):
         self._buffer = OrderedDict()
         self._buffer_length = buffer_length
         self._buffer_size_bytes = buffer_size_bytes
@@ -61,14 +64,24 @@ class CacheDict(Generic[KeyType, ItemType]):
             self._remove_oldest_item()
 
         if self._buffer_size_bytes is not None:
-            size = get_memory_footprint(
-                value) if not self._calculate_size_once or self._first_object_size is None else self._first_object_size
-            while len(self._buffer) > 0 and self._current_buffer_size + size > self._buffer_size_bytes:
+            size = (
+                get_memory_footprint(value)
+                if not self._calculate_size_once or self._first_object_size is None
+                else self._first_object_size
+            )
+            while (
+                len(self._buffer) > 0
+                and self._current_buffer_size + size > self._buffer_size_bytes
+            ):
                 self._remove_oldest_item()
 
             self._current_buffer_size += size
 
-            if size < self._buffer_size_bytes or len(self._buffer) == 0 and self._always_allow_one_item:
+            if (
+                size < self._buffer_size_bytes
+                or len(self._buffer) == 0
+                and self._always_allow_one_item
+            ):
                 self._buffer[key] = value, size
         else:
             self._buffer[key] = value, size
@@ -85,7 +98,7 @@ class CacheDict(Generic[KeyType, ItemType]):
 
 
 def fit_image_to_max_size(image: BGRImageArray, max_size: Tuple[int, int]):
-    """ Make sure image fits within (width, height) max_size while preserving aspect ratio """
+    """Make sure image fits within (width, height) max_size while preserving aspect ratio"""
     if image.shape[0] > max_size[1] or image.shape[1] > max_size[0]:
         scale_factor = min(max_size[1] / image.shape[0], max_size[0] / image.shape[1])
         return cv2.resize(src=image, dsize=None, fx=scale_factor, fy=scale_factor)
@@ -135,9 +148,14 @@ class VideoReader:
         We use "av": conda install av -c conda-forge
     """
 
-    def __init__(self, path: str, buffer_size_bytes=1024 ** 3, threshold_frames_to_scan=30,
-                 max_size_xy: Optional[Tuple[int, int]] = None, use_cache: bool = True):
-
+    def __init__(
+        self,
+        path: str,
+        buffer_size_bytes=1024**3,
+        threshold_frames_to_scan=30,
+        max_size_xy: Optional[Tuple[int, int]] = None,
+        use_cache: bool = True,
+    ):
         self._path = os.path.expanduser(path)
         assert os.path.exists(self._path), f"Cannot find a video at {path}"
 
@@ -145,15 +163,18 @@ class VideoReader:
         # self.stream = self.container.streams.video[0]
 
         # self._cap = cv2.VideoCapture(path)
-        self._frame_cache: CacheDict[int, VideoFrameInfo] = CacheDict(buffer_size_bytes=buffer_size_bytes,
-                                                                      always_allow_one_item=True)
+        self._frame_cache: CacheDict[int, VideoFrameInfo] = CacheDict(
+            buffer_size_bytes=buffer_size_bytes, always_allow_one_item=True
+        )
         self._next_index_to_be_read: int = 0
         self._threshold_frames_to_scan = threshold_frames_to_scan
         # self._fps = self._cap.get(cv2.CAP_PROP_FPS)
         self._fps = float(self.container.streams.video[0].guessed_rate)
 
         self._n_frames = self.container.streams.video[0].frames
-        self._cached_last_frame: Optional[VideoFrameInfo] = None  # Helps fix weird bug... see notes below
+        self._cached_last_frame: Optional[
+            VideoFrameInfo
+        ] = None  # Helps fix weird bug... see notes below
         self._max_size_xy = max_size_xy
         self._use_cache = use_cache
         self._iterator = self._iter_frame_data()
@@ -167,25 +188,42 @@ class VideoReader:
     def frame_index_to_nearest_frame(self, index: int) -> int:
         return max(0, min(self.get_n_frames() - 1, index))
 
-    def iter_frame_ixs(self, time_interval: TimeIntervalTuple = (None, None),
-                       frame_interval: Tuple[Optional[int], Optional[int]] = (None, None)) -> Iterator[int]:
-
+    def iter_frame_ixs(
+        self,
+        time_interval: TimeIntervalTuple = (None, None),
+        frame_interval: Tuple[Optional[int], Optional[int]] = (None, None),
+    ) -> Iterator[int]:
         assert time_interval == (None, None) or frame_interval == (
-        None, None), "You can provide a time interval or frame inteval, not both"
+            None,
+            None,
+        ), "You can provide a time interval or frame inteval, not both"
         if time_interval != (None, None):
             tstart, tstop = time_interval
-            return range(self.time_to_nearest_frame(tstart) if tstart is not None else 0,
-                         self.time_to_nearest_frame(tstop) + 1 if tstop is not None else self.get_n_frames())
+            return range(
+                self.time_to_nearest_frame(tstart) if tstart is not None else 0,
+                self.time_to_nearest_frame(tstop) + 1
+                if tstop is not None
+                else self.get_n_frames(),
+            )
         elif frame_interval != (None, None):
             istart, istop = frame_interval
-            return range(self.frame_index_to_nearest_frame(istart) if istart is not None else 0,
-                         self.frame_index_to_nearest_frame(istop) if istop is not None else self.get_n_frames())
+            return range(
+                self.frame_index_to_nearest_frame(istart) if istart is not None else 0,
+                self.frame_index_to_nearest_frame(istop)
+                if istop is not None
+                else self.get_n_frames(),
+            )
         else:
             return range(0, self.get_n_frames())
 
-    def iter_frames(self, time_interval: TimeIntervalTuple = (None, None),
-                    frame_interval: Tuple[Optional[int], Optional[int]] = (None, None)) -> Iterator[VideoFrameInfo]:
-        for i in self.iter_frame_ixs(time_interval=time_interval, frame_interval=frame_interval):
+    def iter_frames(
+        self,
+        time_interval: TimeIntervalTuple = (None, None),
+        frame_interval: Tuple[Optional[int], Optional[int]] = (None, None),
+    ) -> Iterator[VideoFrameInfo]:
+        for i in self.iter_frame_ixs(
+            time_interval=time_interval, frame_interval=frame_interval
+        ):
             yield self.request_frame(i)
 
     def _iter_frame_data(self):
@@ -202,7 +240,9 @@ class VideoReader:
         index = max(0, min(self.get_n_frames() - 1, index))
 
         if index == self.get_n_frames() - 1 and self._cached_last_frame is not None:
-            return self._cached_last_frame  # There's a weird bug preventing us from loading the last frame again
+            return (
+                self._cached_last_frame
+            )  # There's a weird bug preventing us from loading the last frame again
         elif index in self._frame_cache:
             return self._frame_cache[index]
         elif 0 <= index - self._next_index_to_be_read < self._threshold_frames_to_scan:
@@ -212,9 +252,10 @@ class VideoReader:
                     frame_data = next(self._iterator)
                 except StopIteration:
                     raise Exception(
-                        f"Could not get frame at index {index}, despite n_frames being {self.get_n_frames()}")
+                        f"Could not get frame at index {index}, despite n_frames being {self.get_n_frames()}"
+                    )
 
-                image = frame_data.to_rgb().to_ndarray(format='bgr24')
+                image = frame_data.to_rgb().to_ndarray(format="bgr24")
 
                 if self._max_size_xy is not None:
                     image = fit_image_to_max_size(image, self._max_size_xy)
@@ -222,7 +263,7 @@ class VideoReader:
                     image=image,
                     seconds_into_video=self._next_index_to_be_read / self._fps,
                     frame_ix=self._next_index_to_be_read,
-                    fps=self._fps
+                    fps=self._fps,
                 )
                 if self._use_cache:
                     self._frame_cache[frame.frame_ix] = frame
@@ -238,7 +279,9 @@ class VideoReader:
             self._iterator = self._iter_frame_data()
             for j, f in enumerate(self._iterator):
                 if j > max_seek_search:
-                    raise RuntimeError(f'Did not find target within {max_seek_search} frames of seek')
+                    raise RuntimeError(
+                        f"Did not find target within {max_seek_search} frames of seek"
+                    )
                 if f.pts >= pts - 1:
                     self._iterator = itertools.chain([f], self._iterator)
                     break
@@ -247,13 +290,13 @@ class VideoReader:
 
 
 def test_video_reader(video_path: str, show=False):
-
     for use_cache in (False, True):
-
         reader = VideoReader(path=video_path, use_cache=use_cache)
 
         all_frame_hashes = [compute_fixed_hash(f.image) for f in reader.iter_frames()]
-        all_frame_hashes_again = [compute_fixed_hash(f.image) for f in reader.iter_frames()]
+        all_frame_hashes_again = [
+            compute_fixed_hash(f.image) for f in reader.iter_frames()
+        ]
         assert all_frame_hashes == all_frame_hashes_again
 
         # With just the top lines:
@@ -265,19 +308,19 @@ def test_video_reader(video_path: str, show=False):
         time_snoppet_hashes = []
         for frame in reader.iter_frames(time_interval=(1, 2)):
             if show:
-                cv2.imshow('frame', frame.image)
+                cv2.imshow("frame", frame.image)
                 cv2.waitKey(1)
             time_snoppet_hashes.append(compute_fixed_hash(frame.image))
             count += 1
         start_ix = reader.time_to_nearest_frame(1)
         assert count > 20
-        assert all_frame_hashes[start_ix:start_ix + count] == time_snoppet_hashes
+        assert all_frame_hashes[start_ix : start_ix + count] == time_snoppet_hashes
 
         index_snippet_hashes = []
 
         for i, frame in enumerate(reader.iter_frames(frame_interval=(10, 20))):
             if show:
-                cv2.imshow('frame', frame.image)
+                cv2.imshow("frame", frame.image)
                 cv2.waitKey(1)
             index_snippet_hashes.append(compute_fixed_hash(frame.image))
             assert frame.frame_ix == 10 + i
@@ -287,8 +330,14 @@ def test_video_reader(video_path: str, show=False):
         last_frame = reader.request_frame(-1)
         assert last_frame.frame_ix == reader.get_n_frames() - 1
         assert compute_fixed_hash(last_frame.image) == all_frame_hashes[-1]
-        assert reader.request_frame(reader.get_n_frames() - 1).frame_ix == reader.get_n_frames() - 1
-        assert reader.request_frame(reader.get_n_frames()).frame_ix == reader.get_n_frames() - 1
+        assert (
+            reader.request_frame(reader.get_n_frames() - 1).frame_ix
+            == reader.get_n_frames() - 1
+        )
+        assert (
+            reader.request_frame(reader.get_n_frames()).frame_ix
+            == reader.get_n_frames() - 1
+        )
 
         second_last_frame = reader.request_frame(reader.get_n_frames() - 2)
         assert second_last_frame.frame_ix == reader.get_n_frames() - 2

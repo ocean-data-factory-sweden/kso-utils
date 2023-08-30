@@ -579,40 +579,6 @@ class ProjectProcessor:
             project=self.project, db_connection=self.db_connection, movie_i=movie_name
         )
 
-    def get_clips(
-        self,
-        movie_name,
-        movie_path,
-        clip_selection,
-        use_gpu,
-        pool_size,
-        clip_modification,
-    ):
-        self.generated_clips = t_utils.create_clips(
-            available_movies_df=self.server_movies_csv,
-            movie_i=movie_name,
-            movie_path=movie_path,
-            clip_selection=clip_selection,
-            project=self.project,
-            modification_details={},
-            gpu_available=use_gpu,
-            pool_size=pool_size,
-        )
-        mod_clips = t_utils.create_modified_clips(
-            self.project,
-            self.generated_clips.clip_path,
-            movie_name,
-            clip_modification.checks,
-            use_gpu,
-            pool_size,
-        )
-        # Temporary workaround to get both clip paths
-        self.generated_clips["modif_clip_path"] = mod_clips
-        # Temporary workaround to ensure site_id is an integer
-        self.generated_clips["site_id"] = self.generated_clips["site_id"].astype(
-            np.int64
-        )
-
     def generate_zoo_clips(
         self,
         movie_name,
@@ -647,7 +613,7 @@ class ProjectProcessor:
 
         if not test:
             button = widgets.Button(
-                description="Click to extract clips.",
+                description="Click to extract clips",
                 disabled=False,
                 display="flex",
                 flex_flow="column",
