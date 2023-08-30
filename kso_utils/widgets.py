@@ -327,7 +327,7 @@ def choose_footage(
         )
         movie_dict = {
             name: movie_utils.get_movie_path(f_path, project, server_connection)
-            for name, f_path in available_movies_df[["filename", "fpath"]].values
+            for name, f_path in available_movies_df[0][["filename", "fpath"]].values
         }
         movie_widget = widgets.SelectMultiple(
             options=[(name, movie) for name, movie in movie_dict.items()],
