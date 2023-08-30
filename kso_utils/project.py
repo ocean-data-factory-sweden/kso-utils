@@ -947,6 +947,7 @@ class ProjectProcessor:
                 species_i=species_list.value,
                 modification_details=frame_modification.checks,
             )
+            self.modified_frames = self.generated_frames
 
         button.on_click(on_button_clicked)
         display(frame_modification)
