@@ -923,21 +923,23 @@ def check_movies_meta(
 
 def concatenate_local_movies(csv_paths):
     # concatenates the movies specified in the "go_pro_files" column
-    # and saves them to fpath
+    # and saves them to fpath 
 
     # Load the csv with movies information
-    df = pd.read_csv(csv_paths["local_movies_csv"])
+    df = pd.read_csv(csv_paths["local_movies_csv"]) 
 
     # Select only the path of the folder
-    df["Path"] = df["fpath"].str.rsplit("\\", n=1).str[0]
+    df["Path"] = df["fpath"].str.rsplit("\\", n=1).str[0] 
 
-    # Set the go_pro_files column as a list
-    df["go_pro_files"] = df["go_pro_files"].str.split(";")
+    # Function to merge directory path and multiple filenames into a list
+    def merge_paths(row):
+        directory_path = row['Path']
+        filenames = row['go_pro_files'].split('; ')
+        merged_paths = [os.path.join(directory_path, filename.strip()) for filename in filenames]
+        return merged_paths
 
     # Combine the path of the folder with the go_profiles inside the folder
-    df["path_go_pros"] = df.apply(
-        lambda row: [row["Path"] + "/" + str(s) for s in row["go_pro_files"]], axis=1
-    )
+    df["path_go_pros"] = df.apply(merge_paths, axis=1) 
 
     # Create an empty list to store the annotations
     rows_list = []
@@ -947,21 +949,21 @@ def concatenate_local_movies(csv_paths):
         # Start text file and list to keep track of the videos to concatenate
         textfile_name = "a_file.txt"
         textfile = open(textfile_name, "w")
-        video_list = []
+        video_list = [] 
 
         for movie_i in sorted(row["path_go_pros"]):
             # Keep track of the videos to concatenate
             textfile.write("file '" + movie_i + "'" + "\n")
             video_list.append(movie_i)
-        textfile.close()
+        textfile.close() 
 
         # Concatenate the files
         if os.path.exists(row["fpath"]):
             logging.info(
-                f"{row['filename']} not concatenated because it already exists"
+                f"{row['fpath']} not concatenated because it already exists"
             )
         else:
-            logging.info(f"Concatenating {row['filename']}")
+            logging.info(f"Concatenating {row['fpath']}")
 
             # Concatenate the videos
             subprocess.call(
@@ -979,11 +981,12 @@ def concatenate_local_movies(csv_paths):
                 ]
             )
 
-        logging.info(f"{row['filename']} concatenated successfully")
 
+        logging.info(f"{row['fpath']} concatenated successfully")
+
+ 
         # Delete the text file
         os.remove(textfile_name)
-
 
 #         # Delete the go_pro_videos
 #         for f in video_list:
