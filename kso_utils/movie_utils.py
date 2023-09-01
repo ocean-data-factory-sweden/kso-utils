@@ -931,13 +931,17 @@ def concatenate_local_movies(csv_paths):
     # Select only the path of the folder
     df["Path"] = df["fpath"].str.rsplit("\\", n=1).str[0]
 
-    # Set the go_pro_files column as a list
-    df["go_pro_files"] = df["go_pro_files"].str.split(";")
+    # Function to merge directory path and multiple filenames into a list
+    def merge_paths(row):
+        directory_path = row["Path"]
+        filenames = row["go_pro_files"].split("; ")
+        merged_paths = [
+            os.path.join(directory_path, filename.strip()) for filename in filenames
+        ]
+        return merged_paths
 
     # Combine the path of the folder with the go_profiles inside the folder
-    df["path_go_pros"] = df.apply(
-        lambda row: [row["Path"] + "/" + str(s) for s in row["go_pro_files"]], axis=1
-    )
+    df["path_go_pros"] = df.apply(merge_paths, axis=1)
 
     # Create an empty list to store the annotations
     rows_list = []
@@ -957,11 +961,9 @@ def concatenate_local_movies(csv_paths):
 
         # Concatenate the files
         if os.path.exists(row["fpath"]):
-            logging.info(
-                f"{row['filename']} not concatenated because it already exists"
-            )
+            logging.info(f"{row['fpath']} not concatenated because it already exists")
         else:
-            logging.info(f"Concatenating {row['filename']}")
+            logging.info(f"Concatenating {row['fpath']}")
 
             # Concatenate the videos
             subprocess.call(
@@ -979,7 +981,7 @@ def concatenate_local_movies(csv_paths):
                 ]
             )
 
-        logging.info(f"{row['filename']} concatenated successfully")
+        logging.info(f"{row['fpath']} concatenated successfully")
 
         # Delete the text file
         os.remove(textfile_name)
