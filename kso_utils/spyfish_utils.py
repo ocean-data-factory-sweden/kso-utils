@@ -114,7 +114,7 @@ def process_spyfish_subjects(
     if not os.path.exists(local_i_csv):
         from kso_utils.server_utils import download_object_from_s3
 
-        renames_csv = download_object_from_s3(
+        download_object_from_s3(
             client=server_connection["client"],
             bucket=project.bucket,
             key=server_csv,
