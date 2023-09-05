@@ -762,7 +762,7 @@ class ProjectProcessor:
             subject_type=workflow_checks["Subject type: #0"],
             selected_zoo_workflows=selected_zoo_workflows,
         )
-    
+
     def aggregate_zoo_classifications(self, agg_params, test: bool = False):
         if test:
             workflow_checks = {
