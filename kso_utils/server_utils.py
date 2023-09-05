@@ -558,8 +558,8 @@ def mount_snic(
     )
     stdin, stdout, stderr = client.exec_command(cmd)
     # Log output and errors (if any)
-    logging.info("Output:", stdout.read().decode("utf-8"))
-    logging.error("Errors:", stderr.read().decode("utf-8"))
+    logging.info("Output: {}", stdout.read().decode("utf-8"))
+    logging.error("Errors: {}", stderr.read().decode("utf-8"))
     # Verify that the remote directory is mounted
     if os.path.ismount(snic_path):
         logging.info("Remote directory mounted successfully!")

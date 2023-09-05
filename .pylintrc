@@ -22,6 +22,12 @@ output-format=colorized
 # See: https://pylint.pycqa.org/en/latest/user_guide/messages/error/no-member.html
 generated-members = ["cv2.*"], ["torch.*"]
 
+[LOGGING]
+
+# The type of string formatting that logging methods do. `old` means using %
+# formatting, `new` is for `{}` formatting.
+logging-format-style=new
+
 [MESSAGES CONTROL]
 
 # For now we only want to see the errors (F and E), next step would be to turn on W
