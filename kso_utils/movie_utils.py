@@ -445,7 +445,7 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
                         f"No frame was extracted for {url} at frame {row['frame_number']}"
                     )
     else:
-        logging.info("Missing movie", url)
+        logging.info("Missing movie {}", url)
 
 
 def get_movie_extensions():
@@ -493,7 +493,7 @@ def convert_video(
         conv_fpath = os.path.join(conv_filename)
 
     else:
-        logging.error("The path to", movie_path, " is invalid")
+        logging.error("The path to {} is invalid", movie_path)
 
     if gpu_available and compression:
         subprocess.call(
