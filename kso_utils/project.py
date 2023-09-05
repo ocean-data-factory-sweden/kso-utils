@@ -1613,21 +1613,6 @@ class MLProjectProcessor(ProjectProcessor):
         logging.info("Checkpoint downloaded.")
         self.best_model_path = os.path.realpath(artifact_dir)
 
-    def export_best_model(self, output_path):
-        # Export the best model to PyTorch format
-        import torch
-        import tensorflow as tf
-
-        model = tf.keras.models.load_model(self.best_model_path)
-        converter = tf.lite.TFLiteConverter.from_keras_model(model)
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        tflite_model = converter.convert()
-        with open("temp.tflite", "wb") as f:
-            f.write(tflite_model)
-        converter = torch.onnx.TFLiteParser.parse("temp.tflite")
-        with open(output_path, "wb") as f:
-            f.write(converter)
-
     def get_dataset(self, model: str, team_name: str = "koster"):
         """
         It takes in a project name and a model name, and returns the paths to the train and val datasets
