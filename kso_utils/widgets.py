@@ -64,6 +64,7 @@ def single_wait_for_change(widget, value):
 #####################Common widgets###################################
 ######################################################################
 
+
 def choose_species(project: Project):
     """
     This function generates a widget to select the species of interest
