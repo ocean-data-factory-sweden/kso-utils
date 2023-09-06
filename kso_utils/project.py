@@ -665,6 +665,8 @@ class ProjectProcessor:
         :type subject_type: str
         """
         if subject_type == "clip":
+            # Add declaration to avoid pylint error
+            self.local_sites_csv = self.local_sites_csv
             upload_df, sitename, created_on = zoo_utils.set_zoo_clip_metadata(
                 project=self.project,
                 generated_clipsdf=self.generated_clips,
