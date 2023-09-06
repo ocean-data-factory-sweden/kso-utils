@@ -290,8 +290,8 @@ def modify_clips(
             eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
             os.chmod(output_clip_path, 0o777)
         except ffmpeg_python.Error as e:
-            logging.info("stdout:", e.stdout.decode("utf8"))
-            logging.info("stderr:", e.stderr.decode("utf8"))
+            logging.info("stdout: {}", e.stdout.decode("utf8"))
+            logging.info("stderr: {}", e.stderr.decode("utf8"))
             raise e
 
     logging.info(f"Clip {clip_i} modified successfully")
@@ -454,8 +454,8 @@ def extract_clips(
             eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
             os.chmod(str(output_clip_path), 0o777)
         except ffmpeg_python.Error as e:
-            logging.info("stdout:", e.stdout.decode("utf8"))
-            logging.info("stderr:", e.stderr.decode("utf8"))
+            logging.info("stdout: {}", e.stdout.decode("utf8"))
+            logging.info("stderr: {}", e.stderr.decode("utf8"))
             raise e
 
         logging.info("Clips extracted successfully")

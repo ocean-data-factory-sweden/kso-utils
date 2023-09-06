@@ -1771,8 +1771,8 @@ def modify_frames(
                     eval(full_prompt).run(capture_stdout=True, capture_stderr=True)
                     os.chmod(row["modif_frame_path"], 0o777)
                 except ffmpeg.Error as e:
-                    logging.info("stdout:", e.stdout.decode("utf8"))
-                    logging.info("stderr:", e.stderr.decode("utf8"))
+                    logging.info("stdout: {}", e.stdout.decode("utf8"))
+                    logging.info("stderr: {}", e.stderr.decode("utf8"))
                     raise e
 
         logging.info("Frames modified successfully")
