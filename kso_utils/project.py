@@ -66,14 +66,6 @@ class ProjectProcessor:
         # Create empty db and populate with local csv files data
         self.setup_db()
 
-        # Mount Snic server if needed
-        if self.project.server == "SNIC":
-            if not os.path.exists(self.project.csv_folder):
-                logging.error("Not running on SNIC server, attempting to mount...")
-                status = self.mount_snic()
-                if status == 0:
-                    return
-
     def __repr__(self):
         return repr(self.__dict__)
 
@@ -1302,40 +1294,6 @@ class MLProjectProcessor(ProjectProcessor):
         model_widget.observe(on_change, names="value")
         return model_widget
 
-    def transfer_model(
-        model_name: str, artifact_dir: str, project_name: str, user: str, password: str
-    ):
-        """
-        It takes the model name, the artifact directory, the project name, the user and the password as
-        arguments and then downloads the latest model from the project and uploads it to the server
-
-        :param model_name: the name of the model you want to transfer
-        :type model_name: str
-        :param artifact_dir: the directory where the model is stored
-        :type artifact_dir: str
-        :param project_name: The name of the project you want to transfer the model from
-        :type project_name: str
-        :param user: the username of the remote server
-        :type user: str
-        :param password: the password for the user you're using to connect to the server
-        :type password: str
-        """
-        ssh = SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.load_system_host_keys()
-        ssh.connect(
-            hostname="80.252.221.46", port=2230, username=user, password=password
-        )
-
-        # SCPCLient takes a paramiko transport as its only argument
-        scp = SCPClient(ssh.get_transport())
-        scp.put(
-            f"{artifact_dir}/weights/best.pt",
-            f"/home/koster/model_config/weights/ \
-                {os.path.basename(project_name)}_{os.path.basename(os.path.dirname(artifact_dir))}_{model_name}",
-        )
-        scp.close()
-
     def setup_paths(self, test: bool = False):
         if not isinstance(self.output_path, str) and self.output_path is not None:
             self.output_path = self.output_path.selected
@@ -1571,11 +1529,14 @@ class MLProjectProcessor(ProjectProcessor):
 
     def get_best_model(self, metric="mAP_0.5", download_path: str = ""):
         # Get the best model from the run history according to the specified metric
-        if self.run_history is not None:
+        if isinstance(self.run_history, list) and len(self.run_history) > 0:
             best_run = self.run_history[0]
         else:
             self.download_project_runs()
-            best_run = self.run_history[0]
+            try:
+                best_run = self.run_history[0]
+            except:
+                best_run = None
         try:
             best_metric = best_run["metrics"][metric]
             for run in self.run_history:

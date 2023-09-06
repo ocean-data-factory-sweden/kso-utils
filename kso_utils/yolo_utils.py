@@ -20,6 +20,7 @@ import imagesize
 import base64
 import ffmpeg
 import ipywidgets as widgets
+from jupyter_bbox_widget import BBoxWidget
 from IPython.display import display, clear_output, HTML
 from PIL import Image as PILImage, ImageDraw
 
@@ -506,10 +507,10 @@ def frame_aggregation(
             movie_df, left_on="movie_id", right_on="id", how="left"
         )["fpath"]
 
-        from kso_utils.server_utils import get_movie_url
+        from kso_utils.movie_utils import get_movie_path
 
         train_rows["movie_path"] = train_rows["movie_path"].apply(
-            lambda x: get_movie_url(project, x)
+            lambda x: get_movie_path(project, x)
         )
 
         # Read each movie for efficient frame access
@@ -1297,7 +1298,7 @@ def get_annotator(image_path: str, species_list: list, autolabel_model: str = No
     else:
         w_status.value = "No predictions, using existing labels if available"
         bboxes, labels = get_bboxes(image, bboxes, labels)
-    w_bbox = widgets.BBoxWidget(image=encode_image(image), classes=species_list)
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
@@ -1459,7 +1460,7 @@ def get_annotations_viewer(data_path: str, species_list: list):
                     "label": species_list[int(s[0])],
                 }
             )
-    w_bbox = widgets.BBoxWidget(image=encode_image(image), classes=species_list)
+    w_bbox = BBoxWidget(image=encode_image(image), classes=species_list)
 
     # here we assign an empty list to bboxes but
     # we could also run a detection model on the file
