@@ -208,7 +208,7 @@ def update_csv_server(
             remote_fpath=remote_fpath,
         )
 
-    elif server == "LOCAL":
+    elif project.server == "LOCAL":
         logging.error("Updating csv files to the server is a work in progress")
 
     else:
@@ -244,13 +244,15 @@ def upload_file_server(
         logging.info(f"{f_path} standarised and uploaded to the server.")
 
     elif project.server == "TEMPLATE":
-        logging.error(f"{movie_path} not uploaded to the server as project is template")
+        logging.error(
+            f"{conv_mov_path} not uploaded to the server as project is template"
+        )
 
     elif project.server == "SNIC":
         logging.error("Uploading the movies to the server is a work in progress")
 
     elif project.server == "LOCAL":
-        logging.error(f"{movie_path} not uploaded to the server as project is local")
+        logging.error(f"{conv_mov_path} not uploaded to the server as project is local")
 
     else:
         raise ValueError("Specify the server of the project in the project_list.csv.")
@@ -558,8 +560,8 @@ def mount_snic(
     )
     stdin, stdout, stderr = client.exec_command(cmd)
     # Log output and errors (if any)
-    logging.info("Output:", stdout.read().decode("utf-8"))
-    logging.error("Errors:", stderr.read().decode("utf-8"))
+    logging.info("Output: {}", stdout.read().decode("utf-8"))
+    logging.error("Errors: {}", stderr.read().decode("utf-8"))
     # Verify that the remote directory is mounted
     if os.path.ismount(snic_path):
         logging.info("Remote directory mounted successfully!")
