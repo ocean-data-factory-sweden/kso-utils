@@ -142,6 +142,10 @@ class ProjectProcessor:
             # Read the local csv files into a pd df
             setattr(self, csv_key, pd.read_csv(self.csv_paths[csv_key]))
 
+            # Temporary workaround for sites_csv (Pylint needs an explicit declaration)
+            if csv_key == "sites":
+                self.local_sites_csv = pd.read_csv(self.csv_paths[csv_key])
+
     def setup_db(self):
         """
         The function creates a database and populates it with the data from the local csv files.
@@ -666,7 +670,6 @@ class ProjectProcessor:
         """
         if subject_type == "clip":
             # Add declaration to avoid pylint error
-            self.local_sites_csv = self.local_sites_csv
             upload_df, sitename, created_on = zoo_utils.set_zoo_clip_metadata(
                 project=self.project,
                 generated_clipsdf=self.generated_clips,
