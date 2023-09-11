@@ -276,24 +276,17 @@ def preview_movie(
 
     else:
         # Generate temporary path to the selected movie
-        url = get_movie_path(
+        movie_path = get_movie_path(
             project=project,
             f_path=movie_selected["fpath"].values[0],
             server_connection=server_connection,
         )
-        if project.server == ServerType.SNIC:
-            url = (
-                "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
-                + pathname2url(movie_path)
-            )
-        else:
-            movie_path = url
 
         html_code = f"""<html>
                 <div style="display: flex; justify-content: space-around; align-items: center">
                 <div>
                   <video width=500 controls>
-                  <source src={url}>
+                  <source src={movie_path}>
                   </video>
                 </div>
                 <div>{movie_selected_view.to_html()}</div>
