@@ -275,7 +275,9 @@ def add_spyfish_survey_info(movies_df: pd.DataFrame, csv_paths: dict):
 
     # Read info about the surveys
     surveys_df = pd.read_csv(
-        csv_paths["local_surveys_csv"], parse_dates=["SurveyStartDate"]
+        csv_paths["local_surveys_csv"],
+        parse_dates=["SurveyStartDate"],
+        infer_datetime_format=True,
     )
 
     # Combine the movie_id and survey information

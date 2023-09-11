@@ -844,7 +844,7 @@ class ProjectProcessor:
             )
 
         frame_modification = kso_widgets.clip_modification_widget()
-        species_list = kso_widgets.choose_species(self.project)
+        species_list = kso_widgets.choose_species(self.db_connection)
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -1163,7 +1163,9 @@ class MLProjectProcessor(ProjectProcessor):
             )
 
         else:
-            species_list = kso_widgets.choose_species(self.project)
+            species_list = kso_widgets.choose_species(
+                self.db_connection, agg_df.label.unique().tolist()
+            )
 
             button = widgets.Button(
                 description="Aggregate frames",

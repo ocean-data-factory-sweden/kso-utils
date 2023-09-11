@@ -523,7 +523,7 @@ def compare_frames(df):
         with main_out:
             clear_output()
             if change["new"] == "No frame":
-                print("It is OK to modify the frames again")
+                logging.info("It is OK to modify the frames again")
             else:
                 a = view_frames(df, change["new"])
                 display(a)
@@ -1511,6 +1511,9 @@ def format_to_gbif(
         # Concatenate the dfs and select only unique common names and the labels
         commonName_labels_df = pd.concat(commonName_labels_list).drop_duplicates()
 
+        # Drop the clips classified as nothing here or other
+        df = df[~df["label"].isin(["OTHER", "NOTHINGHERE"])]
+
         # Combine the labels with the commonNames of the classifications
         comb_df = pd.merge(df, commonName_labels_df, how="left", on="label")
 
@@ -1523,9 +1526,6 @@ def format_to_gbif(
 
         # Identify the second of the original movie when the species first appears
         comb_df["second_in_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
-
-        # Drop the clips classified as nothing here or other
-        comb_df[~comb_df["label"].isin(["OTHER", "NOTHINGHERE"])]
 
         # Select the max count of each species on each movie
         comb_df = comb_df.sort_values("how_many").drop_duplicates(

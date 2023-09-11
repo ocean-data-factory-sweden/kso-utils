@@ -65,15 +65,17 @@ def single_wait_for_change(widget, value):
 ######################################################################
 
 
-def choose_species(project: Project, species_list=None):
+def choose_species(db_connection, species_list=None):
     """
     This function generates a widget to select the species of interest
     :param project: the project object
 
     """
+    from kso_utils.db_utils import get_df_from_db_table
+
     if species_list is None:
         # Get a list of the species available from the db
-        species_df = get_df_from_db_table(project.db_path, "species")
+        species_df = get_df_from_db_table(db_connection, "species")
 
         species_list = species_df["commonName"].unique().tolist()
 
@@ -577,7 +579,10 @@ def map_sites(project: Project, csv_paths: dict):
     sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
     # Set initial location to first site
-    init_location = [sites_df.iloc[0]["decimalLatitude"], sites_df.iloc[0]["decimalLongitude"]]
+    init_location = [
+        sites_df.iloc[0]["decimalLatitude"],
+        sites_df.iloc[0]["decimalLongitude"],
+    ]
 
     # Create the initial kso map
     kso_map = folium.Map(location=init_location, width=900, height=600)
