@@ -577,7 +577,10 @@ def map_sites(project: Project, csv_paths: dict):
     sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
     # Set initial location to first site
-    init_location = [sites_df.iloc[0]["decimalLatitude"], sites_df.iloc[0]["decimalLongitude"]]
+    init_location = [
+        sites_df.iloc[0]["decimalLatitude"],
+        sites_df.iloc[0]["decimalLongitude"],
+    ]
 
     # Create the initial kso map
     kso_map = folium.Map(location=init_location, width=900, height=600)
