@@ -578,10 +578,32 @@ def map_sites(project: Project, csv_paths: dict):
     # Read the csv file with site information
     sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
+    # Identify columns containing "Latitude" or "Longitude"
+    latitude_columns = [col for col in sites_df.columns if "Latitude" in col]
+    longitude_columns = [col for col in sites_df.columns if "Longitude" in col]
+
+    # Ensure we have at least one column of each
+    if not latitude_columns or not longitude_columns:
+        raise ValueError("No 'Latitude' or 'Longitude' columns found.")
+
+    # Rearrange columns to put Latitude and Longitude first
+    new_columns = (
+        latitude_columns
+        + longitude_columns
+        + [
+            col
+            for col in sites_df.columns
+            if col not in latitude_columns + longitude_columns
+        ]
+    )
+
+    # Create a new DataFrame with rearranged columns
+    sites_df = sites_df[new_columns]
+
     # Set initial location to first site
     init_location = [
-        sites_df.iloc[0]["decimalLatitude"],
-        sites_df.iloc[0]["decimalLongitude"],
+        sites_df.iloc[0][latitude_columns],
+        sites_df.iloc[0][longitude_columns],
     ]
 
     # Create the initial kso map
@@ -590,16 +612,14 @@ def map_sites(project: Project, csv_paths: dict):
     # Iterate through rows to add markers for each site
     for index, row in sites_df.iterrows():
         site_info = row.to_list()
-        latitude = row["decimalLatitude"]
-        longitude = row["decimalLongitude"]
-        site_name = row["siteName"]
+        latitude = row[latitude_columns]
+        longitude = row[longitude_columns]
 
         # Create a CircleMarker for the site
         folium.CircleMarker(
             location=[latitude, longitude],
             radius=14,
             popup=site_info,
-            tooltip=site_name,
         ).add_to(kso_map)
 
     # Add a minimap to the corner for reference
