@@ -31,6 +31,9 @@ import ipywidgets as widgets
 from kso_utils.project_utils import Project
 import kso_utils.movie_utils as movie_utils
 
+# server imports
+from kso_utils.server_utils import ServerType
+
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -1346,11 +1349,8 @@ def create_clips(
     potential_start_df["clip_length"] = clip_length
 
     # Specify the temp folder to host the clips
-    if project.server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = str(Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips"))
-    else:
-        clips_folder = movie_i + "_zooniverseclips"
+    movie_path_folder = Path(movie_path).parent
+    clips_folder = str(Path(movie_path_folder, "tmp_dir", movie_i + "_zooniverseclips"))
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = (
@@ -1417,18 +1417,12 @@ def create_modified_clips(
     :return: The modified clips
     """
 
-    # Get project-specific server info
-    server = project.server
-
     # Specify the folder to host the modified clips
-
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
-    if server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
-    else:
-        mod_clips_folder = mod_clip_folder
+    # Specify the temp folder to host the clips
+    movie_path_folder = Path(movie_i).parent
+    mod_clips_folder = str(Path(movie_path_folder, "tmp_dir", mod_clip_folder))
 
     # Remove existing modified clips
     if os.path.exists(mod_clips_folder):

@@ -1596,15 +1596,12 @@ def extract_frames_for_zoo(
     comb_df = check_frames_uploaded(project, comb_df)
 
     # Specify the temp location to store the frames
-    if project.server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-        folder_name = f"{snic_path}/tmp_dir/frames/"
-        frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
-    else:
-        frames_folder = "_".join(species_list) + "_frames/"
-        if len(frames_folder) > 260:
-            curr = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-            frames_folder = f"{curr}_various_frames/"
+    temp_frames_folder = "_".join(species_list) + "_frames/"
+    if len(temp_frames_folder) > 260:
+        curr = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        temp_frames_folder = f"{curr}_various_frames/"
+
+    frames_folder = Path(project.movie_folder, temp_frames_folder)
 
     # Extract the frames from the videos, store them in the temp location
     # and save the df with information about the frames in the projectprocessor
@@ -1628,64 +1625,63 @@ def check_frames_uploaded(
     # create a list of the species about to upload (scientificName)
     list_species = frames_df["scientificName"].unique()
 
-    if project.server == "SNIC":
-        # Get info of frames of the species of interest already uploaded
-        if len(list_species) <= 1:
-            uploaded_frames_df = pd.read_sql_query(
-                f"SELECT movie_id, frame_number, \
-            frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
-                db_connection,
-            )
+    # Get info of frames of the species of interest already uploaded
+    if len(list_species) <= 1:
+        uploaded_frames_df = pd.read_sql_query(
+            f"SELECT movie_id, frame_number, \
+        frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
+            db_connection,
+        )
 
-        else:
-            uploaded_frames_df = pd.read_sql_query(
-                f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
-            {tuple(list_species)} AND subject_type='frame'",
-                db_connection,
-            )
+    else:
+        uploaded_frames_df = pd.read_sql_query(
+            f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
+        {tuple(list_species)} AND subject_type='frame'",
+            db_connection,
+        )
 
-        # Filter out frames that have already been uploaded
-        if (
-            len(uploaded_frames_df) > 0
-            and not uploaded_frames_df["frame_number"].isnull().any()
-        ):
-            logging.info(
-                "There are some frames already uploaded in Zooniverse for the species selected. \
-                Checking if those are the frames you are trying to upload"
-            )
-            # Ensure that frame_number is an integer
-            uploaded_frames_df["frame_number"] = uploaded_frames_df[
-                "frame_number"
-            ].astype(int)
-            frames_df["frame_number"] = frames_df["frame_number"].astype(int)
-            merge_df = (
-                pd.merge(
-                    frames_df,
-                    uploaded_frames_df,
-                    left_on=["movie_id", "frame_number"],
-                    right_on=["movie_id", "frame_number"],
-                    how="left",
-                    indicator=True,
-                )["_merge"]
-                == "both"
-            )
+    # Filter out frames that have already been uploaded
+    if (
+        len(uploaded_frames_df) > 0
+        and not uploaded_frames_df["frame_number"].isnull().any()
+    ):
+        logging.info(
+            "There are some frames already uploaded in Zooniverse for the species selected. \
+            Checking if those are the frames you are trying to upload"
+        )
+        # Ensure that frame_number is an integer
+        uploaded_frames_df["frame_number"] = uploaded_frames_df["frame_number"].astype(
+            int
+        )
+        frames_df["frame_number"] = frames_df["frame_number"].astype(int)
+        merge_df = (
+            pd.merge(
+                frames_df,
+                uploaded_frames_df,
+                left_on=["movie_id", "frame_number"],
+                right_on=["movie_id", "frame_number"],
+                how="left",
+                indicator=True,
+            )["_merge"]
+            == "both"
+        )
 
-            # Exclude frames that have already been uploaded
-            # trunk-ignore(flake8/E712)
-            frames_df = frames_df[merge_df == False]
-            if len(frames_df) == 0:
-                logging.error(
-                    "All of the frames you have selected are already uploaded."
-                )
-            else:
-                logging.info(
-                    "There are {} frames with the species of interest not uploaded to Zooniverse yet.", len(frames_df)
-                )
-
+        # Exclude frames that have already been uploaded
+        # trunk-ignore(flake8/E712)
+        frames_df = frames_df[merge_df == False]
+        if len(frames_df) == 0:
+            logging.error("All of the frames you have selected are already uploaded.")
         else:
             logging.info(
-                "There are no frames uploaded in Zooniverse for the species selected."
+                "There are",
+                len(frames_df),
+                "frames with the species of interest not uploaded to Zooniverse yet.",
             )
+
+    else:
+        logging.info(
+            "There are no frames uploaded in Zooniverse for the species selected."
+        )
 
     return frames_df
 
@@ -1697,13 +1693,11 @@ def modify_frames(
     species_i: list,
     modification_details: dict,
 ):
-    server = project.server
-
     if len(species_i) == 0:
         species_i = ["custom_species"]
 
     # Specify the folder to host the modified frames
-    if server == "SNIC":
+    if project.server == "SNIC":
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"

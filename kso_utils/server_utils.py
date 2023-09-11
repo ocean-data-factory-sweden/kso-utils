@@ -5,13 +5,11 @@ import getpass
 import gdown
 import zipfile
 import boto3
-import paramiko
 import logging
 import sys
 import ftfy
 from tqdm import tqdm
 from pathlib import Path
-from paramiko import SFTPClient, SSHClient
 
 # util imports
 from kso_utils.project_utils import Project
@@ -20,6 +18,24 @@ from kso_utils.project_utils import Project
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+
+######################################
+# ###### Supported servers ###########
+# #####################################
+# Specify the names of the KSO supported servers
+class ServerType:
+    TEMPLATE = "TEMPLATE"
+    LOCAL = "LOCAL"
+    SNIC = "SNIC"
+    AWS = "AWS"
+
+
+# Store a list of ServerType values
+server_types = [
+    getattr(ServerType, attr)
+    for attr in dir(ServerType)
+    if not callable(getattr(ServerType, attr)) and not attr.startswith("__")
+]
 
 ######################################
 # ###### Common server functions ######
@@ -42,26 +58,21 @@ def connect_to_server(project: Project):
     # Create an empty dictionary to host the server connections
     server_connection = {}
 
-    if project.server == "AWS":
+    if project.server == ServerType.TEMPLATE:
+        # Set client as Wildlife.ai
+        server_connection["client"] = "Wildlife.ai"
+
+    elif project.server in [ServerType.LOCAL, ServerType.SNIC]:
+        logging.info("Running locally, no external connection to server needed.")
+
+    elif project.server == ServerType.AWS:
         # Connect to AWS as a client
-        client = get_aws_client()
-
-    elif project.server == "SNIC":
-        # Connect to SNIC as a client and get sftp
-        client, sftp_client = get_snic_client()
-
-    elif project.server == "TEMPLATE":
-        # Connect to SNIC as a client and get sftp
-        client = "Wildlife.ai"
+        server_connection["client"] = get_aws_client()
 
     else:
-        server_connection = {}
-
-    if "client" in vars():
-        server_connection["client"] = client
-
-    if "sftp_client" in vars():
-        server_connection["sftp_client"] = sftp_client
+        raise ValueError(
+            f"Unsupported server type: {project.server}. Supported servers are {server_types}."
+        )
 
     return server_connection
 
@@ -79,7 +90,14 @@ def download_init_csv(project: Project, init_keys: list, server_connection: dict
     # Create empty dictionary to save the server paths of the csv files
     db_initial_info = {}
 
-    if project.server == "AWS":
+    if project.server == ServerType.TEMPLATE:
+        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
+        download_gdrive(gdrive_id, project.csv_folder)
+
+    elif project.server in [ServerType.LOCAL, ServerType.SNIC]:
+        logging.info("Running locally so no csv files were downloaded from the server.")
+
+    elif project.server == ServerType.AWS:
         # Retrieve a list with all the csv files in the folder with initival csvs
         server_csv_files = get_matching_s3_keys(
             client=server_connection["client"],
@@ -113,18 +131,9 @@ def download_init_csv(project: Project, init_keys: list, server_connection: dict
                 filename=local_i_csv,
             )
 
-    elif project.server == "TEMPLATE":
-        gdrive_id = "1PZGRoSY_UpyLfMhRphMUMwDXw4yx1_Fn"
-        download_gdrive(gdrive_id, project.csv_folder)
-
-    elif project.server in ["LOCAL", "SNIC"]:
-        logging.info(
-            "Running on SNIC or locally so no csv files were downloaded from the server."
-        )
-
     else:
         raise ValueError(
-            "The server type you have chosen is not currently supported. Supported values are AWS, SNIC and LOCAL."
+            f"Unsupported server type: {project.server}. Supported servers are {server_types}."
         )
 
     return db_initial_info
@@ -141,7 +150,7 @@ def get_ml_data(project: Project, test: bool = False):
     """
     if project.ml_folder is not None:
         # Download the folder containing the training data
-        if project.server == "TEMPLATE":
+        if project.server == ServerType.TEMPLATE:
             gdrive_id = "1xknKGcMnHJXu8wFZTAwiKuR3xCATKco9"
             ml_folder = project.ml_folder
 
@@ -177,7 +186,17 @@ def update_csv_server(
     :param updated_csv: the updated csv file
     :type updated_csv: str
     """
-    if project.server == "AWS":
+    if project.server == ServerType.TEMPLATE:
+        logging.error(
+            f"The server {orig_csv} can't be updated for template project without admin permissions."
+        )
+
+    elif project.server in [ServerType.LOCAL, ServerType.SNIC]:
+        logging.error(
+            "The project doesn't have csv files in the server so only the local csv files have been updated"
+        )
+
+    elif project.server == ServerType.AWS:
         logging.info("Updating csv file in AWS server")
         # Update csv to AWS
         upload_file_to_s3(
@@ -186,36 +205,12 @@ def update_csv_server(
             key=str(csv_paths[orig_csv]),
             filename=str(csv_paths[updated_csv]),
         )
-
-    elif project.server == "TEMPLATE":
-        logging.error(
-            f"{orig_csv} couldn't be updated. Check writing permisions to the server."
-        )
-
-    elif project.server == "SNIC":
-        # Specify volume allocated by SNIC
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-        # TODO: orig_csv and updated_csv as filenames, create full path for upload_object_to_snic with project.csv_folder.
-        # Use below definition for production, commented not for development
-        # local_fpath = project.csv_folder + updated_csv
-        # Special implementation with two dummy folders for SNIC case since local and server
-        # are essentially the same for now.
-        local_fpath = f"{project.csv_folder}" + updated_csv
-        remote_fpath = f"{project.csv_folder}" + orig_csv
-        upload_object_to_snic(
-            sftp_client=server_connection["sftp_client"],
-            local_fpath=local_fpath,
-            remote_fpath=remote_fpath,
-        )
-
-    elif project.server == "LOCAL":
-        logging.error("Updating csv files to the server is a work in progress")
+        logging.info(f"{orig_csv} updated to the {ServerType.AWS} server.")
 
     else:
-        logging.error(
-            f"{orig_csv} couldn't be updated. Check writing permisions to the server."
+        raise ValueError(
+            f"Unsupported server type: {project.server}. Supported servers are {server_types}."
         )
-    logging.info(f"{orig_csv} updated to the server.")
 
 
 def upload_file_server(
@@ -231,8 +226,15 @@ def upload_file_server(
     :type f_path: str
 
     """
-    if project.server == "AWS":
-        logging.info("Uploading movie to AWS server")
+    if project.server == ServerType.TEMPLATE:
+        logging.error(
+            f"{conv_mov_path} not uploaded to the server as project is template"
+        )
+
+    elif project.server in [ServerType.LOCAL, ServerType.SNIC]:
+        logging.error(f"{conv_mov_path} not uploaded to the server as project is local")
+
+    elif project.server == ServerType.AWS:
         # Update csv to AWS
         upload_file_to_s3(
             client=server_connection["client"],
@@ -243,19 +245,10 @@ def upload_file_server(
 
         logging.info(f"{f_path} standarised and uploaded to the server.")
 
-    elif project.server == "TEMPLATE":
-        logging.error(
-            f"{conv_mov_path} not uploaded to the server as project is template"
-        )
-
-    elif project.server == "SNIC":
-        logging.error("Uploading the movies to the server is a work in progress")
-
-    elif project.server == "LOCAL":
-        logging.error(f"{conv_mov_path} not uploaded to the server as project is local")
-
     else:
-        raise ValueError("Specify the server of the project in the project_list.csv.")
+        raise ValueError(
+            f"Unsupported server type: {project.server}. Supported servers are {server_types}."
+        )
 
 
 #####################
@@ -460,115 +453,6 @@ def delete_file_from_s3(client: boto3.client, *, bucket: str, key: str):
 ##############################
 # #######SNIC functions########
 # #############################
-
-
-def snic_credentials():
-    # Save your access key for the SNIC server.
-    snic_user = getpass.getpass("Enter your username for SNIC server")
-    snic_pass = getpass.getpass("Enter your password for SNIC server")
-    return snic_user, snic_pass
-
-
-def connect_snic(snic_user: str, snic_pass: str):
-    # Connect to the SNIC server and return SSH client
-    client = SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.load_system_host_keys()
-    client.connect(
-        hostname="129.16.125.130", port=22, username=snic_user, password=snic_pass
-    )
-    return client
-
-
-def create_snic_transport(snic_user: str, snic_pass: str):
-    # Connect to the SNIC server and return SSH client
-    t = paramiko.Transport(("129.16.125.130", 22))
-    t.connect(username=snic_user, password=snic_pass)
-    sftp = paramiko.SFTPClient.from_transport(t)
-    return sftp
-
-
-def get_snic_client():
-    # Set SNIC credentials
-    snic_user, snic_pass = snic_credentials()
-
-    # Connect to SNIC
-    client = connect_snic(snic_user, snic_pass)
-    sftp_client = create_snic_transport(snic_user, snic_pass)
-
-    return client, sftp_client
-
-
-def get_snic_files(client: SSHClient, folder: str):
-    """
-    Get list of movies from SNIC server using ssh client.
-
-    :param client: SSH client (paramiko)
-    """
-    stdin, stdout, stderr = client.exec_command(f"find {folder} -type f")
-    snic_df = pd.DataFrame(stdout.read().decode("utf-8").split("\n"), columns=["fpath"])
-    return snic_df
-
-
-def download_object_from_snic(
-    sftp_client: SFTPClient, remote_fpath: str, local_fpath: str = "."
-):
-    """
-    Download an object from SNIC with progress bar.
-    """
-
-    class TqdmWrap(tqdm):
-        def viewBar(self, a, b):
-            self.total = int(b)
-            self.update(int(a - self.n))  # update pbar with increment
-
-    # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit="b", unit_scale=True) as pbar:
-        sftp_client.get(remote_fpath, local_fpath, callback=pbar.viewBar)
-
-
-def upload_object_to_snic(sftp_client: SFTPClient, local_fpath: str, remote_fpath: str):
-    """
-    Upload an object to SNIC with progress bar.
-    """
-
-    class TqdmWrap(tqdm):
-        def viewBar(self, a, b):
-            self.total = int(b)
-            self.update(int(a - self.n))  # update pbar with increment
-
-    # end of reusable imports/classes
-    with TqdmWrap(ascii=True, unit="b", unit_scale=True) as pbar:
-        sftp_client.put(local_fpath, remote_fpath, callback=pbar.viewBar)
-
-
-def mount_snic(
-    client: SSHClient, snic_path: str = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-):
-    """
-    It mounts the remote directory to the local machine
-
-    :param snic_path: The path to the SNIC directory on the remote server, defaults to
-            /mimer/NOBACKUP/groups/snic2021-6-9/
-    :type snic_path: str (optional)
-    :return: The return value is the exit status of the command.
-    """
-    cmd = "sshfs {}:{} {}".format(
-        client.get_transport().get_username(),
-        snic_path,
-        snic_path,
-    )
-    stdin, stdout, stderr = client.exec_command(cmd)
-    # Log output and errors (if any)
-    logging.info("Output: {}", stdout.read().decode("utf-8"))
-    logging.error("Errors: {}", stderr.read().decode("utf-8"))
-    # Verify that the remote directory is mounted
-    if os.path.ismount(snic_path):
-        logging.info("Remote directory mounted successfully!")
-        return 1
-    else:
-        logging.error("Failed to mount remote directory!")
-        return 0
 
 
 def fix_text_encoding(folder_name):
