@@ -248,7 +248,6 @@ def spyfish_subject_metadata(df: pd.DataFrame, csv_paths: dict):
             "#VideoFilename",
             "#SiteID",
             "#SiteCode",
-            "species_id",
         ]
     ].reset_index(drop=True)
 

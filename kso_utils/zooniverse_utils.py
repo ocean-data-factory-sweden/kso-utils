@@ -1593,7 +1593,7 @@ def extract_frames_for_zoo(
     comb_df.drop(["subject_ids"], inplace=True, axis=1)
 
     # Check the frames haven't been uploaded to Zooniverse
-    comb_df = check_frames_uploaded(project, comb_df)
+    comb_df = check_frames_uploaded(db_connection, comb_df)
 
     # Specify the temp location to store the frames
     temp_frames_folder = "_".join(species_list) + "_frames/"
@@ -1616,29 +1616,45 @@ def extract_frames_for_zoo(
 
 # Function to gather information of frames already uploaded to Zooniverse
 def check_frames_uploaded(
-    project: Project,
+    db_connection,
     frames_df: pd.DataFrame,
 ):
-    from kso_utils.db_utils import create_connection
+    from kso_utils.db_utils import get_df_from_db_table
 
-    db_connection = create_connection(project.db_path)
-    # create a list of the species about to upload (scientificName)
+    # Get info of the subjects uploaded to zooniverse from the db
+    subjects_df = get_df_from_db_table(db_connection, "subjects")
+
+    # Select only frame subjects
+    subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+    if subjects_df.empty:
+        return frames_df
+
+    # Create a list of the species about to upload (scientificName)
     list_species = frames_df["scientificName"].unique()
 
-    # Get info of frames of the species of interest already uploaded
-    if len(list_species) <= 1:
-        uploaded_frames_df = pd.read_sql_query(
-            f"SELECT movie_id, frame_number, \
-        frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
-            db_connection,
-        )
+    # Query id and sci. names from the species table
+    species_df = get_df_from_db_table(db_connection, "species")[
+        ["id", "scientificName"]
+    ]
 
-    else:
-        uploaded_frames_df = pd.read_sql_query(
-            f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
-        {tuple(list_species)} AND subject_type='frame'",
-            db_connection,
-        )
+    # Rename columns to match subject df
+    species_df = species_df.rename(columns={"id": "frame_exp_sp_id"})
+
+    # Reference the expected species on the uploaded subjects
+    subjects = pd.merge(
+        subjects_df,
+        species_df,
+        how="left",
+        on="frame_exp_sp_id",
+    )
+
+    # Select only those subjects that should have the species of interest
+    uploaded_frames_df = subjects_df[subjects_df["scientificName"].isin(list_species)]
+
+    uploaded_frames_df = uploaded_frames_df[
+        ["movie_id", "frame_number", "frame_exp_sp_id"]
+    ]
 
     # Filter out frames that have already been uploaded
     if (
@@ -1806,8 +1822,14 @@ def set_zoo_frame_metadata(
     ):
         df["frame_path"] = df["modif_frame_path"]
 
+    # Roadblock to prevent uploading frames to template project:
+    if project.Zooniverse_number == 9754:
+        raise ValueError(
+            "You are not allowed to upload frames to the template Zooniverse project."
+        )
+
     # Set project-specific metadata
-    if project.Zooniverse_number == 9747 or 9754:
+    if project.Zooniverse_number == 9747:
         df = add_db_info_to_df(
             project, db_connection, csv_paths, df, "sites", "id, siteName"
         )

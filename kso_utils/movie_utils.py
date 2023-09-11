@@ -363,14 +363,11 @@ def extract_frames(
     """
 
     # Set the filename of the frames
-    df["frame_path"] = (
-        frames_folder
-        + df["filename"].astype(str)
-        + "_frame_"
-        + df["frame_number"].astype(str)
-        + "_"
-        + df["label"].astype(str)
-        + ".jpg"
+    df["frame_path"] = df.apply(
+        lambda row: os.path.join(
+            frames_folder, f"{row['filename']}_{row['frame_number']}_{row['label']}.jpg"
+        ),
+        axis=1,
     )
 
     # Create the folder to store the frames if not exist
