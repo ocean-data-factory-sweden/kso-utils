@@ -122,9 +122,10 @@ def movies_in_movie_folder(project: Project, db_connection, server_connection: d
         # Read the movie files from the movie_path folder
         local_files = os.listdir(project.movie_folder)
         available_movies_list = [
-            filename
-            for filename in local_files
-            if filename.endswith(get_movie_extensions())
+            os.path.join(dp, f)
+            for dp, dn, filenames in os.walk(project.movie_folder)
+            for f in filenames
+            if os.path.splitext(f)[1].endswith(get_movie_extensions())
         ]
 
         # Save the list of movies as a pd df
