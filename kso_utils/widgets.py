@@ -258,7 +258,7 @@ def choose_footage(
     :return: A path of the folder of interest
     """
     if project.server == "AWS":
-        available_movies_df = movie_utils.retrieve_movie_info_from_server(
+        available_movies_df,_,_ = movie_utils.retrieve_movie_info_from_server(
             project=project,
             server_connection=server_connection,
             db_connection=db_connection,
