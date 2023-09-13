@@ -1679,7 +1679,8 @@ def check_frames_uploaded(
                 )
             else:
                 logging.info(
-                    "There are {} frames with the species of interest not uploaded to Zooniverse yet.", len(frames_df)
+                    "There are {} frames with the species of interest not uploaded to Zooniverse yet.",
+                    len(frames_df),
                 )
 
         else:
