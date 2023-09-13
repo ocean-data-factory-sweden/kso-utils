@@ -3,7 +3,7 @@ import glob
 import os
 import argparse
 import time
-import cv2 as cv
+import cv2 as cv2
 import numpy as np
 import re
 import pims
@@ -46,7 +46,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 # globals
-frame_device = cv.cuda_GpuMat()
+frame_device = cv2.cuda_GpuMat()
 
 trackerTypes = [
     "BOOSTING",
@@ -69,8 +69,8 @@ def applyMask(frame: np.ndarray):
     :return: The frame with the mask applied.
     """
     h, w, c = frame.shape
-    cv.rectangle(frame, (0, h), (0 + w, h - 100), 0, -1)
-    cv.rectangle(frame, (0, 0), (0 + w, 50), 0, -1)
+    cv2.rectangle(frame, (0, h), (0 + w, h - 100), 0, -1)
+    cv2.rectangle(frame, (0, 0), (0 + w, 50), 0, -1)
     return frame
 
 
@@ -85,7 +85,7 @@ def clearImage(frame: np.ndarray):
     :param frame: the image to be processed
     :return: The clear image
     """
-    channels = cv.split(frame)
+    channels = cv2.split(frame)
     # Get the maximum value of each channel
     # and get the dark channel of each image
     # record the maximum value of each channel
@@ -93,20 +93,20 @@ def clearImage(frame: np.ndarray):
     for idx in range(len(channels)):
         a_max_dst[idx] = channels[idx].max()
 
-    dark_image = cv.min(channels[0], cv.min(channels[1], channels[2]))
+    dark_image = cv2.min(channels[0], cv2.min(channels[1], channels[2]))
 
     # Gaussian filtering the dark channel
-    dark_image = cv.GaussianBlur(dark_image, (25, 25), 0)
+    dark_image = cv2.GaussianBlur(dark_image, (25, 25), 0)
 
     image_t = (255.0 - 0.95 * dark_image) / 255.0
-    image_t = cv.max(image_t, 0.5)
+    image_t = cv2.max(image_t, 0.5)
 
     # Calculate t(x) and get the clear image
     for idx in range(len(channels)):
         channels[idx] = (
-            cv.max(
-                cv.add(
-                    cv.subtract(channels[idx].astype(np.float32), int(a_max_dst[idx]))
+            cv2.max(
+                cv2.add(
+                    cv2.subtract(channels[idx].astype(np.float32), int(a_max_dst[idx]))
                     / image_t,
                     int(a_max_dst[idx]),
                 ),
@@ -117,7 +117,7 @@ def clearImage(frame: np.ndarray):
         )
         channels[idx] = channels[idx].astype(np.uint8)
 
-    return cv.merge(channels)
+    return cv2.merge(channels)
 
 
 def ProcFrames(proc_frame_func: Callable, frames_path: str):
@@ -136,15 +136,15 @@ def ProcFrames(proc_frame_func: Callable, frames_path: str):
     for f in files:
         if f.endswith((".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif")):
             if os.path.exists(str(Path(frames_path, f))):
-                new_frame = proc_frame_func(cv.imread(str(Path(frames_path, f))))
-                cv.imwrite(str(Path(frames_path, f)), new_frame)
+                new_frame = proc_frame_func(cv2.imread(str(Path(frames_path, f))))
+                cv2.imwrite(str(Path(frames_path, f)), new_frame)
             else:
                 from kso_utils.movie_utils import unswedify
 
                 new_frame = proc_frame_func(
-                    cv.imread(unswedify(str(Path(frames_path, f))))
+                    cv2.imread(unswedify(str(Path(frames_path, f))))
                 )
-                cv.imwrite(str(Path(frames_path, f)), new_frame)
+                cv2.imwrite(str(Path(frames_path, f)), new_frame)
     end = time.time()
     return (end - start) * 1000 / len(files), len(files)
 
@@ -160,7 +160,7 @@ def ProcVid(proc_frame_func: Callable, vidPath: str):
     :type vidPath: str
     :return: The average time to process a frame in milliseconds and the number of frames processed.
     """
-    cap = cv.VideoCapture(vidPath)
+    cap = cv2.VideoCapture(vidPath)
     if cap.isOpened() is False:
         logging.error("Error opening video stream or file")
         return
@@ -189,13 +189,13 @@ def ProcFrameCuda(frame: np.ndarray, size=(416, 416), use_gpu=False):
     """
     if use_gpu:
         frame_device.upload(frame)
-        frame_device_small = cv.resize(frame_device, dsize=size)
-        fg_device = cv.cvtColor(frame_device_small, cv.COLOR_BGR2RGB)
+        frame_device_small = cv2.resize(frame_device, dsize=size)
+        fg_device = cv2.cvtColor(frame_device_small, cv2.COLOR_BGR2RGB)
         fg_host = fg_device.download()
         return fg_host
     else:
-        frame_device_small = cv.resize(frame, dsize=size)
-        fg_device = cv.cvtColor(frame_device_small, cv.COLOR_BGR2RGB)
+        frame_device_small = cv2.resize(frame, dsize=size)
+        fg_device = cv2.cvtColor(frame_device_small, cv2.COLOR_BGR2RGB)
         return fg_device
 
 
@@ -797,21 +797,21 @@ def createTrackerByName(trackerType: str):
     """
     # Create a tracker based on tracker name
     if trackerType == trackerTypes[0]:
-        tracker = cv.legacy.TrackerBoosting_create()
+        tracker = cv2.legacy.TrackerBoosting_create()
     elif trackerType == trackerTypes[1]:
-        tracker = cv.legacy.TrackerMIL_create()
+        tracker = cv2.legacy.TrackerMIL_create()
     elif trackerType == trackerTypes[2]:
-        tracker = cv.legacy.TrackerKCF_create()
+        tracker = cv2.legacy.TrackerKCF_create()
     elif trackerType == trackerTypes[3]:
-        tracker = cv.legacy.TrackerTLD_create()
+        tracker = cv2.legacy.TrackerTLD_create()
     elif trackerType == trackerTypes[4]:
-        tracker = cv.legacy.TrackerMedianFlow_create()
+        tracker = cv2.legacy.TrackerMedianFlow_create()
     elif trackerType == trackerTypes[5]:
-        tracker = cv.legacy.TrackerGOTURN_create()
+        tracker = cv2.legacy.TrackerGOTURN_create()
     elif trackerType == trackerTypes[6]:
-        tracker = cv.legacy.TrackerMOSSE_create()
+        tracker = cv2.legacy.TrackerMOSSE_create()
     elif trackerType == trackerTypes[7]:
-        tracker = cv.legacy.TrackerCSRT_create()
+        tracker = cv2.legacy.TrackerCSRT_create()
     else:
         tracker = None
         logging.info("Incorrect tracker name")
@@ -844,7 +844,7 @@ def track_frames(
     trackerType = "CSRT"
 
     # Create MultiTracker object
-    multiTracker = cv.legacy.MultiTracker_create()
+    multiTracker = cv2.legacy.MultiTracker_create()
 
     # Extract relevant frame
     frame = video[start_frame]  # [0]
