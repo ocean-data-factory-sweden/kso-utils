@@ -671,13 +671,13 @@ class ProjectProcessor:
                 project=self.project,
                 db_connection=self.db_connection,
                 df=self.generated_frames,
-                species_list=self.species_of_interest.value,
+                species_list=self.species_of_interest,
                 csv_paths=self.csv_paths,
             )
             zoo_utils.upload_frames_to_zooniverse(
                 project=self.project,
                 upload_to_zoo=upload_df,
-                species_list=self.species_of_interest.value,
+                species_list=self.species_of_interest,
             )
 
         else:
@@ -759,7 +759,7 @@ class ProjectProcessor:
         if test:
             species_list = self.aggregated_zoo_classifications.label.unique().tolist()
         else:
-            species_list = self.species_of_interest.value
+            species_list = self.species_of_interest
 
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
@@ -800,7 +800,7 @@ class ProjectProcessor:
                 self.modified_frames = zoo_utils.modify_frames(
                     project=self.project,
                     frames_to_upload_df=self.generated_frames.reset_index(drop=True),
-                    species_i=self.species_of_interest.value,
+                    species_i=self.species_of_interest,
                     modification_details=frame_modification.checks,
                 )
 
@@ -918,51 +918,6 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(frame_modification)
         display(button)
-
-    #############
-    # t5, t6, t7
-    #############
-
-    def get_team_name(self):
-        """
-        > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
-
-        :param project_name: The name of the project you want to get the data from
-        :type project_name: str
-        :return: The team name is being returned.
-        """
-
-        if self.project.Project_name == "Spyfish_Aotearoa":
-            return "wildlife-ai"
-        else:
-            return "koster"
-
-    def get_ml_data(self):
-        # get template ml data
-        pass
-
-    def process_image(self):
-        # code for processing image goes here
-        pass
-
-    def prepare_metadata(self):
-        # code for preparing metadata goes here
-        pass
-
-    def prepare_movies(self):
-        # code for preparing movie files (standardising formats)
-        pass
-
-    def check_frames_uploaded(self):
-        """
-        This function checks if the frames in the frames_to_upload_df dataframe have been uploaded to
-        the database
-        """
-        t_utils.check_frames_uploaded(
-            self.project,
-            self.frames_to_upload_df,
-            self.species_of_interest,
-        )
 
     #############
     # t8
@@ -1648,11 +1603,6 @@ class Annotator:
 
         # Save the annotations
         dataset.save()
-
-    def annotate(self, autolabel_model: str = None):
-        return t_utils.get_annotator(
-            self.images_path, self.potential_labels, autolabel_model
-        )
 
     def load_annotations(self):
         images = sorted(

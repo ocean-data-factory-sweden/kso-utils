@@ -145,9 +145,7 @@ def movies_in_movie_folder(project: Project, db_connection, server_connection: d
         mov_folder_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     else:
-        raise ValueError(
-            f"Unsupported server type: {project.server}. Supported servers are {server_types}."
-        )
+        raise ValueError(f"Unsupported server type: {project.server}")
 
     return mov_folder_df
 
@@ -416,7 +414,7 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
                         f"No frame was extracted for {url} at frame {row['frame_number']}"
                     )
     else:
-        logging.info("Missing movie", url)
+        logging.info(f"Missing movie {url}")
 
 
 def get_movie_extensions():
@@ -464,7 +462,7 @@ def convert_video(
         conv_fpath = os.path.join(conv_filename)
 
     else:
-        logging.error("The path to", movie_path, " is invalid")
+        logging.error(f"The path to {movie_path} is invalid")
 
     if gpu_available and compression:
         subprocess.call(
