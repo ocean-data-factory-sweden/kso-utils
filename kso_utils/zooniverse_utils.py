@@ -1160,16 +1160,15 @@ def populate_subjects(
                 ["id", "scientificName"]
             ]
 
-            # Rename columns to match subject df
-            species_df = species_df.rename(columns={"id": "frame_exp_sp_id"})
+            # Create a lookup dict to match the exp id to scientific name
+            species_lookup_dict = species_df.set_index('id')['scientificName'].to_dict()
 
-            # Reference the expected species on the uploaded subjects
-            subjects = pd.merge(
-                subjects,
-                species_df,
-                how="left",
-                on="frame_exp_sp_id",
-            )
+            # Function to apply replacement to each element in a list
+            def replace_list_elements(lst):
+                return [species_lookup_dict.get(item, item) for item in lst]
+
+            # Replace the frame_exp_sp_id with the scientific names
+            subjects['frame_exp_sp_id'] = subjects['frame_exp_sp_id'].apply(replace_list_elements)
 
     else:
         right_types = ["frame", "clip"]
