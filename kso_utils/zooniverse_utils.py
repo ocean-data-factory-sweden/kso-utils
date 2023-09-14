@@ -352,11 +352,11 @@ def get_workflow_labels(
 
     # now join workflow structure to workflow label content for each task
     for task in tasknames:
-        # Check if the task has multiple choices 
-        if isinstance(workflow_info[task], dict):   
+        # Check if the task has multiple choices
+        if isinstance(workflow_info[task], dict):
             # Create an empty dictionary to host the dfs of interest
             label_common_name_dict = {"commonName": [], "label": []}
-            for choice in workflow_info[task]["choices"]:            
+            for choice in workflow_info[task]["choices"]:
                 label_common_name_dict["label"].append(choice)
                 choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
                 label_common_name_dict["commonName"].append(choice_name)
@@ -1161,14 +1161,16 @@ def populate_subjects(
             ]
 
             # Create a lookup dict to match the exp id to scientific name
-            species_lookup_dict = species_df.set_index('id')['scientificName'].to_dict()
+            species_lookup_dict = species_df.set_index("id")["scientificName"].to_dict()
 
             # Function to apply replacement to each element in a list
             def replace_list_elements(lst):
                 return [species_lookup_dict.get(item, item) for item in lst]
 
             # Replace the frame_exp_sp_id with the scientific names
-            subjects['frame_exp_sp_id'] = subjects['frame_exp_sp_id'].apply(replace_list_elements)
+            subjects["frame_exp_sp_id"] = subjects["frame_exp_sp_id"].apply(
+                replace_list_elements
+            )
 
     else:
         right_types = ["frame", "clip"]
