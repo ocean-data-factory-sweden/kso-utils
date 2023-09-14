@@ -1322,7 +1322,7 @@ def set_zoo_clip_metadata(
     """
 
     # Add spyfish-specific info
-    if project.Project_name == "Spyfish_Aotearoa":
+    if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
         # Rename the site columns to match standard cols names
         sitesdf = sitesdf.rename(columns={"schema_site_id": "id", "SiteID": "siteName"})
 
