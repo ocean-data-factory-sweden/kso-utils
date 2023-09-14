@@ -352,11 +352,11 @@ def get_workflow_labels(
 
     # now join workflow structure to workflow label content for each task
     for task in tasknames:
-        # Check if the task has multiple choices 
-        if isinstance(workflow_info[task], dict):   
+        # Check if the task has multiple choices
+        if isinstance(workflow_info[task], dict):
             # Create an empty dictionary to host the dfs of interest
             label_common_name_dict = {"commonName": [], "label": []}
-            for choice in workflow_info[task]["choices"]:            
+            for choice in workflow_info[task]["choices"]:
                 label_common_name_dict["label"].append(choice)
                 choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
                 label_common_name_dict["commonName"].append(choice_name)
@@ -1144,35 +1144,10 @@ def populate_subjects(
         # Reference the movienames with the id movies table
         subjects = pd.merge(subjects, movies_df, how="left", on="filename")
 
-    if subjects["subject_type"].value_counts().idxmax() == "clip":
-        # Calculate the clip_end_time
-        subjects["clip_end_time"] = (
-            subjects["clip_start_time"] + subjects["clip_length"]
-        )
+    # Ensure only subjects with the right format get populated
+    right_types = ["frame", "clip"]
 
-    elif subjects["subject_type"].value_counts().idxmax() == "frame":
-        ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
-        if "frame_exp_sp_id" in subjects.columns:
-            from kso_utils.db_utils import get_df_from_db_table
-
-            # Query id and sci. names from the species table
-            species_df = get_df_from_db_table(db_connection, "species")[
-                ["id", "scientificName"]
-            ]
-
-            # Create a lookup dict to match the exp id to scientific name
-            species_lookup_dict = species_df.set_index('id')['scientificName'].to_dict()
-
-            # Function to apply replacement to each element in a list
-            def replace_list_elements(lst):
-                return [species_lookup_dict.get(item, item) for item in lst]
-
-            # Replace the frame_exp_sp_id with the scientific names
-            subjects['frame_exp_sp_id'] = subjects['frame_exp_sp_id'].apply(replace_list_elements)
-
-    else:
-        right_types = ["frame", "clip"]
-
+    if subjects[subjects.subject_type.isin(right_types)].all().all():
         # Count the number of rows to be excluded
         logging.info(
             f"{subjects[~subjects.subject_type.isin(right_types)].shape[0]}"
@@ -1181,6 +1156,21 @@ def populate_subjects(
 
         # Select only rows with the right subject_type info
         subjects = subjects[subjects["subject_type"].isin(right_types)]
+
+    if subjects["subject_type"].value_counts().idxmax() == "clip":
+        # Calculate the clip_end_time
+        subjects["clip_end_time"] = (
+            subjects["clip_start_time"] + subjects["clip_length"]
+        )
+
+    if subjects["subject_type"].value_counts().idxmax() == "frame":
+        # Ensure only one value per expected species id
+        # this value is not crucial as we use the labels
+        # to process the actual classifications
+        # Modify the DataFrame to retain only the first value from each list
+        subjects["frame_exp_sp_id"] = subjects["frame_exp_sp_id"].apply(
+            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
+        )
 
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(
