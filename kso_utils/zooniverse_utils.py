@@ -351,17 +351,15 @@ def get_workflow_labels(
     workflow_info["first_task"] = theworkflow["first_task"].values[0]
 
     # now join workflow structure to workflow label content for each task
-
     for task in tasknames:
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-        for choice in workflow_info[task]["choices"]:
-            label_common_name_dict["label"].append(choice)
-            choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
-            label_common_name_dict["commonName"].append(choice_name)
+        # Check if the task has multiple choices 
+        if isinstance(workflow_info[task], dict):   
+            # Create an empty dictionary to host the dfs of interest
+            label_common_name_dict = {"commonName": [], "label": []}
+            for choice in workflow_info[task]["choices"]:            
+                label_common_name_dict["label"].append(choice)
+                choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
+                label_common_name_dict["commonName"].append(choice_name)
 
         if task == "T0":
             break
