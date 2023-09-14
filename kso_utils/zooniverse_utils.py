@@ -351,17 +351,15 @@ def get_workflow_labels(
     workflow_info["first_task"] = theworkflow["first_task"].values[0]
 
     # now join workflow structure to workflow label content for each task
-
     for task in tasknames:
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-
-        # Create an empty dictionary to host the dfs of interest
-        label_common_name_dict = {"commonName": [], "label": []}
-        for choice in workflow_info[task]["choices"]:
-            label_common_name_dict["label"].append(choice)
-            choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
-            label_common_name_dict["commonName"].append(choice_name)
+        # Check if the task has multiple choices
+        if isinstance(workflow_info[task], dict):
+            # Create an empty dictionary to host the dfs of interest
+            label_common_name_dict = {"commonName": [], "label": []}
+            for choice in workflow_info[task]["choices"]:
+                label_common_name_dict["label"].append(choice)
+                choice_name = strings[workflow_info[task]["choices"][choice]["label"]]
+                label_common_name_dict["commonName"].append(choice_name)
 
         if task == "T0":
             break
@@ -1146,36 +1144,10 @@ def populate_subjects(
         # Reference the movienames with the id movies table
         subjects = pd.merge(subjects, movies_df, how="left", on="filename")
 
-    if subjects["subject_type"].value_counts().idxmax() == "clip":
-        # Calculate the clip_end_time
-        subjects["clip_end_time"] = (
-            subjects["clip_start_time"] + subjects["clip_length"]
-        )
+    # Ensure only subjects with the right format get populated
+    right_types = ["frame", "clip"]
 
-    elif subjects["subject_type"].value_counts().idxmax() == "frame":
-        ##### Match 'ScientificName' to species id and save as column "frame_exp_sp_id"
-        if "frame_exp_sp_id" in subjects.columns:
-            from kso_utils.db_utils import get_df_from_db_table
-
-            # Query id and sci. names from the species table
-            species_df = get_df_from_db_table(db_connection, "species")[
-                ["id", "scientificName"]
-            ]
-
-            # Rename columns to match subject df
-            species_df = species_df.rename(columns={"id": "frame_exp_sp_id"})
-
-            # Reference the expected species on the uploaded subjects
-            subjects = pd.merge(
-                subjects,
-                species_df,
-                how="left",
-                on="frame_exp_sp_id",
-            )
-
-    else:
-        right_types = ["frame", "clip"]
-
+    if subjects[subjects.subject_type.isin(right_types)].all().all():
         # Count the number of rows to be excluded
         logging.info(
             f"{subjects[~subjects.subject_type.isin(right_types)].shape[0]}"
@@ -1184,6 +1156,21 @@ def populate_subjects(
 
         # Select only rows with the right subject_type info
         subjects = subjects[subjects["subject_type"].isin(right_types)]
+
+    if subjects["subject_type"].value_counts().idxmax() == "clip":
+        # Calculate the clip_end_time
+        subjects["clip_end_time"] = (
+            subjects["clip_start_time"] + subjects["clip_length"]
+        )
+
+    if subjects["subject_type"].value_counts().idxmax() == "frame":
+        # Ensure only one value per expected species id
+        # this value is not crucial as we use the labels
+        # to process the actual classifications
+        # Modify the DataFrame to retain only the first value from each list
+        subjects["frame_exp_sp_id"] = subjects["frame_exp_sp_id"].apply(
+            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
+        )
 
     # Extract the html location of the subjects
     subjects["https_location"] = subjects["locations"].apply(
@@ -1322,7 +1309,7 @@ def set_zoo_clip_metadata(
     """
 
     # Add spyfish-specific info
-    if project.Project_name == "Spyfish_Aotearoa":
+    if project.Project_name in ["Spyfish_Aotearoa", "Spyfish_BOPRC"]:
         # Rename the site columns to match standard cols names
         sitesdf = sitesdf.rename(columns={"schema_site_id": "id", "SiteID": "siteName"})
 
@@ -1593,18 +1580,15 @@ def extract_frames_for_zoo(
     comb_df.drop(["subject_ids"], inplace=True, axis=1)
 
     # Check the frames haven't been uploaded to Zooniverse
-    comb_df = check_frames_uploaded(project, comb_df)
+    comb_df = check_frames_uploaded(db_connection, comb_df)
 
     # Specify the temp location to store the frames
-    if project.server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-        folder_name = f"{snic_path}/tmp_dir/frames/"
-        frames_folder = Path(folder_name, "_".join(species_list) + "_frames/")
-    else:
-        frames_folder = "_".join(species_list) + "_frames/"
-        if len(frames_folder) > 260:
-            curr = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-            frames_folder = f"{curr}_various_frames/"
+    temp_frames_folder = "_".join(species_list) + "_frames/"
+    if len(temp_frames_folder) > 260:
+        curr = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        temp_frames_folder = f"{curr}_various_frames/"
+
+    frames_folder = Path(project.movie_folder, temp_frames_folder)
 
     # Extract the frames from the videos, store them in the temp location
     # and save the df with information about the frames in the projectprocessor
@@ -1619,74 +1603,86 @@ def extract_frames_for_zoo(
 
 # Function to gather information of frames already uploaded to Zooniverse
 def check_frames_uploaded(
-    project: Project,
+    db_connection,
     frames_df: pd.DataFrame,
 ):
-    from kso_utils.db_utils import create_connection
+    from kso_utils.db_utils import get_df_from_db_table
 
-    db_connection = create_connection(project.db_path)
-    # create a list of the species about to upload (scientificName)
+    # Get info of the subjects uploaded to zooniverse from the db
+    subjects_df = get_df_from_db_table(db_connection, "subjects")
+
+    # Select only frame subjects
+    subjects_df = subjects_df[subjects_df["subject_type"] == "frame"]
+
+    if subjects_df.empty:
+        return frames_df
+
+    # Create a list of the species about to upload (scientificName)
     list_species = frames_df["scientificName"].unique()
 
-    if project.server == "SNIC":
-        # Get info of frames of the species of interest already uploaded
-        if len(list_species) <= 1:
-            uploaded_frames_df = pd.read_sql_query(
-                f"SELECT movie_id, frame_number, \
-            frame_exp_sp_id FROM subjects WHERE scientificName=='{list_species[0]}' AND subject_type='frame'",
-                db_connection,
-            )
+    # Query id and sci. names from the species table
+    species_df = get_df_from_db_table(db_connection, "species")[
+        ["id", "scientificName"]
+    ]
 
+    # Rename columns to match subject df
+    species_df = species_df.rename(columns={"id": "frame_exp_sp_id"})
+
+    # Reference the expected species on the uploaded subjects
+    subjects = pd.merge(
+        subjects_df,
+        species_df,
+        how="left",
+        on="frame_exp_sp_id",
+    )
+
+    # Select only those subjects that should have the species of interest
+    uploaded_frames_df = subjects_df[subjects_df["scientificName"].isin(list_species)]
+
+    uploaded_frames_df = uploaded_frames_df[
+        ["movie_id", "frame_number", "frame_exp_sp_id"]
+    ]
+
+    # Filter out frames that have already been uploaded
+    if (
+        len(uploaded_frames_df) > 0
+        and not uploaded_frames_df["frame_number"].isnull().any()
+    ):
+        logging.info(
+            "There are some frames already uploaded in Zooniverse for the species selected. \
+            Checking if those are the frames you are trying to upload"
+        )
+        # Ensure that frame_number is an integer
+        uploaded_frames_df["frame_number"] = uploaded_frames_df["frame_number"].astype(
+            int
+        )
+        frames_df["frame_number"] = frames_df["frame_number"].astype(int)
+        merge_df = (
+            pd.merge(
+                frames_df,
+                uploaded_frames_df,
+                left_on=["movie_id", "frame_number"],
+                right_on=["movie_id", "frame_number"],
+                how="left",
+                indicator=True,
+            )["_merge"]
+            == "both"
+        )
+
+        # Exclude frames that have already been uploaded
+        # trunk-ignore(flake8/E712)
+        frames_df = frames_df[merge_df == False]
+        if len(frames_df) == 0:
+            logging.error("All of the frames you have selected are already uploaded.")
         else:
-            uploaded_frames_df = pd.read_sql_query(
-                f"SELECT movie_id, frame_number, frame_exp_sp_id FROM subjects WHERE frame_exp_sp_id IN \
-            {tuple(list_species)} AND subject_type='frame'",
-                db_connection,
-            )
-
-        # Filter out frames that have already been uploaded
-        if (
-            len(uploaded_frames_df) > 0
-            and not uploaded_frames_df["frame_number"].isnull().any()
-        ):
             logging.info(
-                "There are some frames already uploaded in Zooniverse for the species selected. \
-                Checking if those are the frames you are trying to upload"
-            )
-            # Ensure that frame_number is an integer
-            uploaded_frames_df["frame_number"] = uploaded_frames_df[
-                "frame_number"
-            ].astype(int)
-            frames_df["frame_number"] = frames_df["frame_number"].astype(int)
-            merge_df = (
-                pd.merge(
-                    frames_df,
-                    uploaded_frames_df,
-                    left_on=["movie_id", "frame_number"],
-                    right_on=["movie_id", "frame_number"],
-                    how="left",
-                    indicator=True,
-                )["_merge"]
-                == "both"
+                f"There are {len(frames_df)} frames with the species of interest not uploaded to Zooniverse yet.",
             )
 
-            # Exclude frames that have already been uploaded
-            # trunk-ignore(flake8/E712)
-            frames_df = frames_df[merge_df == False]
-            if len(frames_df) == 0:
-                logging.error(
-                    "All of the frames you have selected are already uploaded."
-                )
-            else:
-                logging.info(
-                    "There are {} frames with the species of interest not uploaded to Zooniverse yet.",
-                    len(frames_df),
-                )
-
-        else:
-            logging.info(
-                "There are no frames uploaded in Zooniverse for the species selected."
-            )
+    else:
+        logging.info(
+            "There are no frames uploaded in Zooniverse for the species selected."
+        )
 
     return frames_df
 
@@ -1698,13 +1694,11 @@ def modify_frames(
     species_i: list,
     modification_details: dict,
 ):
-    server = project.server
-
     if len(species_i) == 0:
         species_i = ["custom_species"]
 
     # Specify the folder to host the modified frames
-    if server == "SNIC":
+    if project.server == "SNIC":
         # Specify volume allocated by SNIC
         snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
         folder_name = f"{snic_path}/tmp_dir/frames/"
@@ -1813,8 +1807,14 @@ def set_zoo_frame_metadata(
     ):
         df["frame_path"] = df["modif_frame_path"]
 
+    # Roadblock to prevent uploading frames to template project:
+    if project.Zooniverse_number == 9754:
+        raise ValueError(
+            "You are not allowed to upload frames to the template Zooniverse project."
+        )
+
     # Set project-specific metadata
-    if project.Zooniverse_number == 9747 or 9754:
+    if project.Zooniverse_number == 9747:
         df = add_db_info_to_df(
             project, db_connection, csv_paths, df, "sites", "id, siteName"
         )

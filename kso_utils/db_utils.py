@@ -487,6 +487,9 @@ def add_db_info_to_df(
 
     # Set species table
     elif table_name == "species":
+        if "label" in df.columns:
+            df["commonName"] = df["label"]
+
         from kso_utils.zooniverse_utils import clean_label
 
         # Match format of species name to Zooniverse labels

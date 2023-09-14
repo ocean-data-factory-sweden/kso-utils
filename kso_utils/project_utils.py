@@ -17,7 +17,7 @@ class Project:
     # `photo_folder`, and `ml_folder`. The `@dataclass` decorator is used to automatically generate
     # several special methods such as `__init__`, `__repr__`, and `__eq__` for the class. This makes it
     # easier to create and work with instances of the `Project` class.
-    Project_name: str = None
+    Project_name: str
     Zooniverse_number: int = 0
     db_path: str = None
     server: str = None
@@ -65,23 +65,23 @@ def find_project(project_name: str = ""):
     return
 
 
-def add_project(project_info: dict = {}):
-    """Add new project information to
-    project csv using a project_info dictionary
-    """
-    tut_path = os.getcwd()
-    abspath = os.path.abspath(__file__)
-    dname = os.path.dirname(abspath)
-    os.chdir(dname)
-    # Specify standard project list location
-    project_path = "db_starter/projects_list.csv"
-    # Specify volume allocated by SNIC
-    snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
+# def add_project(project_info: dict = {}):
+#     """Add new project information to
+#     project csv using a project_info dictionary
+#     """
+#     tut_path = os.getcwd()
+#     abspath = os.path.abspath(__file__)
+#     dname = os.path.dirname(abspath)
+#     os.chdir(dname)
+#     # Specify standard project list location
+#     project_path = "db_starter/projects_list.csv"
+#     # Specify volume allocated by SNIC
+#     snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
 
-    if not os.path.exists(project_path) and os.path.exists(snic_path):
-        project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
-    with open(project_path, "a") as f:
-        project = [Project(*list(project_info.values()))]
-        w = DataclassWriter(f, project, Project)
-        w.write(skip_header=True)
-    os.chdir(tut_path)
+#     if not os.path.exists(project_path) and os.path.exists(snic_path):
+#         project_path = os.path.join(snic_path, "db_starter/projects_list.csv")
+#     with open(project_path, "a") as f:
+#         project = [Project(*list(project_info.values()))]
+#         w = DataclassWriter(f, project, Project)
+#         w.write(skip_header=True)
+#     os.chdir(tut_path)

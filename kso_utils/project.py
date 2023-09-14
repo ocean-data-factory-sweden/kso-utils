@@ -11,9 +11,6 @@ import pandas as pd
 import ipywidgets as widgets
 import ffmpeg
 import shutil
-import paramiko
-from paramiko import SSHClient
-from scp import SCPClient
 from itertools import chain
 from pathlib import Path
 from tqdm import tqdm
@@ -116,35 +113,29 @@ class ProjectProcessor:
         It loads the metadata from the relevant local csv files into the `csv_paths` dictionary
         """
         # Retrieve a list with all the csv files in the folder with initival csvs
-        local_files = os.listdir(self.project.csv_folder)
+        csv_folder = Path(self.project.csv_folder)
         local_csv_files = [
-            filename for filename in local_files if filename.endswith("csv")
-        ]
-
-        # Select only csv files that are relevant to start the db
-        local_csvs_db = [
-            file
-            for file in local_csv_files
-            if any(local_csv_files in file for local_csv_files in self.init_keys)
+            filename for filename in os.listdir(csv_folder) if filename.endswith(".csv")
         ]
 
         # Store the paths of the local csv files of interest into the "csv_paths" dictionary
-        for local_csv in local_csvs_db:
-            # Specify the key of the csv
-            init_key = [key for key in self.init_keys if key in local_csv][0]
+        for filename in local_csv_files:
+            # Select only csv files that are relevant to start the db
+            for init_key in self.init_keys:
+                if init_key in filename:
+                    # Specify the key in the dictionary of the CSV file
+                    csv_key = f"local_{init_key}_csv"
 
-            # Specify the key in the dictionary of the csv file
-            csv_key = str("local_" + init_key + "_csv")
+                    # Store the path of the CSV file
+                    csv_path = csv_folder / filename
+                    self.csv_paths[csv_key] = csv_path
 
-            # Store the path of the csv file
-            self.csv_paths[csv_key] = Path(self.project.csv_folder, local_csv)
+                    # Read the local CSV file into a pandas DataFrame
+                    setattr(self, csv_key, pd.read_csv(csv_path))
 
-            # Read the local csv files into a pd df
-            setattr(self, csv_key, pd.read_csv(self.csv_paths[csv_key]))
-
-            # Temporary workaround for sites_csv (Pylint needs an explicit declaration)
-            if csv_key == "sites":
-                self.local_sites_csv = pd.read_csv(self.csv_paths[csv_key])
+                    # Temporary workaround for sites_csv (Pylint needs an explicit declaration)
+                    if csv_key == "local_sites_csv":
+                        self.local_sites_csv = pd.read_csv(csv_path)
 
     def setup_db(self):
         """
@@ -162,27 +153,25 @@ class ProjectProcessor:
         table_names = db_utils.get_schema_table_names(self.db_connection)
 
         # Select only attributes of the propjectprocessor that are df of local csvs
-        # (sorted in reverse alphabetically to load sites before movies) and
-        # have a table in the sql db
-        local_dfs = sorted(
-            [
-                str(file)
-                for file in list(self.keys())
-                if "local" in str(file) and str(file).split("_", 2)[1] in table_names
-            ],
-            reverse=True,
-        )
+        local_dfs = [
+            key
+            for key in self.keys()
+            if key.startswith("local_") and key.split("_")[1] in table_names
+        ]
+
+        # Sort the local dfs in reverse alphabetically to load sites before movies
+        local_dfs = sorted(local_dfs, reverse=True)
 
         # Populate the db with initial info from the local_csvs
-        [
+        for df_key in local_dfs:
+            init_key = df_key.split("_")[1]
+            local_df = getattr(self, df_key)
             db_utils.populate_db(
                 project=self.project,
                 conn=self.db_connection,
-                local_df=getattr(self, i),
-                init_key=i.split("_", 2)[1],
+                local_df=local_df,
+                init_key=init_key,
             )
-            for i in local_dfs
-        ]
 
     #############
     # t1
@@ -405,12 +394,7 @@ class ProjectProcessor:
             logging.error("No valid movie found to upload.")
             return
         for index, movie in enumerate(movie_list):
-            if self.project.server == "SNIC":
-                # Specify volume allocated by SNIC
-                snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9"
-                remote_fpath = Path(f"{snic_path}/tmp_dir/", movie[1])
-            else:
-                remote_fpath = Path(f"{movie_folder}", movie[1])
+            remote_fpath = Path(f"{movie_folder}", movie[1])
             if os.path.exists(remote_fpath):
                 logging.info(
                     "Filename "
@@ -432,14 +416,7 @@ class ProjectProcessor:
                     threads=4,
                 ).run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
 
-                if self.project.server == "SNIC":
-                    server_utils.upload_object_to_snic(
-                        self.server_connection["sftp_client"],
-                        str(processed_video_path),
-                        str(remote_fpath),
-                    )
-                elif self.project.server in ["LOCAL", "TEMPLATE"]:
-                    shutil.copy2(str(processed_video_path), str(remote_fpath))
+                shutil.copy2(str(processed_video_path), str(remote_fpath))
                 logging.info("movie uploaded\n")
             # Fetch movie metadata that can be calculated from movie file
             fps, duration = movie_utils.get_fps_duration(movie[0])
@@ -694,13 +671,13 @@ class ProjectProcessor:
                 project=self.project,
                 db_connection=self.db_connection,
                 df=self.generated_frames,
-                species_list=self.species_of_interest.value,
+                species_list=self.species_of_interest,
                 csv_paths=self.csv_paths,
             )
             zoo_utils.upload_frames_to_zooniverse(
                 project=self.project,
                 upload_to_zoo=upload_df,
-                species_list=self.species_of_interest.value,
+                species_list=self.species_of_interest,
             )
 
         else:
@@ -782,7 +759,7 @@ class ProjectProcessor:
         if test:
             species_list = self.aggregated_zoo_classifications.label.unique().tolist()
         else:
-            species_list = self.species_of_interest.value
+            species_list = self.species_of_interest
 
         self.generated_frames = zoo_utils.extract_frames_for_zoo(
             project=self.project,
@@ -823,7 +800,7 @@ class ProjectProcessor:
                 self.modified_frames = zoo_utils.modify_frames(
                     project=self.project,
                     frames_to_upload_df=self.generated_frames.reset_index(drop=True),
-                    species_i=self.species_of_interest.value,
+                    species_i=self.species_of_interest,
                     modification_details=frame_modification.checks,
                 )
 
@@ -867,7 +844,7 @@ class ProjectProcessor:
             )
 
         frame_modification = kso_widgets.clip_modification_widget()
-        species_list = kso_widgets.choose_species(self.project)
+        species_list = kso_widgets.choose_species(self.db_connection)
 
         button = widgets.Button(
             description="Click to modify frames",
@@ -941,51 +918,6 @@ class ProjectProcessor:
         button.on_click(on_button_clicked)
         display(frame_modification)
         display(button)
-
-    #############
-    # t5, t6, t7
-    #############
-
-    def get_team_name(self):
-        """
-        > If the project name is "Spyfish_Aotearoa", return "wildlife-ai", otherwise return "koster"
-
-        :param project_name: The name of the project you want to get the data from
-        :type project_name: str
-        :return: The team name is being returned.
-        """
-
-        if self.project.Project_name == "Spyfish_Aotearoa":
-            return "wildlife-ai"
-        else:
-            return "koster"
-
-    def get_ml_data(self):
-        # get template ml data
-        pass
-
-    def process_image(self):
-        # code for processing image goes here
-        pass
-
-    def prepare_metadata(self):
-        # code for preparing metadata goes here
-        pass
-
-    def prepare_movies(self):
-        # code for preparing movie files (standardising formats)
-        pass
-
-    def check_frames_uploaded(self):
-        """
-        This function checks if the frames in the frames_to_upload_df dataframe have been uploaded to
-        the database
-        """
-        t_utils.check_frames_uploaded(
-            self.project,
-            self.frames_to_upload_df,
-            self.species_of_interest,
-        )
 
     #############
     # t8
@@ -1186,7 +1118,9 @@ class MLProjectProcessor(ProjectProcessor):
             )
 
         else:
-            species_list = kso_widgets.choose_species(self.project)
+            species_list = kso_widgets.choose_species(
+                self.db_connection, agg_df.label.unique().tolist()
+            )
 
             button = widgets.Button(
                 description="Aggregate frames",
@@ -1669,11 +1603,6 @@ class Annotator:
 
         # Save the annotations
         dataset.save()
-
-    def annotate(self, autolabel_model: str = None):
-        return t_utils.get_annotator(
-            self.images_path, self.potential_labels, autolabel_model
-        )
 
     def load_annotations(self):
         images = sorted(

@@ -16,6 +16,9 @@ from IPython.display import HTML
 # util imports
 from kso_utils.project_utils import Project
 
+# server imports
+from kso_utils.server_utils import ServerType, get_matching_s3_keys
+
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -76,7 +79,7 @@ def get_movie_path(f_path: str, project: Project, server_connection: dict = None
     :return: a string containing the path (or url) where the movie of interest can be access from
 
     """
-    if project.server == "AWS":
+    if project.server == ServerType.AWS:
         # Generate presigned url
         movie_url = server_connection["client"].generate_presigned_url(
             "get_object",
@@ -102,12 +105,22 @@ def movies_in_movie_folder(project: Project, db_connection, server_connection: d
 
     """
 
-    from kso_utils.server_utils import get_snic_files, get_matching_s3_keys
+    # Retrieve the list of movies available in Wildlife.ai
+    if project.server == ServerType.TEMPLATE:
+        # Combine wildlife.ai storage and filenames of the movie examples
+        available_movies_list = [
+            "https://www.wildlife.ai/wp-content/uploads/2022/06/" + filename
+            for filename in [f"movie_{i}.mp4" for i in range(1, 6)]
+        ]
+
+        # Save the list of movies as a pd df
+        mov_folder_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     # Retrieve the list of local movies available
-    if project.server == "LOCAL":
+    elif project.server in [ServerType.LOCAL, ServerType.SNIC]:
         logging.info("Retrieving movies that are available locally")
         # Read the movie files from the movie_path folder
+        local_files = os.listdir(project.movie_folder)
         available_movies_list = [
             os.path.join(dp, f)
             for dp, dn, filenames in os.walk(project.movie_folder)
@@ -119,7 +132,7 @@ def movies_in_movie_folder(project: Project, db_connection, server_connection: d
         mov_folder_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
     # Retrieve the list of movies available in AWS
-    elif project.server == "AWS":
+    elif project.server == ServerType.AWS:
         logging.info("Retrieving movies that are available in AWS")
         # List all the movies available from the S3 bucket
         available_movies_list = get_matching_s3_keys(
@@ -131,30 +144,8 @@ def movies_in_movie_folder(project: Project, db_connection, server_connection: d
         # Save the list of movies as a pd df
         mov_folder_df = pd.Series(available_movies_list, name="fpath").to_frame()
 
-    # Retrieve the list of movies available in Wildlife.ai
-    elif project.server == "TEMPLATE":
-        # Combine wildlife.ai storage and filenames of the movie examples
-        available_movies_list = [
-            "https://www.wildlife.ai/wp-content/uploads/2022/06/" + filename
-            for filename in [f"movie_{i}.mp4" for i in range(1, 6)]
-        ]
-
-        # Save the list of movies as a pd df
-        mov_folder_df = pd.Series(available_movies_list, name="fpath").to_frame()
-
-    # Retrieve the list of movies available in SNIC
-    elif project.server == "SNIC":
-        if "client" in server_connection:
-            mov_folder_df = get_snic_files(
-                client=server_connection["client"],
-                folder=project.movie_folder,
-            )
-        else:
-            logging.error("No database connection could be established.")
-            return pd.DataFrame(columns=["filename"])
-
     else:
-        raise ValueError("The server type you selected is not currently supported.")
+        raise ValueError(f"Unsupported server type: {project.server}")
 
     return mov_folder_df
 
@@ -173,11 +164,6 @@ def retrieve_movie_info_from_server(
 
     """
 
-    if not server_connection and not project.server == "LOCAL":
-        raise ValueError(
-            "There is no information to connect to the server with the movies."
-        )
-
     # Create a dataframe of the movies in the "movie_folder"
     mov_folder_df = movies_in_movie_folder(project, db_connection, server_connection)
 
@@ -189,7 +175,7 @@ def retrieve_movie_info_from_server(
     # Query info about the movie of interest
     movies_df = movies_df.rename(columns={"id": "movie_id"})
 
-    if project.server == "SNIC":
+    if project.server == ServerType.SNIC:
         # Find closest matching filename (may differ due to Swedish character encoding)
         parsed_url = urllib.parse.urlparse(movies_df["fpath"].iloc[0])
 
@@ -201,10 +187,6 @@ def retrieve_movie_info_from_server(
                     return s
             return None
 
-        # If there is a url or filepath directly, use the full path instead of the filename
-        # if os.path.isdir(movies_df["fpath"].iloc[0]) or (
-        #    parsed_url.scheme or parsed_url.netloc or 1==1
-        # ):
         movies_df["fpath"] = movies_df["fpath"].apply(
             lambda x: get_match(x, mov_folder_df["fpath"].unique()),
             1,
@@ -291,34 +273,24 @@ def preview_movie(
         return None
 
     else:
-        # Generate temporary path to the movie select
-        if project.server == "SNIC":
-            movie_path = get_movie_path(
-                project=project,
-                f_path=movie_selected["fpath"].values[0],
-                server_connection=server_connection,
-            )
-            url = (
-                "https://portal.c3se.chalmers.se/pun/sys/dashboard/files/fs/"
-                + pathname2url(movie_path)
-            )
-        else:
-            url = get_movie_path(
-                project=project,
-                f_path=movie_selected["fpath"].values[0],
-                server_connection=server_connection,
-            )
-            movie_path = url
+        # Generate temporary path to the selected movie
+        movie_path = get_movie_path(
+            project=project,
+            f_path=movie_selected["fpath"].values[0],
+            server_connection=server_connection,
+        )
+
         html_code = f"""<html>
                 <div style="display: flex; justify-content: space-around; align-items: center">
                 <div>
                   <video width=500 controls>
-                  <source src={url}>
+                  <source src={movie_path}>
                   </video>
                 </div>
                 <div>{movie_selected_view.to_html()}</div>
                 </div>
                 </html>"""
+
         return HTML(html_code), movie_path
 
 
@@ -383,14 +355,11 @@ def extract_frames(
     """
 
     # Set the filename of the frames
-    df["frame_path"] = (
-        frames_folder
-        + df["filename"].astype(str)
-        + "_frame_"
-        + df["frame_number"].astype(str)
-        + "_"
-        + df["label"].astype(str)
-        + ".jpg"
+    df["frame_path"] = df.apply(
+        lambda row: os.path.join(
+            frames_folder, f"{row['filename']}_{row['frame_number']}_{row['label']}.jpg"
+        ),
+        axis=1,
     )
 
     # Create the folder to store the frames if not exist
@@ -445,7 +414,7 @@ def write_movie_frames(key_movie_df: pd.DataFrame, url: str):
                         f"No frame was extracted for {url} at frame {row['frame_number']}"
                     )
     else:
-        logging.info("Missing movie {}", url)
+        logging.info(f"Missing movie {url}")
 
 
 def get_movie_extensions():
@@ -493,7 +462,7 @@ def convert_video(
         conv_fpath = os.path.join(conv_filename)
 
     else:
-        logging.error("The path to {} is invalid", movie_path)
+        logging.error(f"The path to {movie_path} is invalid")
 
     if gpu_available and compression:
         subprocess.call(
@@ -747,27 +716,6 @@ def check_movies_meta(
         logging.info(
             f"There are {no_info_movies_df.shape[0]} movies in the movie_folder"
             f" that are not in the movies.csv. Their paths are: {no_info_movies_df.fpath.unique()}"
-        )
-
-    if project.server == "SNIC":
-        # Find closest matching filename (may differ due to Swedish character encoding)
-        parsed_url = urllib.parse.urlparse(df["fpath"].iloc[0])
-
-        def get_match(string, string_options):
-            normalized_string = unicodedata.normalize("NFC", string)
-            for s in string_options:
-                normalized_s = unicodedata.normalize("NFC", s)
-                if normalized_string in normalized_s:
-                    return s
-            return None
-
-        # If there is a url or filepath directly, use the full path instead of the filename
-        # if os.path.isdir(movies_df["fpath"].iloc[0]) or (
-        #    parsed_url.scheme or parsed_url.netloc or 1==1
-        # ):
-        df["fpath"] = df["fpath"].apply(
-            lambda x: get_match(x, available_movies_df["fpath"].unique()),
-            1,
         )
 
     # Add information about whether the movies are available in the movie_folder

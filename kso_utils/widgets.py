@@ -65,19 +65,19 @@ def single_wait_for_change(widget, value):
 ######################################################################
 
 
-def choose_species(project: Project):
+def choose_species(db_connection, species_list=None):
     """
     This function generates a widget to select the species of interest
     :param project: the project object
 
     """
-    # Create connection to db
-    conn = create_connection(project.db_path)
+    from kso_utils.db_utils import get_df_from_db_table
 
-    # Get a list of the species available
-    species_list = pd.read_sql_query("SELECT commonName from species", conn)[
-        "commonName"
-    ].tolist()
+    if species_list is None:
+        # Get a list of the species available from the db
+        species_df = get_df_from_db_table(db_connection, "species")
+
+        species_list = species_df["commonName"].unique().tolist()
 
     # Roadblock to check if species list is empty
     if len(species_list) == 0:
@@ -575,39 +575,52 @@ def map_sites(project: Project, csv_paths: dict):
     :param csv_paths: a dictionary with the paths of the csv files used to initiate te db
     :return: A map with all the sites plotted on it.
     """
-    if project.server in ["SNIC", "LOCAL"]:
-        # Set initial location to Gothenburg
-        init_location = [57.708870, 11.974560]
+    # Read the csv file with site information
+    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
 
-    else:
-        # Set initial location to Taranaki
-        init_location = [-39.296109, 174.063916]
+    # Identify columns containing "Latitude" or "Longitude"
+    latitude_columns = [col for col in sites_df.columns if "Latitude" in col]
+    longitude_columns = [col for col in sites_df.columns if "Longitude" in col]
+
+    # Ensure we have at least one column of each
+    if not latitude_columns or not longitude_columns:
+        raise ValueError("No 'Latitude' or 'Longitude' columns found.")
+
+    # Rearrange columns to put Latitude and Longitude first
+    new_columns = (
+        latitude_columns
+        + longitude_columns
+        + [
+            col
+            for col in sites_df.columns
+            if col not in latitude_columns + longitude_columns
+        ]
+    )
+
+    # Create a new DataFrame with rearranged columns
+    sites_df = sites_df[new_columns]
+
+    # Set initial location to first site
+    init_location = [
+        sites_df.iloc[0][latitude_columns],
+        sites_df.iloc[0][longitude_columns],
+    ]
 
     # Create the initial kso map
     kso_map = folium.Map(location=init_location, width=900, height=600)
 
-    # Read the csv file with site information
-    sites_df = pd.read_csv(csv_paths["local_sites_csv"])
+    # Iterate through rows to add markers for each site
+    for index, row in sites_df.iterrows():
+        site_info = row.to_list()
+        latitude = row[latitude_columns]
+        longitude = row[longitude_columns]
 
-    # Combine information of interest into a list to display for each site
-    sites_df["site_info"] = sites_df.values.tolist()
-
-    # Save the names of the columns
-    df_cols = sites_df.columns
-
-    # Add each site to the map
-    sites_df.apply(
-        lambda row: folium.CircleMarker(
-            location=[
-                row[df_cols.str.contains("Latitude")],
-                row[df_cols.str.contains("Longitude")],
-            ],
+        # Create a CircleMarker for the site
+        folium.CircleMarker(
+            location=[latitude, longitude],
             radius=14,
-            popup=row["site_info"],
-            tooltip=row[df_cols.str.contains("siteName", case=False)],
-        ).add_to(kso_map),
-        axis=1,
-    )
+            popup=site_info,
+        ).add_to(kso_map)
 
     # Add a minimap to the corner for reference
     kso_map = kso_map.add_child(MiniMap())

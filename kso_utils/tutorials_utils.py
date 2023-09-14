@@ -31,6 +31,9 @@ import ipywidgets as widgets
 from kso_utils.project_utils import Project
 import kso_utils.movie_utils as movie_utils
 
+# server imports
+from kso_utils.server_utils import ServerType
+
 # Logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -520,7 +523,7 @@ def compare_frames(df):
         with main_out:
             clear_output()
             if change["new"] == "No frame":
-                print("It is OK to modify the frames again")
+                logging.info("It is OK to modify the frames again")
             else:
                 a = view_frames(df, change["new"])
                 display(a)
@@ -1346,11 +1349,8 @@ def create_clips(
     potential_start_df["clip_length"] = clip_length
 
     # Specify the temp folder to host the clips
-    if project.server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        clips_folder = str(Path(snic_path, "tmp_dir", movie_i + "_zooniverseclips"))
-    else:
-        clips_folder = movie_i + "_zooniverseclips"
+    movie_path_folder = Path(movie_path).parent
+    clips_folder = str(Path(movie_path_folder, "tmp_dir", movie_i + "_zooniverseclips"))
 
     # Set the filename of the clips
     potential_start_df["clip_filename"] = (
@@ -1417,18 +1417,12 @@ def create_modified_clips(
     :return: The modified clips
     """
 
-    # Get project-specific server info
-    server = project.server
-
     # Specify the folder to host the modified clips
-
     mod_clip_folder = "modified_" + movie_i + "_clips"
 
-    if server == "SNIC":
-        snic_path = "/mimer/NOBACKUP/groups/snic2021-6-9/"
-        mod_clips_folder = Path(snic_path, "tmp_dir", mod_clip_folder)
-    else:
-        mod_clips_folder = mod_clip_folder
+    # Specify the temp folder to host the clips
+    movie_path_folder = Path(movie_i).parent
+    mod_clips_folder = str(Path(movie_path_folder, "tmp_dir", mod_clip_folder))
 
     # Remove existing modified clips
     if os.path.exists(mod_clips_folder):
@@ -1517,6 +1511,9 @@ def format_to_gbif(
         # Concatenate the dfs and select only unique common names and the labels
         commonName_labels_df = pd.concat(commonName_labels_list).drop_duplicates()
 
+        # Drop the clips classified as nothing here or other
+        df = df[~df["label"].isin(["OTHER", "NOTHINGHERE"])]
+
         # Combine the labels with the commonNames of the classifications
         comb_df = pd.merge(df, commonName_labels_df, how="left", on="label")
 
@@ -1529,9 +1526,6 @@ def format_to_gbif(
 
         # Identify the second of the original movie when the species first appears
         comb_df["second_in_movie"] = comb_df["clip_start_time"] + comb_df["first_seen"]
-
-        # Drop the clips classified as nothing here or other
-        comb_df[~comb_df["label"].isin(["OTHER", "NOTHINGHERE"])]
 
         # Select the max count of each species on each movie
         comb_df = comb_df.sort_values("how_many").drop_duplicates(

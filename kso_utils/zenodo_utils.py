@@ -98,7 +98,7 @@ def add_metadata_zenodo_upload(
         headers=headers,
     )
     if r.status_code == 200:
-        print("Upload successful")
+        logging.info("Upload successful")
         r = requests.post(
             f"https://zenodo.org/api/deposit/depositions/{deposition_id}/actions/publish",
             params={"access_token": access_token},
@@ -106,4 +106,4 @@ def add_metadata_zenodo_upload(
         return r.status_code
 
     else:
-        print("Upload failed")
+        logging.info("Upload failed")
